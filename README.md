@@ -1,100 +1,75 @@
 # Vibloom
 
-Vibloom is a private, browser-based visual music player and sample-accurate A/B comparison tool. Start with one local track and an interactive Live2D companion, then add Track B from the player only when you want to compare versions without losing the shared playback position.
+Your music library, brought to life.
 
-[Open the live app](https://wedoso.github.io/Vibloom/) · [Architecture](docs/architecture.md)
+Vibloom is a private, browser-based music player for local files. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hiyori as a rhythm-aware Live2D companion.
 
-![Vibloom landing page with Hiyori](docs/assets/landing.png)
+[Open Vibloom](https://wedoso.github.io/Vibloom/)
 
-## Listening modes
+![Vibloom welcome screen](docs/assets/landing.png)
 
-### One-track listening
+## Everything stays yours
 
-![Vibloom listening room](docs/assets/listening-room.png)
+Vibloom has no account, server upload, analytics, or cloud music locker. Audio and lyrics are read and processed in your browser.
 
-- Audio is decoded and analyzed locally in the current browser tab.
-- A semantically reviewed subset of Hiyori's official motions forms a beat- and phrase-aware listening performance.
-- Learned body beats add restrained nod accents without replacing the authored pose.
-- A solid A/B-colored disc accumulates three low-frequency size tiers, then releases slowly instead of flashing on every transient.
-- Director mode frames phrase-scale energy automatically; the mouse wheel switches to manual framing.
+New music is kept on this device by default so reopening the tab does not normally require reconnecting your files. You can pause automatic caching, remove individual cached copies, clear all cached audio while keeping the library, or reset Vibloom completely from **Storage**.
 
-### Focus mode
+Browser storage can still be cleared by private-browsing rules, site-data cleanup, or operating-system pressure. Vibloom always shows which tracks are available, stored on-device, or need reconnection.
 
-![Vibloom Focus mode](docs/assets/focus-mode.png)
+## A complete local player
 
-Press `F` to move into a close listening view through a full-screen editorial iris. The curtain becomes fully opaque before the layout changes; Hiyori's Pixi camera, rig, scale, contact shadow, and backing buffer settle during two hidden paint frames, then the finished composition is revealed. The canvas is never recreated, and the active waveform remains available. When Track B exists, the same A/B selector stays available too—Focus mode never creates a second control system.
+![Vibloom library with availability, lyrics, and Version B tags](docs/assets/library.png)
 
-### Timed LRC lyrics
+- Import multiple audio files, matching `.lrc` lyrics, or a complete folder.
+- Play in order, shuffle without repeats, repeat one track, or repeat the queue.
+- Reorder the queue and choose **Play next** without changing the library.
+- Search your collection and resume the last track and position after reopening.
+- Use `Space` to play or pause, arrow keys to seek five seconds, and `F` to enter or leave Focus mode.
+- Start in Portrait, switch to a larger full-body Wide shot, or use the mouse wheel for manual framing up to 235%.
+- Camera framing keeps Hiyori and the background circle aligned, preserves a near-full-body view around 162%, and protects the title area at close zoom.
 
-![Vibloom displaying synchronized Japanese LRC lyrics](docs/assets/lyrics.png)
+## Hear the difference
 
-Load an optional `.lrc` file after adding audio to place synchronized lyrics inside the listening room. The current line eases into the center of a softly masked lyric column and fills with the playback position; surrounding lines fade toward the edges without scrolling the page itself. Track A uses Vibloom's green accent and Track B uses its rose accent, so the lyric treatment follows the audible source during A/B switching.
+![Vibloom comparing two synchronized versions](docs/assets/listening-room.png)
 
-The lyric font stack includes system fallbacks for English, Simplified and Traditional Chinese, and Japanese. UTF-8 and BOM-marked UTF-16 LRC files are supported, including global `[offset:]`, repeated timestamps, and multiple lyric lines at the same time. Lyrics are optional and never leave the browser tab.
+The current library track is always Version A. Add or drop a Version B only when you need it; Vibloom then shows two color-matched waveforms on one shared timeline.
 
-### Two-track comparison
+- A and B start from the same audio clock and stay sample-aligned.
+- Use the visible A/B controls or press `1` / `2` (`A` / `B`) to switch.
+- Replace or remove Version B at any time.
+- Different-length files are called out clearly; the shared timeline follows the longer version and identifies a source that has already ended.
+- Version B is cached with its Version A track and receives a visible tag in the library.
 
-- Choose **Enable A/B mode** beside Track A, then add the comparison file. Track B's score, waveform, and source switch appear only when comparison is requested.
-- Both decoded files start from one `AudioContext` clock.
-- Switching A/B changes gain only; it never seeks, restarts, or changes playback speed.
-- An 18 ms gain crossfade prevents clicks without hiding meaningful differences.
-- The longer track defines the shared timeline; the shorter track's endpoint is marked explicitly.
-- Hiyori's gaze follows the currently audible track while comparison playback is active.
+## Focus on the music
 
-## Live2D behavior
+![Vibloom Focus mode with synchronized lyrics and a compact transport](docs/assets/focus-mode.png)
 
-Vibloom uses Hiyori's official motions as the primary performance instead of rebuilding character movement from raw coordinates.
+Press `F` for a distraction-free stage. Focus mode removes the waveform cards while keeping the same audio clock, playhead, camera, synchronized lyrics, compact A/B selector, and single bottom transport. The stage now reaches the transport instead of leaving a large empty band below Hiyori. Press `F` again or `Esc` to leave.
 
-- **Homepage:** PRO raised-arm `m06` and celebratory `m08` form a separate Arm B welcome performance. Their speaking-mouth channel is masked, and they connect only to each other through the single-pose trajectory.
-- **Playing:** `m01`, `m02`, and `m05` rotate as Arm A listening motions, with neutral `m03` as the phrase gesture. Unsuitable mouth and expression curves are masked.
-- **Motion semantics:** upset, startled, angry, or shouting clips (`m04`, `m07`, `m09`, `m10`) are never loaded or scheduled. The incompatible Arm A and Arm B sets never connect visibly: the fully opaque scene curtain hides a deterministic mesh and pose reset before the destination scene is revealed. A/B audio changes use gaze and a restrained body accent instead of a character reaction clip.
-- **Beat contact:** every accepted learned beat starts the independent 360 ms nod, so long authored gestures add variety without weakening precise head-to-beat timing.
-- **Motion connection:** SDK motion fades and per-loop fade restarts are disabled. Clip changes wait for an authored return window, then one pose controller follows a velocity-matched cubic Hermite joint path to the target clip's exact first keyframe. That endpoint is rendered for a complete frame before the authored clip starts at the identical pose; two motions are never opacity- or weight-blended.
-- **Paused:** the authored motion stops and its complete PRO pose eases visibly to neutral over 1.2 seconds. SDK blink, Natural Breath, pointer focus, Physics, Pose, and subtle secondary motion remain alive.
-- **Loop continuity:** each clip's non-matching endpoints are corrected over the final 720 ms using Cubism's actual motion clock, including the exact frame where the SDK resets that clock to zero.
-- **Beat response:** broadband and bass onsets learn a per-track 0.5–1.0 second body groove. Scheduled beats produce one eased 360 ms nod accent rather than hi-hat-speed twitching.
+## Synchronized lyrics
 
-See [docs/architecture.md](docs/architecture.md) for parameter ownership, signal processing, camera rules, transitions, and deployment invariants.
+![Vibloom displaying timed Japanese lyrics](docs/assets/lyrics.png)
 
-## Privacy
+Attach, replace, or remove an `.lrc` file from the current song or its library menu. Lyrics scroll with playback and use the audible source color: green for Version A, rose for Version B. UTF-8 and BOM-marked UTF-16 files are supported, including offsets, repeated timestamps, and multilingual lines.
 
-Audio and LRC files, decoded buffers, parsed lyric lines, waveform peaks, and analysis data stay inside the current tab. Vibloom has no backend, account system, database, cookies, analytics, upload endpoint, or persistent media storage. Hover or focus the shield in the header to see this privacy reminder in the app.
+## Supported browsers and files
 
-## Use
+Vibloom targets current Safari, Chrome, and Firefox on desktop. Folder drag-and-drop depends on browser support; the visible folder picker is always available as a fallback.
 
-1. Choose or drop one audio file.
-2. Optionally choose **Add lyrics** or drop a `.lrc` file into the session.
-3. Press the central play button or `Space`.
-4. Optionally add Audio B for synchronized comparison.
-5. Use `1` / `A` for Audio A and `2` / `B` for Audio B.
-6. Drag the timeline to seek, or use the arrow keys to move five seconds.
-7. Scroll over Hiyori for manual camera zoom; choose **Director** to resume automatic framing.
-8. Press `F` for Focus mode and `Esc` to leave it.
-9. Choose **Clear session** to return through the reverse scene transition.
+Common MP3, WAV, M4A/AAC, FLAC, OGG, Opus, WebM Audio, and AIFF files are accepted when the browser can decode them. Individual files larger than 300 MB are rejected to protect the tab.
 
-### Keyboard shortcuts
+## Quick start
 
-| Key | Action |
-| --- | --- |
-| `Space` | Play or pause |
-| `1` or `A` | Listen to Audio A |
-| `2` or `B` | Listen to Audio B |
-| `←` / `→` | Seek backward / forward five seconds |
-| `L` | Toggle timeline loop |
-| `F` | Enter or leave Focus mode |
-| `Esc` | Leave Focus mode |
+1. Open Vibloom and choose **Import your music**.
+2. Pick files or a folder. Include same-named `.lrc` files if you have them.
+3. Choose a song, **Play all**, or **Shuffle**.
+4. Open **Queue** to change what plays next.
+5. Choose **Add version B** when you want an exact mix comparison.
+6. Open **Storage** whenever you want to review or clear local copies.
 
-## Supported audio
+## For contributors
 
-Compatibility depends on the browser's Web Audio decoder. Vibloom accepts common WAV, MP3, M4A/AAC, FLAC, OGG, Opus, WebM audio, and AIFF files. Files are fully decoded in memory so both tracks can share an exact clock; files larger than 300 MB are rejected to protect the tab.
-
-## Supported lyrics
-
-Vibloom accepts timestamped `.lrc` files as an optional session-level lyric track shared by Audio A and B. Standard `[mm:ss.xx]` and `[mm:ss.xxx]` timestamps, multiple timestamps on one line, `[offset:]`, title/artist metadata, and same-time multilingual lines are supported. Text is decoded locally as UTF-8 or BOM-marked UTF-16LE/UTF-16BE.
-
-## Local development
-
-Requirements: Node.js 22.13 or newer and npm 10 or newer.
+Vibloom is a static React/Vite app and can be hosted without a backend.
 
 ```bash
 git clone https://github.com/wedoso/Vibloom.git
@@ -103,53 +78,12 @@ npm ci
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+Run the complete validation suite with `npm run check`. A production build is emitted to `dist/` with `npm run build`. GitHub Pages deployment is configured in [deploy-pages.yml](.github/workflows/deploy-pages.yml).
 
-Run the complete validation suite with:
+Detailed implementation contracts live in [the player specification](docs/library-player.md) and [architecture notes](docs/architecture.md).
 
-```bash
-npm run check
-```
+## License
 
-This runs ESLint, TypeScript, the Vite production build, and the static architecture regression suite.
+Vibloom source code is available under the [MIT License](LICENSE).
 
-## Deployment
-
-`npm run build` emits a fully static `dist/` directory. Vite uses relative asset paths, so the same output works at a domain root or a GitHub Pages repository path.
-
-The included [GitHub Pages workflow](.github/workflows/deploy-pages.yml) runs `npm ci`, `npm run check`, and deploys `dist/` on every push to `main` or `master`. Configure **Settings → Pages → Source** as **GitHub Actions** once for a new fork.
-
-Other static hosts can use:
-
-- Build command: `npm run build`
-- Publish directory: `dist`
-- Required server functions: none
-
-## Project structure
-
-```text
-index.html                 Static document and social metadata
-src/
-  App.tsx                  Audio engine and complete interface
-  Live2DStage.tsx          Hiyori motion, camera, shadow, and stage visuals
-  audioVisual.ts           Web Audio features and transient signal
-  lrc.ts                   LRC decoding, metadata, offsets, and timed lines
-  index.css                Responsive visual and motion system
-public/
-  live2d/hiyori-pro/       Official Hiyori PRO runtime, motions, Pose, and Physics
-  live2d/live2dcubismcore.min.js
-  og.png                   Current social preview
-docs/
-  architecture.md          Runtime design and invariants
-  assets/                  README screenshots, including the LRC preview
-tests/
-  static-build.test.mjs    Build and architecture regressions
-.github/workflows/
-  deploy-pages.yml         GitHub Pages CI/CD
-```
-
-## Live2D notice and license
-
-Hiyori Momose is a sample model created by Live2D. The model notice is included at [`public/live2d/hiyori/LICENSE-HIYORI.txt`](public/live2d/hiyori/LICENSE-HIYORI.txt). Use and redistribution of the sample model and Cubism runtime remain subject to Live2D's Free Material License Agreement and Terms of Use; review them before publishing or commercial use.
-
-Vibloom's own source code is licensed under the [MIT License](LICENSE).
+Hiyori Momose is a Live2D sample model. Its bundled notice is available at [LICENSE-HIYORI.txt](public/live2d/hiyori/LICENSE-HIYORI.txt); the model and Cubism runtime remain subject to Live2D's applicable licenses and terms.
