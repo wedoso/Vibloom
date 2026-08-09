@@ -81,7 +81,7 @@ const FADE_SECONDS = 0.018;
 const SOURCE_LEAD_SECONDS = 0.025;
 const MAX_FILE_BYTES = 300 * 1024 * 1024;
 
-type SceneTransitionDirection = "enter" | "exit";
+type SceneTransitionDirection = "enter" | "exit" | "focus-enter" | "focus-exit";
 
 let sceneCoverTimer: number | null = null;
 let sceneCleanupTimer: number | null = null;
@@ -759,12 +759,14 @@ export default function Home() {
   function changeFocusMode(nextFocusMode: boolean) {
     if (nextFocusMode === focusMode) return;
     if (focusTransitionTimerRef.current !== null) window.clearTimeout(focusTransitionTimerRef.current);
-    setFocusTransition(nextFocusMode ? "enter" : "exit");
-    setFocusMode(nextFocusMode);
-    focusTransitionTimerRef.current = window.setTimeout(() => {
-      setFocusTransition(null);
-      focusTransitionTimerRef.current = null;
-    }, 1040);
+    void withSceneTransition(() => {
+      setFocusTransition(nextFocusMode ? "enter" : "exit");
+      setFocusMode(nextFocusMode);
+      focusTransitionTimerRef.current = window.setTimeout(() => {
+        setFocusTransition(null);
+        focusTransitionTimerRef.current = null;
+      }, 1040);
+    }, nextFocusMode ? "focus-enter" : "focus-exit");
   }
 
   useEffect(() => {
@@ -947,6 +949,16 @@ export default function Home() {
           <small>Session complete</small>
           <strong><span>Until the</span><em>next song.</em></strong>
           <i>Your files never left this device</i>
+        </span>
+        <span className="scene-curtain-copy scene-curtain-copy-focus-enter">
+          <small>Focus mode</small>
+          <strong><span>The noise</span><em>falls away.</em></strong>
+          <i>One track · One room · One moment</i>
+        </span>
+        <span className="scene-curtain-copy scene-curtain-copy-focus-exit">
+          <small>Full room</small>
+          <strong><span>The session</span><em>returns.</em></strong>
+          <i>Controls and comparison restored</i>
         </span>
       </div>
       <header className="site-header">

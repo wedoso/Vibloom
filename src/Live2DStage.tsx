@@ -23,44 +23,114 @@ const PARTICLES = [
   [68, 46, 2.1, 7.1], [47, 55, 7.4, 9.1], [58, 42, 5.8, 8.6],
 ] as const;
 
-// hiyori_m01 authors all of these channels. Pause must hand off the complete
-// pose: omitting even the arms, brows, gaze, breath, or ahoge makes that part
-// snap to its default on the frame stopAllMotions() runs.
+// Complete parameter union authored by the admitted official motions. Pause
+// must hand off the whole pose: omitting even the arms, brows, gaze, breath, or ahoge
+// makes that part snap to its default on the frame stopAllMotions() runs.
 const REST_SETTLE_PARAM_IDS = [
   "ParamAngleX", "ParamAngleY", "ParamAngleZ",
-  "ParamArmLA", "ParamArmRA",
+  "ParamArmLA", "ParamArmLB", "ParamArmRA", "ParamArmRB",
   "ParamBodyAngleX", "ParamBodyAngleY", "ParamBodyAngleZ",
-  "ParamBreath", "ParamBrowLForm", "ParamBrowRForm",
+  "ParamBreath", "ParamBrowLX", "ParamBrowLY", "ParamBrowLAngle", "ParamBrowLForm",
+  "ParamBrowRX", "ParamBrowRY", "ParamBrowRAngle", "ParamBrowRForm",
   "ParamEyeBallX", "ParamEyeBallY",
   "ParamEyeLOpen", "ParamEyeROpen", "ParamEyeLSmile", "ParamEyeRSmile",
-  "ParamHairAhoge", "ParamMouthForm", "ParamMouthOpenY", "ParamCheek",
+  "ParamHairAhoge", "ParamHandL", "ParamHandLB", "ParamHandR", "ParamHandRB",
+  "ParamLeg", "ParamShoulder", "ParamMouthForm", "ParamMouthOpenY", "ParamCheek",
 ] as const;
 
 const REST_EYE_OPEN_PARAM_IDS = new Set(["ParamEyeLOpen", "ParamEyeROpen"]);
-const REST_SETTLE_SECONDS = 0.68;
-const REST_EYE_HANDOFF_SECONDS = 0.28;
+const REST_SETTLE_SECONDS = 1.2;
+const REST_EYE_HANDOFF_SECONDS = 0.36;
 
-const PLAYING_IDLE_GROUP = "Idle";
 const RESTING_IDLE_GROUP = "__audiff_resting__";
-const OFFICIAL_LISTENING_DURATION = 4.7;
 const MOTION_LOOP_SEAM_SECONDS = 0.72;
+const POSE_TRANSITION_MIN_SECONDS = 0.38;
+const POSE_TRANSITION_MAX_SECONDS = 0.68;
 
-// hiyori_m01 is marked as looping, but six of its authored curves do not end
-// where they begin. These deltas close only that final seam; the preceding
-// official motion remains untouched.
-const MOTION_LOOP_CORRECTIONS = [
-  ["ParamAngleX", -9],
-  ["ParamAngleY", 4],
-  ["ParamAngleZ", 11.207],
-  ["ParamEyeBallX", -0.803],
-  ["ParamEyeBallY", -0.794],
-  ["ParamBodyAngleZ", 3.976],
+type OfficialMotionId = "m01" | "m02" | "m03" | "m05" | "m06" | "m08";
+
+type OfficialMotion = {
+  id: OfficialMotionId;
+  group: string;
+  index: number;
+  duration: number;
+  role: "base" | "gesture" | "welcome";
+  mode: "player" | "welcome";
+  ignoreParamIds?: readonly string[];
+};
+
+const M02_EXPRESSION_PARAM_IDS = [
+  "ParamCheek", "ParamEyeLSmile", "ParamEyeRSmile",
+  "ParamBrowLX", "ParamBrowLY", "ParamBrowLAngle", "ParamBrowLForm",
+  "ParamBrowRX", "ParamBrowRY", "ParamBrowRAngle", "ParamBrowRForm",
+  "ParamMouthForm", "ParamMouthOpenY",
 ] as const;
+const M05_MOUTH_PARAM_IDS = ["ParamMouthForm", "ParamMouthOpenY"] as const;
+const WELCOME_MOUTH_PARAM_IDS = ["ParamMouthOpenY"] as const;
+
+// Only motions whose emotional meaning fits attentive music listening are
+// admitted. m02 keeps its useful body/arm performance without the surprised
+// blush and mouth; m05 keeps its joyful listening pose without lip movement.
+const OFFICIAL_MOTIONS: Record<OfficialMotionId, OfficialMotion> = {
+  m01: { id: "m01", group: "Idle", index: 0, duration: 4.7, role: "base", mode: "player" },
+  m02: { id: "m02", group: "Idle", index: 1, duration: 5.93, role: "base", mode: "player", ignoreParamIds: M02_EXPRESSION_PARAM_IDS },
+  m03: { id: "m03", group: "Flick", index: 0, duration: 4.2, role: "gesture", mode: "player" },
+  m05: { id: "m05", group: "Idle", index: 2, duration: 8.57, role: "base", mode: "player", ignoreParamIds: M05_MOUTH_PARAM_IDS },
+  m06: { id: "m06", group: "FlickUp", index: 0, duration: 5.37, role: "welcome", mode: "welcome", ignoreParamIds: WELCOME_MOUTH_PARAM_IDS },
+  m08: { id: "m08", group: "Tap", index: 1, duration: 2.1, role: "welcome", mode: "welcome", ignoreParamIds: WELCOME_MOUTH_PARAM_IDS },
+};
+
+const BASE_MOTION_SEQUENCE = ["m02", "m01", "m05", "m01"] as const;
+const GESTURE_MOTION_SEQUENCE = ["m03"] as const;
+const WELCOME_MOTION_SEQUENCE = ["m06", "m08"] as const;
+
+// Exact first authored keyframes for every admitted motion. Zeroes are kept:
+// several Arm B hand channels start at 0 even though the model default is 10.
+// Falling back to that default would finish the connector at 10 and let the
+// target clip hard-reset the hand to 0 on its first frame.
+const NEUTRAL_MOTION_START = {
+  ParamAngleX: 0, ParamAngleY: 0, ParamAngleZ: 0,
+  ParamCheek: 0,
+  ParamEyeLOpen: 1, ParamEyeLSmile: 0,
+  ParamEyeROpen: 1, ParamEyeRSmile: 0,
+  ParamEyeBallX: 0, ParamEyeBallY: 0,
+  ParamBrowLY: 0, ParamBrowRY: 0, ParamBrowLX: 0, ParamBrowRX: 0,
+  ParamBrowLAngle: 0, ParamBrowRAngle: 0,
+  ParamBrowLForm: 0, ParamBrowRForm: 0,
+  ParamMouthForm: 1, ParamMouthOpenY: 0,
+  ParamBodyAngleX: 0, ParamBodyAngleY: 0, ParamBodyAngleZ: 0,
+  ParamBreath: 0, ParamShoulder: 0, ParamLeg: 1, ParamHairAhoge: 0,
+} as const;
+
+// A transition owns one pose and moves its joints to this exact boundary
+// before the target clip starts; no second motion or opacity-weighted pose is
+// rendered underneath it.
+const MOTION_START_POSES: Record<OfficialMotionId, Readonly<Record<string, number>>> = {
+  m01: { ...NEUTRAL_MOTION_START, ParamAngleX: -8, ParamAngleY: -5, ParamBodyAngleX: 1, ParamArmLA: -10, ParamArmRA: -10 },
+  m02: { ...NEUTRAL_MOTION_START, ParamAngleX: 18, ParamAngleY: -24, ParamCheek: 1, ParamEyeLSmile: 0.63, ParamEyeRSmile: 0.63, ParamEyeBallX: -0.002, ParamBrowLAngle: 0.03, ParamMouthForm: -1, ParamMouthOpenY: 1, ParamArmLA: -8.7, ParamArmRA: -8.7, ParamHandL: 0, ParamHandR: 0 },
+  m03: { ...NEUTRAL_MOTION_START, ParamArmLA: -10, ParamArmRA: -10, ParamHandL: 0, ParamHandR: 0 },
+  m05: { ...NEUTRAL_MOTION_START, ParamArmLA: -10, ParamArmRA: -10, ParamArmRB: 0.02 },
+  m06: { ...NEUTRAL_MOTION_START, ParamBodyAngleX: -10, ParamBodyAngleY: 10, ParamArmLB: 0, ParamArmRB: 0, ParamHandLB: 0, ParamHandRB: 0, ParamHandL: 0, ParamHandR: 0 },
+  m08: { ...NEUTRAL_MOTION_START, ParamArmLA: 0, ParamArmRA: 0, ParamArmLB: 0, ParamArmRB: 0, ParamHandLB: 10, ParamHandRB: 10 },
+};
+
+// Every admitted Hiyori clip is marked as looping, although some authored
+// curves end away from their first value. Correct only the final 720 ms of the
+// active cycle so a loop or beat-aligned handoff cannot expose a one-frame snap.
+const MOTION_LOOP_CORRECTIONS: Record<OfficialMotionId, readonly (readonly [string, number])[]> = {
+  m01: [["ParamAngleX", -9], ["ParamAngleY", 4], ["ParamAngleZ", 11.207], ["ParamEyeBallX", -0.803], ["ParamEyeBallY", -0.794], ["ParamBodyAngleX", 7], ["ParamBodyAngleZ", 3.976], ["ParamShoulder", 0.9]],
+  m02: [["ParamAngleX", 18], ["ParamAngleY", -24], ["ParamAngleZ", -17], ["ParamEyeLOpen", 1], ["ParamEyeLSmile", -0.141], ["ParamEyeROpen", 1], ["ParamEyeRSmile", -0.13], ["ParamEyeBallX", -0.002], ["ParamBrowLY", -0.396], ["ParamBrowRY", -0.417], ["ParamMouthForm", -2], ["ParamMouthOpenY", 1], ["ParamBodyAngleX", -0.013], ["ParamBodyAngleZ", 3], ["ParamShoulder", 1], ["ParamArmLA", -5.7], ["ParamArmRA", -8.698], ["ParamHandL", -0.208], ["ParamHandR", -0.208]],
+  m03: [["ParamAngleX", 2], ["ParamAngleY", 3], ["ParamAngleZ", -11], ["ParamBodyAngleY", -6], ["ParamBodyAngleZ", -8], ["ParamLeg", 0.938], ["ParamArmLA", -7], ["ParamArmRA", -9.971], ["ParamHandL", -0.8], ["ParamHandR", -0.8]],
+  m05: [["ParamEyeLSmile", -0.812], ["ParamEyeRSmile", -0.8], ["ParamBodyAngleX", 0.326], ["ParamBodyAngleZ", -0.025]],
+  m06: [["ParamAngleY", 10], ["ParamAngleZ", 3], ["ParamEyeLOpen", 1], ["ParamEyeLSmile", -0.833], ["ParamEyeROpen", 1], ["ParamEyeRSmile", -0.823], ["ParamEyeBallX", 0.28], ["ParamEyeBallY", -0.13], ["ParamBrowLY", -0.479], ["ParamBrowRY", -0.479], ["ParamBrowLX", 0.479], ["ParamBrowRX", 0.69], ["ParamMouthOpenY", -1], ["ParamBodyAngleX", -12.025], ["ParamBodyAngleY", 9.905], ["ParamBodyAngleZ", -8], ["ParamShoulder", 0.2], ["ParamLeg", 0.948], ["ParamArmLB", 6.458], ["ParamArmRB", 5.833], ["ParamHandLB", -7.1], ["ParamHandRB", -6.8], ["ParamHandL", -0.4], ["ParamHandR", -0.3]],
+  m08: [["ParamAngleY", -11], ["ParamAngleZ", 9], ["ParamEyeLOpen", 1], ["ParamEyeLSmile", -1], ["ParamEyeROpen", 1], ["ParamEyeRSmile", -1], ["ParamBrowLY", 0.14], ["ParamBrowRY", 0.14], ["ParamBrowLX", 0.21], ["ParamBrowRX", 0.2], ["ParamBrowLAngle", -0.25], ["ParamBrowRAngle", -0.23], ["ParamMouthOpenY", -1], ["ParamBodyAngleZ", -2], ["ParamArmLB", -9.583], ["ParamArmRB", -4.375], ["ParamHandLB", 5.208], ["ParamHandRB", 2.708]],
+};
 
 type CoreModel = {
   getParameterIndex: (id: string) => number;
   getParameterDefaultValue: (index: number) => number;
   getParameterValueByIndex: (index: number) => number;
+  setPartOpacityById: (id: string, opacity: number) => void;
   addParameterValueByIndex: (index: number, value: number, weight?: number) => void;
   setParameterValueByIndex: (index: number, value: number, weight?: number) => void;
 };
@@ -76,9 +146,16 @@ type MotionQueueEntryController = {
   isStarted: () => boolean;
 };
 
+type MotionAssetController = {
+  setFadeInTime: (seconds: number) => void;
+  setFadeOutTime: (seconds: number) => void;
+  setIsLoopFadeIn: (enabled: boolean) => void;
+};
+
 type MotionManagerController = {
   groups: { idle: string };
   queueManager?: { _motions?: MotionQueueEntryController[] };
+  loadMotion: (group: string, index: number) => Promise<MotionAssetController | undefined>;
   startMotion: (
     group: string,
     index: number,
@@ -86,17 +163,19 @@ type MotionManagerController = {
     options?: { ignoreParamIds?: string[] },
   ) => Promise<boolean>;
   stopAllMotions: () => void;
-  on: (event: "afterMotionUpdate", listener: () => void) => void;
-  off: (event: "afterMotionUpdate", listener: () => void) => void;
 };
 
 type InternalModelControls = {
   coreModel: CoreModel;
   focusController: FocusController;
   eyeBlink?: unknown;
+  pose?: {
+    reset: (model: CoreModel) => void;
+    updateParameters: (model: CoreModel, deltaTimeSeconds: number) => void;
+  };
   motionManager: MotionManagerController;
-  on: (event: "beforeModelUpdate", listener: () => void) => void;
-  off: (event: "beforeModelUpdate", listener: () => void) => void;
+  on: (event: "afterMotionUpdate" | "beforeModelUpdate", listener: () => void) => void;
+  off: (event: "afterMotionUpdate" | "beforeModelUpdate", listener: () => void) => void;
 };
 
 export default function Live2DStage({
@@ -116,6 +195,7 @@ export default function Live2DStage({
   const previousDiscFocusRef = useRef(focusMode);
   const musicDiscAnimationRef = useRef<Animation | null>(null);
   const sceneLayoutSnapRef = useRef(false);
+  const focusCameraSnapRef = useRef(false);
   const variantRef = useRef(variant);
   const previousVariantRef = useRef(variant);
   const previousFocusModeRef = useRef(focusMode);
@@ -138,8 +218,13 @@ export default function Live2DStage({
     const changingFocus = previousFocusModeRef.current !== focusMode;
     variantRef.current = variant;
     focusModeRef.current = focusMode;
-    if (changingFocus) focusCameraTransitionUntilRef.current = performance.now() + 1100;
     const sceneCovered = document.documentElement.classList.contains("is-scene-covering");
+    if (changingFocus && sceneCovered) {
+      focusCameraSnapRef.current = true;
+      focusCameraTransitionUntilRef.current = 0;
+    } else if (changingFocus) {
+      focusCameraTransitionUntilRef.current = performance.now() + 1100;
+    }
     if ((enteringPlayer || leavingPlayer) && sceneCovered) sceneLayoutSnapRef.current = true;
     if (enteringPlayer) {
       // Establish an intimate first shot before the phrase director takes over.
@@ -200,7 +285,10 @@ export default function Live2DStage({
 
     async function mountModel() {
       try {
-        const [{ Application, BlurFilter, Container, Graphics, UPDATE_PRIORITY }, { Live2DModel, configureCubism4 }] = await Promise.all([
+        const [
+          { Application, BlurFilter, Container, Graphics, UPDATE_PRIORITY },
+          { Live2DModel, MotionPreloadStrategy, configureCubism4 },
+        ] = await Promise.all([
           import("pixi.js"),
           import("pixi-live2d-display-advanced/cubism4"),
         ]);
@@ -218,13 +306,15 @@ export default function Live2DStage({
         const canvas = app.view as HTMLCanvasElement;
         canvas.className = "live2d-canvas";
         canvas.setAttribute("aria-label", "Hiyori, an interactive Live2D music companion");
+        canvas.style.visibility = "hidden";
         host.appendChild(canvas);
 
         const base = import.meta.env.BASE_URL;
-        const model = await Live2DModel.from(`${base}live2d/hiyori/hiyori_free_t08.model3.json`, {
+        const model = await Live2DModel.from(`${base}live2d/hiyori-pro/hiyori_pro_t11.model3.json`, {
           autoHitTest: false,
           autoFocus: false,
           autoUpdate: false,
+          motionPreload: MotionPreloadStrategy.IDLE,
           ticker: app.ticker,
         });
         if (disposed || !app) {
@@ -237,6 +327,23 @@ export default function Live2DStage({
         app.ticker.maxFPS = 60;
         app.ticker.minFPS = 30;
         const internalModel = model.internalModel as unknown as InternalModelControls;
+        await Promise.all(
+          Object.values(OFFICIAL_MOTIONS).map(async (motion) => {
+            const asset = await internalModel.motionManager.loadMotion(motion.group, motion.index);
+            if (!asset) return;
+            // The PRO files omit fade metadata, so Cubism otherwise injects a
+            // one-second SDK fade and restarts it on every loop. Audiff inserts
+            // an explicit single-pose joint transition instead; SDK weights
+            // would overlap controllers and can expose a pale boundary frame.
+            asset.setFadeInTime(0);
+            asset.setFadeOutTime(0);
+            asset.setIsLoopFadeIn(false);
+          }),
+        );
+        if (disposed) {
+          model.destroy();
+          return;
+        }
         // Rest is intentionally not an authored looping motion. The official m01
         // clip becomes the listening performance only while audio is playing;
         // paused Hiyori keeps the SDK's quiet blink, breath, focus, and Physics.
@@ -258,6 +365,7 @@ export default function Live2DStage({
         let currentRigY = targetRigY;
         let currentPortraitOffset = 0;
         let layoutInitialized = false;
+        let canvasRevealed = false;
         let isCompactLayout = host.clientWidth < 600;
         let previousHostBounds: DOMRect | null = null;
 
@@ -268,7 +376,7 @@ export default function Live2DStage({
           const nextWidth = Math.max(1, Math.round(host.clientWidth));
           const nextHeight = Math.max(1, Math.round(host.clientHeight));
           const nextHostBounds = host.getBoundingClientRect();
-          if (layoutInitialized && previousHostBounds) {
+          if (layoutInitialized && previousHostBounds && canvasRevealed) {
             // Keep Hiyori at the same viewport pixel while the header/score strip
             // changes the stage's origin. The camera then eases from that exact
             // screen-space pose into its new focus composition.
@@ -298,6 +406,16 @@ export default function Live2DStage({
             contactShadow.scale.set(currentModelScale);
             cameraRig.position.set(currentRigX, currentRigY);
             layoutInitialized = true;
+          } else if (!canvasRevealed) {
+            // Model loading and late font/layout resolution happen while the
+            // canvas is hidden. Keep replacing the provisional geometry with
+            // the latest target instead of visibly easing from stale bounds.
+            currentModelScale = targetModelScale;
+            currentRigX = targetRigX;
+            currentRigY = targetRigY;
+            model.scale.set(currentModelScale);
+            contactShadow.scale.set(currentModelScale);
+            cameraRig.position.set(currentRigX, currentRigY);
           }
           // Resizing a WebGL backing buffer clears it. Repaint synchronously so
           // a focus layout change cannot expose that cleared frame as a flash.
@@ -385,6 +503,14 @@ export default function Live2DStage({
         let motionRequestVersion = 0;
         let motionStartInFlightVersion: number | null = null;
         let motionWatchdog = 0;
+        let activeMotion: OfficialMotion = OFFICIAL_MOTIONS.m01;
+        let pendingMotion: OfficialMotion | null = null;
+        let baseMotionCursor = 0;
+        let gestureMotionCursor = 0;
+        let welcomeMotionCursor = 0;
+        let activeStageVariant: StageVariant = variantRef.current;
+        let beatCount = 0;
+        let beatsSinceGesture = 16;
         let hasPlayed = false;
         let pausedCameraZoom = 2.02;
         let cameraPhase = Math.PI;
@@ -394,14 +520,23 @@ export default function Live2DStage({
         let poseNod = 0;
         let restSettleElapsed = Number.POSITIVE_INFINITY;
         const restStartValues = new Map<number, number>();
+        let activeMotionRuntime = 0;
+        let lastMotionCycleTime = 0;
+        let poseTransitionTarget: OfficialMotion | null = null;
+        let poseTransitionElapsed = 0;
+        let poseTransitionDuration = POSE_TRANSITION_MIN_SECONDS;
+        let poseTransitionEndpointRendered = false;
+        let poseTransitionStarting = false;
+        const poseTransitionStartValues = new Map<number, number>();
+        const poseTransitionStartVelocities = new Map<number, number>();
+        const poseTransitionTargetValues = new Map<number, number>();
+        const poseHistoryValues = new Map<number, number>();
+        const poseVelocities = new Map<number, number>();
+        let poseHistoryAt = performance.now() / 1000;
         const core = internalModel.coreModel;
         const focusController = internalModel.focusController;
         const parameterIndexes = new Map(
-          [
-            "ParamBodyAngleX", "ParamBodyAngleZ", "ParamAngleZ", "ParamBreath",
-            "ParamAngleX", "ParamAngleY", "ParamBodyAngleY", "ParamEyeBallX", "ParamEyeBallY",
-            "ParamEyeLSmile", "ParamEyeRSmile", "ParamMouthForm", "ParamMouthOpenY", "ParamBustY", "ParamCheek",
-          ].map((id) => [id, core.getParameterIndex(id)]),
+          [...REST_SETTLE_PARAM_IDS, "ParamBustY"].map((id) => [id, core.getParameterIndex(id)]),
         );
         const addMusicParameter = (id: string, value: number, weight: number) => {
           const index = parameterIndexes.get(id);
@@ -413,9 +548,46 @@ export default function Live2DStage({
         const restEyeOpenIndexes = restSettleParameters
           .filter(({ id }) => REST_EYE_OPEN_PARAM_IDS.has(id))
           .map(({ index }) => index);
+        const setArmRigOwnership = (welcomeArms: boolean) => {
+          const armAParameter = core.getParameterIndex("PartArmA");
+          const armBParameter = core.getParameterIndex("PartArmB");
+          // Prime CubismPose's model cache before assigning the visible rig.
+          // Its first update otherwise calls reset() internally and overwrites
+          // this assignment, producing the SDK's default 0.5 s part fade.
+          internalModel.pose?.reset(core);
+          internalModel.pose?.updateParameters(core, 0);
+          if (armAParameter >= 0) core.setParameterValueByIndex(armAParameter, welcomeArms ? 0 : 1);
+          if (armBParameter >= 0) core.setParameterValueByIndex(armBParameter, welcomeArms ? 1 : 0);
+          core.setPartOpacityById("PartArmA", welcomeArms ? 0 : 1);
+          core.setPartOpacityById("PartArmB", welcomeArms ? 1 : 0);
+          // Synchronize the selected part after the explicit assignment. With
+          // its target already fully opaque, Pose has no fade left to perform.
+          internalModel.pose?.updateParameters(core, 0);
+        };
+        const motionCanRun = (motion: OfficialMotion) => (
+          motion.mode === "welcome"
+            ? variantRef.current === "welcome"
+            : variantRef.current === "player" && featuresRef.current.isPlaying
+        );
+        const snapToMotionBoundary = (motion: OfficialMotion) => {
+          const authoredStart = MOTION_START_POSES[motion.id];
+          const ignored = new Set(motion.ignoreParamIds ?? []);
+          for (const { id, index } of restSettleParameters) {
+            const explicitTarget = ignored.has(id) ? undefined : authoredStart[id];
+            core.setParameterValueByIndex(index, explicitTarget ?? core.getParameterDefaultValue(index));
+          }
+          const welcomeArms = motion.mode === "welcome";
+          setArmRigOwnership(welcomeArms);
+        };
         const smootherstep = (value: number) => value ** 3 * (value * (value * 6 - 15) + 10);
         const restEase = (duration: number) => smootherstep(Math.min(1, restSettleElapsed / duration));
-        const getOfficialMotionTime = () => {
+        const transitionParameterScale = (id: string) => {
+          if (/EyeOpen|EyeSmile|Cheek|Leg|Shoulder|Breath/u.test(id)) return 1;
+          if (/Hand/u.test(id)) return 10;
+          if (/Arm/u.test(id)) return 30;
+          return 30;
+        };
+        const getOfficialMotionElapsed = () => {
           const entries = internalModel.motionManager.queueManager?._motions;
           if (!entries?.length) return null;
           for (let index = entries.length - 1; index >= 0; index -= 1) {
@@ -423,56 +595,189 @@ export default function Live2DStage({
             if (!entry.isStarted() || entry.isFinished()) continue;
             const elapsed = entry.getStateTime() - entry.getStartTime();
             if (!Number.isFinite(elapsed) || elapsed < 0) return null;
-            return elapsed % OFFICIAL_LISTENING_DURATION;
+            return elapsed;
           }
           return null;
         };
-        const startOfficialListeningMotion = async (requestVersion: number) => {
+        const startOfficialMotion = async (motion: OfficialMotion, requestVersion: number) => {
           if (motionStartInFlightVersion !== null || requestVersion !== motionRequestVersion) return;
           motionStartInFlightVersion = requestVersion;
           let started = false;
           try {
-            started = await internalModel.motionManager.startMotion(PLAYING_IDLE_GROUP, 0, 3);
+            started = await internalModel.motionManager.startMotion(
+              motion.group,
+              motion.index,
+              3,
+              { ignoreParamIds: [...(motion.ignoreParamIds ?? [])] },
+            );
           } catch (error) {
-            console.warn("Hiyori listening motion will retry", error);
+            console.warn(`Hiyori ${motion.id} motion will retry`, error);
           }
           if (motionStartInFlightVersion === requestVersion) motionStartInFlightVersion = null;
-          if (requestVersion !== motionRequestVersion || !featuresRef.current.isPlaying) {
-            // If playback has already restarted, this is still the same official
-            // m01 loop and may safely satisfy the newer session. Only a genuine
-            // paused state is allowed to stop it.
-            if (!featuresRef.current.isPlaying) {
-              internalModel.motionManager.groups.idle = RESTING_IDLE_GROUP;
-              internalModel.motionManager.stopAllMotions();
-            }
+          if (requestVersion !== motionRequestVersion) {
+            // A pause/resume may supersede a request while its file is loading.
+            // Remove that stale result; the watchdog will restore the current
+            // intended motion on the next frame if playback is active again.
+            internalModel.motionManager.stopAllMotions();
+            motionWatchdog = 0;
             return;
+          }
+          if (!motionCanRun(motion)) {
+            internalModel.motionManager.groups.idle = RESTING_IDLE_GROUP;
+            internalModel.motionManager.stopAllMotions();
+            return;
+          }
+          if (started) {
+            activeMotion = motion;
+            activeMotionRuntime = 0;
+            lastMotionCycleTime = 0;
+            poseTransitionTarget = null;
+            poseTransitionElapsed = 0;
+            poseTransitionEndpointRendered = false;
+            poseTransitionStarting = false;
+            poseTransitionStartValues.clear();
+            poseTransitionStartVelocities.clear();
+            poseTransitionTargetValues.clear();
           }
           // A false result can occur when the SDK still owns a stale reservation.
           // The watchdog below retries only if no official queue entry exists.
-          if (!started) motionWatchdog = 0;
+          if (!started) {
+            poseTransitionStarting = false;
+            motionWatchdog = 0;
+          }
+        };
+        const beginPoseTransition = (motion: OfficialMotion) => {
+          if (!motionCanRun(motion) || motionStartInFlightVersion !== null || poseTransitionTarget !== null) return false;
+          const authoredStart = MOTION_START_POSES[motion.id];
+          const ignored = new Set(motion.ignoreParamIds ?? []);
+          let normalizedDistance = 0;
+          poseTransitionStartValues.clear();
+          poseTransitionStartVelocities.clear();
+          poseTransitionTargetValues.clear();
+          for (const { id, index } of restSettleParameters) {
+            const start = core.getParameterValueByIndex(index);
+            const explicitTarget = ignored.has(id) ? undefined : authoredStart[id];
+            const target = explicitTarget ?? core.getParameterDefaultValue(index);
+            poseTransitionStartValues.set(index, start);
+            poseTransitionStartVelocities.set(index, poseVelocities.get(index) ?? 0);
+            poseTransitionTargetValues.set(index, target);
+            normalizedDistance = Math.max(
+              normalizedDistance,
+              Math.abs(target - start) / transitionParameterScale(id),
+            );
+          }
+          poseTransitionDuration = POSE_TRANSITION_MIN_SECONDS
+            + (POSE_TRANSITION_MAX_SECONDS - POSE_TRANSITION_MIN_SECONDS) * Math.min(1, normalizedDistance);
+          poseTransitionTarget = motion;
+          poseTransitionElapsed = 0;
+          poseTransitionEndpointRendered = false;
+          poseTransitionStarting = false;
+          pendingMotion = null;
+          motionRequestVersion += 1;
+          motionWatchdog = 0;
+          internalModel.motionManager.stopAllMotions();
+          return true;
+        };
+        const cancelMotionControllers = () => {
+          motionRequestVersion += 1;
+          motionWatchdog = 0;
+          pendingMotion = null;
+          poseTransitionTarget = null;
+          poseTransitionElapsed = 0;
+          poseTransitionEndpointRendered = false;
+          poseTransitionStarting = false;
+          poseTransitionStartValues.clear();
+          poseTransitionStartVelocities.clear();
+          poseTransitionTargetValues.clear();
+          internalModel.motionManager.groups.idle = RESTING_IDLE_GROUP;
+          internalModel.motionManager.stopAllMotions();
+        };
+        const startWelcomeMotion = (motion: OfficialMotion) => {
+          cancelMotionControllers();
+          activeMotion = motion;
+          activeMotionRuntime = 0;
+          lastMotionCycleTime = 0;
+          snapToMotionBoundary(motion);
+          const requestVersion = ++motionRequestVersion;
+          motionWatchdog = 0.55;
+          return startOfficialMotion(motion, requestVersion);
+        };
+        const hardResetForStageVariant = (nextVariant: StageVariant) => {
+          cancelMotionControllers();
+          wasListening = false;
+          restSettleElapsed = Number.POSITIVE_INFINITY;
+          restStartValues.clear();
+          if (nextVariant === "welcome") {
+            welcomeMotionCursor = 0;
+            void startWelcomeMotion(OFFICIAL_MOTIONS.m06);
+            return;
+          }
+          // The scene curtain is fully opaque when React changes this variant.
+          // Reset the incompatible Arm B welcome rig to the player's Arm A rest
+          // pose here, never during a visible cross-controller transition.
+          activeMotion = OFFICIAL_MOTIONS.m01;
+          for (const { index } of restSettleParameters) {
+            core.setParameterValueByIndex(index, core.getParameterDefaultValue(index));
+          }
+          setArmRigOwnership(false);
         };
 
         const applyMusicPose = () => {
-          // The official m01 curves remain the performance. Music adds only a
+          // The active official curves remain the performance. Music adds only a
           // small downbeat accent before Physics, preserving authored easing,
           // facial timing, arm movement, and secondary follow-through.
-          if (!featuresRef.current.isPlaying) return;
-          const seamStart = OFFICIAL_LISTENING_DURATION - MOTION_LOOP_SEAM_SECONDS;
+          const welcomePerformance = variantRef.current === "welcome" && activeMotion.mode === "welcome";
+          if (!featuresRef.current.isPlaying && !welcomePerformance) return;
+          const seamStart = activeMotion.duration - MOTION_LOOP_SEAM_SECONDS;
           // Read the queue entry's real clock. A capped render dt can lag behind
           // Cubism after a dropped frame and expose the raw loop boundary once.
-          const motionTime = getOfficialMotionTime();
-          if (motionTime !== null && motionTime > seamStart) {
-            const seamProgress = Math.min(1, (motionTime - seamStart) / MOTION_LOOP_SEAM_SECONDS);
+          const elapsed = getOfficialMotionElapsed();
+          const motionTime = elapsed === null ? null : elapsed % activeMotion.duration;
+          const wrappedBoundaryFrame = motionTime !== null
+            && lastMotionCycleTime > seamStart
+            && motionTime < 0.08;
+          if (motionTime !== null && (motionTime > seamStart || wrappedBoundaryFrame)) {
+            // Cubism resets the queue clock from duration to zero inside the
+            // boundary update. Preserve the full endpoint correction on that
+            // exact rendered frame instead of letting one raw end pose flash.
+            const seamProgress = wrappedBoundaryFrame
+              ? 1
+              : Math.min(1, (motionTime - seamStart) / MOTION_LOOP_SEAM_SECONDS);
             const seamEase = seamProgress * seamProgress * (3 - 2 * seamProgress);
-            for (const [id, correction] of MOTION_LOOP_CORRECTIONS) {
+            for (const [id, correction] of MOTION_LOOP_CORRECTIONS[activeMotion.id]) {
+              if (activeMotion.ignoreParamIds?.includes(id)) continue;
               addMusicParameter(id, correction * seamEase, 1);
             }
           }
+          if (motionTime !== null) lastMotionCycleTime = motionTime;
+          if (!featuresRef.current.isPlaying) return;
           addMusicParameter("ParamAngleY", -poseNod * (4.2 + bass * 1.4), 0.72);
           addMusicParameter("ParamBodyAngleY", -poseNod * 0.9, 0.48);
           addMusicParameter("ParamBodyAngleX", poseSway * poseGroove * (0.72 + bass * 1.05) + switchAccent * 0.42, 0.2);
           addMusicParameter("ParamAngleZ", -poseSway * poseGroove * (0.55 + bass * 0.72) + switchAccent * 0.28, 0.18);
           addMusicParameter("ParamCheek", energy * 0.08, 0.12);
+        };
+        const applyPoseTransition = () => {
+          if (poseTransitionTarget === null || !motionCanRun(poseTransitionTarget)) return;
+          const progress = Math.min(1, poseTransitionElapsed / poseTransitionDuration);
+          const progress2 = progress * progress;
+          const progress3 = progress2 * progress;
+          const h00 = 2 * progress3 - 3 * progress2 + 1;
+          const h10 = progress3 - 2 * progress2 + progress;
+          const h01 = -2 * progress3 + 3 * progress2;
+
+          for (const { id, index } of restSettleParameters) {
+            const start = poseTransitionStartValues.get(index) ?? core.getParameterDefaultValue(index);
+            const target = poseTransitionTargetValues.get(index) ?? core.getParameterDefaultValue(index);
+            const velocityLimit = transitionParameterScale(id) * 3;
+            const measuredVelocity = poseTransitionStartVelocities.get(index) ?? 0;
+            const startVelocity = Math.max(-velocityLimit, Math.min(velocityLimit, measuredVelocity));
+            const value = h00 * start
+              + h10 * poseTransitionDuration * startVelocity
+              + h01 * target;
+            core.setParameterValueByIndex(index, value);
+          }
+          if (progress >= 1) poseTransitionEndpointRendered = true;
         };
         const applyRestPose = () => {
           if (restSettleElapsed >= REST_SETTLE_SECONDS || featuresRef.current.isPlaying) return;
@@ -499,12 +804,34 @@ export default function Live2DStage({
             core.setParameterValueByIndex(index, start + (blinkValue - start) * eased);
           }
         };
-        internalModel.motionManager.on("afterMotionUpdate", applyMusicPose);
-        internalModel.motionManager.on("afterMotionUpdate", applyRestPose);
+        const capturePoseHistory = () => {
+          const now = performance.now() / 1000;
+          const sampleDt = Math.min(0.05, Math.max(0.001, now - poseHistoryAt));
+          for (const { index } of restSettleParameters) {
+            const value = core.getParameterValueByIndex(index);
+            const previous = poseHistoryValues.get(index);
+            if (previous !== undefined) {
+              const measured = (value - previous) / sampleDt;
+              const filtered = (poseVelocities.get(index) ?? measured) * 0.58 + measured * 0.42;
+              poseVelocities.set(index, Math.max(-120, Math.min(120, filtered)));
+            }
+            poseHistoryValues.set(index, value);
+          }
+          poseHistoryAt = now;
+        };
+        // `afterMotionUpdate` belongs to InternalModel, not MotionManager. Binding
+        // it to the manager silently skips every pose controller and turns clip
+        // changes into hard cuts when the next authored motion takes ownership.
+        internalModel.on("afterMotionUpdate", applyPoseTransition);
+        internalModel.on("afterMotionUpdate", applyMusicPose);
+        internalModel.on("afterMotionUpdate", applyRestPose);
+        internalModel.on("afterMotionUpdate", capturePoseHistory);
         internalModel.on("beforeModelUpdate", applyRestEyeHandoff);
         cleanupMotionPose = () => {
-          internalModel.motionManager.off("afterMotionUpdate", applyMusicPose);
-          internalModel.motionManager.off("afterMotionUpdate", applyRestPose);
+          internalModel.off("afterMotionUpdate", applyPoseTransition);
+          internalModel.off("afterMotionUpdate", applyMusicPose);
+          internalModel.off("afterMotionUpdate", applyRestPose);
+          internalModel.off("afterMotionUpdate", capturePoseHistory);
           internalModel.off("beforeModelUpdate", applyRestEyeHandoff);
         };
 
@@ -515,6 +842,11 @@ export default function Live2DStage({
             value + (target - value) * (1 - Math.exp(-speed * dt))
           );
           const listening = features.isPlaying ? 1 : 0;
+
+          if (activeStageVariant !== variantRef.current) {
+            activeStageVariant = variantRef.current;
+            hardResetForStageVariant(activeStageVariant);
+          }
 
           if (sceneLayoutSnapRef.current) {
             cameraZoom = variantRef.current === "player" ? manualZoomRef.current : 1;
@@ -532,19 +864,20 @@ export default function Live2DStage({
           }
 
           if (features.isPlaying && !wasListening) {
-            // Playback hands the whole performance back to Hiyori's official m01
-            // motion. Keep random Idle fallback disabled while the explicit
-            // request loads, otherwise the SDK can briefly choose m02 or m05.
+            // Playback begins from the restrained m01 clip. Later changes are
+            // explicitly scheduled on learned beats; random Idle remains off.
             internalModel.motionManager.groups.idle = RESTING_IDLE_GROUP;
-            const requestVersion = ++motionRequestVersion;
             // Clear any stale SDK reservation before requesting the authored
             // listening loop. This does not affect a pause pose because this
             // branch runs only on the rising edge of playback.
             internalModel.motionManager.stopAllMotions();
-            motionWatchdog = 0.55;
-            void startOfficialListeningMotion(requestVersion);
+            activeMotion = OFFICIAL_MOTIONS.m01;
+            pendingMotion = null;
+            beginPoseTransition(activeMotion);
             rhythmPhase = 0;
             beatClock = 0;
+            beatCount = 0;
+            beatsSinceGesture = 16;
             pendingBeatAccent = 0;
             lightImpulse = 0;
             lightAccentCooldown = 0;
@@ -562,7 +895,7 @@ export default function Live2DStage({
             lastTransient = features.transient;
             lastBassInput = features.bass;
           } else if (!features.isPlaying && wasListening) {
-            // Capture every channel authored by m01, stop the performance, then
+            // Capture every channel authored by the admitted motions, stop the performance, then
             // ease the whole pose to neutral before Physics. Blink gets a shorter
             // late-stage handoff to avoid flashing between controller owners.
             restStartValues.clear();
@@ -570,7 +903,15 @@ export default function Live2DStage({
               restStartValues.set(index, core.getParameterValueByIndex(index));
             }
             restSettleElapsed = 0;
+            poseTransitionTarget = null;
+            poseTransitionElapsed = 0;
+            poseTransitionEndpointRendered = false;
+            poseTransitionStarting = false;
+            poseTransitionStartValues.clear();
+            poseTransitionStartVelocities.clear();
+            poseTransitionTargetValues.clear();
             motionRequestVersion += 1;
+            pendingMotion = null;
             motionWatchdog = 0;
             internalModel.motionManager.groups.idle = RESTING_IDLE_GROUP;
             internalModel.motionManager.stopAllMotions();
@@ -588,18 +929,36 @@ export default function Live2DStage({
           }
           wasListening = features.isPlaying;
 
+          // The synthesized joint transition renders its exact endpoint for one
+          // complete frame. Only then does the target authored clip start at its
+          // identical first keyframe, so there is no pose ownership overlap.
+          if (
+            poseTransitionTarget
+            && motionCanRun(poseTransitionTarget)
+            && poseTransitionEndpointRendered
+            && !poseTransitionStarting
+            && motionStartInFlightVersion === null
+          ) {
+            poseTransitionStarting = true;
+            const requestVersion = ++motionRequestVersion;
+            motionWatchdog = 0.55;
+            void startOfficialMotion(poseTransitionTarget, requestVersion);
+          }
+
           // Loading or a stale priority reservation can occasionally reject the
           // first startMotion request. Poll slowly and restart only when the
           // official queue is genuinely empty, never on every render frame.
           motionWatchdog = Math.max(0, motionWatchdog - dt);
           if (
-            features.isPlaying
+            poseTransitionTarget === null
+            && motionCanRun(activeMotion)
             && motionStartInFlightVersion === null
             && motionWatchdog === 0
-            && getOfficialMotionTime() === null
+            && getOfficialMotionElapsed() === null
           ) {
             motionWatchdog = 0.55;
-            void startOfficialListeningMotion(motionRequestVersion);
+            const requestVersion = ++motionRequestVersion;
+            void startOfficialMotion(activeMotion, requestVersion);
           }
 
           activity = follow(activity, listening, features.isPlaying ? 3.2 : 7.5);
@@ -677,6 +1036,29 @@ export default function Live2DStage({
             timeSinceOnset = 0;
             onsetCooldown = 0.16;
           }
+
+          // Homepage choreography is a separate Arm B performance. Each clip
+          // leaves through its first authored return window, before Cubism can
+          // wrap the loop clock. Avoiding a completed PRO loop removes the
+          // expensive endpoint correction/reset frame that looked like a drop.
+          if (
+            variantRef.current === "welcome"
+            && activeMotion.mode === "welcome"
+            && poseTransitionTarget === null
+          ) {
+            const welcomeElapsed = getOfficialMotionElapsed();
+            const welcomeMotionTime = welcomeElapsed === null
+              ? null
+              : welcomeElapsed % activeMotion.duration;
+            const dwellBeforeChange = activeMotion.duration * 0.55;
+            const inReturnWindow = welcomeMotionTime !== null
+              && welcomeMotionTime >= activeMotion.duration - MOTION_LOOP_SEAM_SECONDS;
+            if (activeMotionRuntime >= dwellBeforeChange && inReturnWindow) {
+              const nextCursor = (welcomeMotionCursor + 1) % WELCOME_MOTION_SEQUENCE.length;
+              const nextMotion = OFFICIAL_MOTIONS[WELCOME_MOTION_SEQUENCE[nextCursor]];
+              if (beginPoseTransition(nextMotion)) welcomeMotionCursor = nextCursor;
+            }
+          }
           lastTransient = features.transient;
           lastBassInput = features.bass;
           beatInterval = follow(beatInterval, targetBeatInterval, 1.25);
@@ -693,6 +1075,65 @@ export default function Live2DStage({
             const gestureStrength = Math.min(1, 0.48 + energy * 0.72 + pendingBeatAccent * 0.5);
             nodGestureTime = 0;
             nodGestureStrength = gestureStrength * gestureVariation;
+            beatCount += 1;
+            beatsSinceGesture += 1;
+
+            // Full authored gestures begin and end only on this same learned
+            // beat edge. The nod is intentionally independent and immediate,
+            // so it keeps exact rhythmic contact while the motion contributes
+            // larger arm, face, and torso phrasing over several beats.
+            const motionElapsed = getOfficialMotionElapsed();
+            const phraseBoundary = beatCount % 8 === 0;
+            if (poseTransitionTarget !== null) {
+              // The joint transition already owns the pose; do not queue another clip
+              // until its target has taken over at the identical boundary.
+            } else if (activeMotion.role === "gesture") {
+              if (pendingMotion === null && activeMotionRuntime >= activeMotion.duration - Math.min(0.72, beatInterval)) {
+                const baseId = BASE_MOTION_SEQUENCE[baseMotionCursor % BASE_MOTION_SEQUENCE.length];
+                pendingMotion = OFFICIAL_MOTIONS[baseId];
+                baseMotionCursor += 1;
+              }
+            } else {
+              const energeticPhrase = energy > 0.38 || bass > 0.4 || pendingBeatAccent > 0.62;
+              const gestureInterval = energeticPhrase ? 8 : 16;
+              const canQueueMotion = activeMotionRuntime >= 0.85;
+              const phraseGestureDue = phraseBoundary && beatsSinceGesture >= gestureInterval;
+              if (pendingMotion === null && canQueueMotion && phraseGestureDue) {
+                const gestureId = GESTURE_MOTION_SEQUENCE[
+                  gestureMotionCursor % GESTURE_MOTION_SEQUENCE.length
+                ];
+                pendingMotion = OFFICIAL_MOTIONS[gestureId];
+                gestureMotionCursor += 1;
+              } else if (
+                pendingMotion === null
+                && canQueueMotion
+                && phraseBoundary
+                && activeMotionRuntime >= activeMotion.duration * 1.6
+              ) {
+                // Quiet passages still evolve: rotate among the three official
+                // Idle performances after a complete cycle.
+                const baseId = BASE_MOTION_SEQUENCE[baseMotionCursor % BASE_MOTION_SEQUENCE.length];
+                if (OFFICIAL_MOTIONS[baseId].id !== activeMotion.id) {
+                  pendingMotion = OFFICIAL_MOTIONS[baseId];
+                  baseMotionCursor += 1;
+                }
+              }
+            }
+
+            // A musical phrase can request the next action, but the actual join
+            // waits for the outgoing clip's authored return window. This keeps
+            // the switch on a learned beat without cutting an arm gesture at its
+            // apex. A single synthesized joint motion then reaches the target's
+            // exact first keyframe before that authored clip begins.
+            const transitionWindow = Math.min(MOTION_LOOP_SEAM_SECONDS, Math.max(0.42, beatInterval * 0.9));
+            const atConnectorAnchor = motionElapsed !== null
+              && motionElapsed >= activeMotion.duration - transitionWindow;
+            if (pendingMotion && atConnectorAnchor) {
+              const nextMotion = pendingMotion;
+              if (beginPoseTransition(nextMotion)) {
+                if (nextMotion.role === "gesture") beatsSinceGesture = 0;
+              }
+            }
             pendingBeatAccent = 0;
             hasNoddedSincePlay = true;
           }
@@ -700,6 +1141,10 @@ export default function Live2DStage({
           variationPhase += dt * (0.17 + energy * 0.06);
           nodGestureTime += dt;
           restSettleElapsed += dt;
+          const motionClockActive = features.isPlaying
+            || (variantRef.current === "welcome" && activeMotion.mode === "welcome");
+          if (poseTransitionTarget) poseTransitionElapsed += dt * (motionClockActive ? 1 : 0);
+          else activeMotionRuntime += dt * (motionClockActive ? 1 : 0);
           const nodProgress = Math.min(1, nodGestureTime / 0.36);
           const smoothstep = (value: number) => value * value * (3 - 2 * value);
           const nodEnvelope = nodProgress < 0.3
@@ -725,26 +1170,41 @@ export default function Live2DStage({
             ? 1.46 + phraseArc * 0.54 + energyLong * 0.07
             : variantRef.current === "player" ? (hasPlayed ? pausedCameraZoom : 2.02) : 1;
           const autoSuspended = performance.now() < autoSuspendUntilRef.current;
-          const baseCameraZoom = cameraModeRef.current === "locked" || autoSuspended
-            ? manualZoomRef.current
-            : Math.max(1.42, Math.min(2.1, autoZoom));
+          const baseCameraZoom = variantRef.current === "welcome"
+            ? 1
+            : cameraModeRef.current === "locked" || autoSuspended
+              ? manualZoomRef.current
+              : Math.max(1.42, Math.min(2.1, autoZoom));
           const focusCameraBias = focusModeRef.current ? 0.2 : 0;
           const targetCameraZoom = Math.min(2.35, baseCameraZoom + focusCameraBias);
           const focusCameraTransitioning = performance.now() < focusCameraTransitionUntilRef.current;
-          cameraZoom = follow(cameraZoom, targetCameraZoom, focusCameraTransitioning ? 2.8 : autoSuspended ? 5.2 : 0.95);
-          currentCameraZoomRef.current = cameraZoom;
-          currentModelScale = follow(currentModelScale, targetModelScale, 3.6);
-          currentRigX = follow(currentRigX, targetRigX, 3.2);
-          currentRigY = follow(currentRigY, targetRigY, 3.2);
+          const portraitOffsetFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
+          if (focusCameraSnapRef.current) {
+            // Focus layout commits only while the solid scene curtain is opaque.
+            // Snap the complete Pixi camera composition in that hidden frame;
+            // revealing a settled rig avoids simultaneous resize/zoom motion.
+            cameraZoom = targetCameraZoom;
+            currentCameraZoomRef.current = cameraZoom;
+            currentModelScale = targetModelScale;
+            currentRigX = targetRigX;
+            currentRigY = targetRigY;
+            currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * portraitOffsetFactor;
+            focusCameraSnapRef.current = false;
+          } else {
+            cameraZoom = follow(cameraZoom, targetCameraZoom, focusCameraTransitioning ? 2.8 : autoSuspended ? 5.2 : 0.95);
+            currentCameraZoomRef.current = cameraZoom;
+            currentModelScale = follow(currentModelScale, targetModelScale, 3.6);
+            currentRigX = follow(currentRigX, targetRigX, 3.2);
+            currentRigY = follow(currentRigY, targetRigY, 3.2);
+            const targetPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * portraitOffsetFactor;
+            currentPortraitOffset = follow(
+              currentPortraitOffset,
+              targetPortraitOffset,
+              focusCameraTransitioning ? 2.8 : 4.2,
+            );
+          }
           model.scale.set(currentModelScale);
           contactShadow.scale.set(currentModelScale);
-          const portraitOffsetFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
-          const targetPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * portraitOffsetFactor;
-          currentPortraitOffset = follow(
-            currentPortraitOffset,
-            targetPortraitOffset,
-            focusCameraTransitioning ? 2.8 : 4.2,
-          );
           cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
           cameraRig.scale.set(cameraZoom);
 
@@ -791,7 +1251,33 @@ export default function Live2DStage({
           }
         }, undefined, UPDATE_PRIORITY.HIGH);
 
+        if (variantRef.current === "welcome") {
+          welcomeMotionCursor = 0;
+          await startWelcomeMotion(OFFICIAL_MOTIONS.m06);
+        }
+        if ("fonts" in document) await document.fonts.ready;
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        layout();
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        layout();
+        currentModelScale = targetModelScale;
+        currentRigX = targetRigX;
+        currentRigY = targetRigY;
+        cameraZoom = variantRef.current === "player"
+          ? Math.min(2.35, manualZoomRef.current + (focusModeRef.current ? 0.2 : 0))
+          : 1;
+        const initialPortraitFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
+        currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * initialPortraitFactor;
+        currentCameraZoomRef.current = cameraZoom;
+        model.scale.set(currentModelScale);
+        contactShadow.scale.set(currentModelScale);
+        cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
+        cameraRig.scale.set(cameraZoom);
         model.automator.autoUpdate = true;
+        model.update(16.67);
+        app.render();
+        canvasRevealed = true;
+        canvas.style.visibility = "";
         if (!disposed) setStatus("ready");
       } catch (error) {
         console.error("Live2D model failed to load", error);

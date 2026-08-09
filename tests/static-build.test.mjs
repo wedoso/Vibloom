@@ -54,21 +54,33 @@ test("produces a portable static site", async () => {
   await access(new URL("og.png", dist));
   await access(new URL("favicon.svg", dist));
   await access(new URL("live2d/live2dcubismcore.min.js", dist));
-  await access(new URL("live2d/hiyori/hiyori_free_t08.model3.json", dist));
-  await access(new URL("live2d/hiyori/hiyori_free_t08.moc3", dist));
+  await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.model3.json", dist));
+  await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.moc3", dist));
+  await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.pose3.json", dist));
+  await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.2048/texture_01.png", dist));
 });
 
 test("drives Hiyori from meaningful per-track audio features", async () => {
-  const [app, visual, stage, styles, listeningMotionText] = await Promise.all([
+  const [app, visual, stage, styles] = await Promise.all([
     readFile(new URL("src/App.tsx", root), "utf8"),
     readFile(new URL("src/audioVisual.ts", root), "utf8"),
     readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
     readFile(new URL("src/index.css", root), "utf8"),
-    readFile(new URL("public/live2d/hiyori/motion/hiyori_m01.motion3.json", root), "utf8"),
   ]);
-  const listeningMotion = JSON.parse(listeningMotionText);
+  const listeningMotions = await Promise.all(
+    [1, 2, 3, 5].map((index) => (
+      readFile(new URL(`public/live2d/hiyori-pro/motion/hiyori_m0${index}.motion3.json`, root), "utf8")
+        .then(JSON.parse)
+    )),
+  );
+  const welcomeMotions = await Promise.all(
+    [6, 8].map((index) => (
+      readFile(new URL(`public/live2d/hiyori-pro/motion/hiyori_m0${index}.motion3.json`, root), "utf8")
+        .then(JSON.parse)
+    )),
+  );
   const authoredMotionParameters = [...new Set(
-    listeningMotion.Curves
+    [...listeningMotions, ...welcomeMotions].flatMap((motion) => motion.Curves)
       .filter((curve) => curve.Target === "Parameter")
       .map((curve) => curve.Id),
   )].sort();
@@ -76,6 +88,24 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   const restSettleParameters = [...restSettleBlock.matchAll(/"(Param[^"]+)"/gu)]
     .map((match) => match[1])
     .sort();
+  for (const motion of listeningMotions) {
+    const partStarts = Object.fromEntries(
+      motion.Curves
+        .filter((curve) => curve.Target === "PartOpacity")
+        .map((curve) => [curve.Id, curve.Segments[1]]),
+    );
+    assert.equal(partStarts.PartArmA, 1);
+    assert.equal(partStarts.PartArmB, 0);
+  }
+  for (const motion of welcomeMotions) {
+    const partStarts = Object.fromEntries(
+      motion.Curves
+        .filter((curve) => curve.Target === "PartOpacity")
+        .map((curve) => [curve.Id, curve.Segments[1]]),
+    );
+    assert.equal(partStarts.PartArmA, 0);
+    assert.ok(partStarts.PartArmB >= 0.99);
+  }
 
   assert.match(app, /context\.createAnalyser\(\)/u);
   assert.match(app, /source\.connect\(analyser\)/u);
@@ -89,17 +119,28 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /addParameterValueByIndex/u);
   assert.match(stage, /features\.isComparing/u);
   assert.match(stage, /focusController\.focus\(gazeX, gazeY\)/u);
-  assert.match(stage, /const PLAYING_IDLE_GROUP = "Idle"/u);
-  assert.match(stage, /startMotion\(PLAYING_IDLE_GROUP, 0, 3\)/u);
-  assert.match(stage, /const startOfficialListeningMotion = async/u);
-  assert.match(stage, /motionWatchdog === 0[\s\S]*?getOfficialMotionTime\(\) === null/u);
-  assert.match(stage, /Hiyori listening motion will retry/u);
-  assert.match(stage, /const OFFICIAL_LISTENING_DURATION = 4\.7/u);
+  assert.match(stage, /motionPreload: MotionPreloadStrategy\.IDLE/u);
+  assert.match(stage, /Object\.values\(OFFICIAL_MOTIONS\)[\s\S]*?motionManager\.loadMotion\(motion\.group, motion\.index\)/u);
+  assert.match(stage, /m01: \{ id: "m01", group: "Idle", index: 0, duration: 4\.7, role: "base", mode: "player" \}/u);
+  assert.match(stage, /m03: \{ id: "m03", group: "Flick", index: 0, duration: 4\.2, role: "gesture", mode: "player" \}/u);
+  assert.match(stage, /m06: \{ id: "m06", group: "FlickUp", index: 0, duration: 5\.37, role: "welcome", mode: "welcome"/u);
+  assert.match(stage, /m08: \{ id: "m08", group: "Tap", index: 1, duration: 2\.1, role: "welcome", mode: "welcome"/u);
+  assert.equal([...stage.matchAll(/^ {2}m0\d: \{ id:/gmu)].length, 6);
+  const admittedMotionBlock = stage.match(/const OFFICIAL_MOTIONS[\s\S]*?^\};/mu)?.[0] ?? "";
+  assert.doesNotMatch(admittedMotionBlock, /m04|m07|m09|m10/u);
+  assert.match(stage, /M02_EXPRESSION_PARAM_IDS/u);
+  assert.match(stage, /M05_MOUTH_PARAM_IDS/u);
+  assert.match(stage, /startMotion\([\s\S]*?motion\.group,[\s\S]*?motion\.index,[\s\S]*?3,[\s\S]*?ignoreParamIds/u);
+  assert.match(stage, /const startOfficialMotion = async/u);
+  assert.match(stage, /motionWatchdog === 0[\s\S]*?getOfficialMotionElapsed\(\) === null/u);
+  assert.match(stage, /Hiyori \$\{motion\.id\} motion will retry/u);
   assert.match(stage, /const MOTION_LOOP_SEAM_SECONDS = 0\.72/u);
-  assert.match(stage, /const MOTION_LOOP_CORRECTIONS = \[/u);
+  assert.match(stage, /const MOTION_LOOP_CORRECTIONS: Record<OfficialMotionId/u);
   assert.match(stage, /const seamEase = seamProgress \* seamProgress \* \(3 - 2 \* seamProgress\)/u);
   assert.match(stage, /entry\.getStateTime\(\) - entry\.getStartTime\(\)/u);
-  assert.match(stage, /return elapsed % OFFICIAL_LISTENING_DURATION/u);
+  assert.match(stage, /elapsed % activeMotion\.duration/u);
+  assert.match(stage, /MOTION_LOOP_CORRECTIONS\[activeMotion\.id\]/u);
+  assert.match(stage, /activeMotion\.ignoreParamIds\?\.includes\(id\)/u);
   assert.doesNotMatch(stage, /officialMotionTime = \(officialMotionTime \+ dt/u);
   assert.match(stage, /const RESTING_IDLE_GROUP = "__audiff_resting__"/u);
   assert.match(stage, /internalModel\.motionManager\.groups\.idle = RESTING_IDLE_GROUP/u);
@@ -109,16 +150,40 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.doesNotMatch(stage, /MUSIC_OWNED_PARAM_IDS/u);
   assert.doesNotMatch(stage, /internalModel\.eyeBlink = undefined/u);
   assert.match(stage, /afterMotionUpdate/u);
-  assert.match(stage, /"ParamArmLA", "ParamArmRA"/u);
-  assert.match(stage, /"ParamBreath", "ParamBrowLForm", "ParamBrowRForm"/u);
+  assert.match(stage, /"ParamArmLA", "ParamArmLB", "ParamArmRA", "ParamArmRB"/u);
+  assert.match(restSettleBlock, /ParamArmLB/u);
+  assert.match(restSettleBlock, /ParamHandLB/u);
+  assert.match(restSettleBlock, /ParamHandRB/u);
+  assert.match(stage, /"ParamBreath", "ParamBrowLX", "ParamBrowLY"/u);
   assert.match(stage, /"ParamEyeBallX", "ParamEyeBallY"/u);
   assert.match(stage, /"ParamHairAhoge"/u);
   assert.deepEqual(restSettleParameters, authoredMotionParameters);
-  assert.match(stage, /const REST_SETTLE_SECONDS = 0\.68/u);
-  assert.match(stage, /const REST_EYE_HANDOFF_SECONDS = 0\.28/u);
+  assert.match(stage, /const REST_SETTLE_SECONDS = 1\.2/u);
+  assert.match(stage, /const REST_EYE_HANDOFF_SECONDS = 0\.36/u);
+  assert.doesNotMatch(stage, /MOTION_HANDOFF_SECONDS/u);
   assert.match(stage, /value \*\* 3 \* \(value \* \(value \* 6 - 15\) \+ 10\)/u);
-  assert.match(stage, /motionManager\.on\("afterMotionUpdate", applyRestPose\)/u);
-  assert.match(stage, /motionManager\.off\("afterMotionUpdate", applyRestPose\)/u);
+  assert.match(stage, /asset\.setFadeInTime\(0\)/u);
+  assert.match(stage, /asset\.setFadeOutTime\(0\)/u);
+  assert.match(stage, /asset\.setIsLoopFadeIn\(false\)/u);
+  assert.match(stage, /const POSE_TRANSITION_MIN_SECONDS = 0\.38/u);
+  assert.match(stage, /const POSE_TRANSITION_MAX_SECONDS = 0\.68/u);
+  assert.match(stage, /const MOTION_START_POSES: Record<OfficialMotionId/u);
+  assert.match(stage, /m06: \{ \.\.\.NEUTRAL_MOTION_START[\s\S]*?ParamHandLB: 0, ParamHandRB: 0/u);
+  assert.match(stage, /m08: \{ \.\.\.NEUTRAL_MOTION_START[\s\S]*?ParamHandLB: 10, ParamHandRB: 10/u);
+  assert.match(stage, /internalModel\.on\("afterMotionUpdate", applyPoseTransition\)/u);
+  assert.match(stage, /internalModel\.off\("afterMotionUpdate", applyPoseTransition\)/u);
+  assert.doesNotMatch(stage, /motionManager\.on\("afterMotionUpdate"/u);
+  assert.match(stage, /const h00 = 2 \* progress3 - 3 \* progress2 \+ 1/u);
+  assert.match(stage, /const h10 = progress3 - 2 \* progress2 \+ progress/u);
+  assert.match(stage, /const h01 = -2 \* progress3 \+ 3 \* progress2/u);
+  assert.match(stage, /h10 \* poseTransitionDuration \* startVelocity/u);
+  assert.match(stage, /if \(progress >= 1\) poseTransitionEndpointRendered = true/u);
+  assert.match(stage, /poseTransitionEndpointRendered[\s\S]*?startOfficialMotion\(poseTransitionTarget, requestVersion\)/u);
+  assert.doesNotMatch(stage, /Math\.exp\(-state\.omega|connectorStates|applyMotionConnector/u);
+  assert.match(stage, /const wrappedBoundaryFrame/u);
+  assert.match(stage, /lastMotionCycleTime > seamStart/u);
+  assert.match(stage, /internalModel\.on\("afterMotionUpdate", applyRestPose\)/u);
+  assert.match(stage, /internalModel\.off\("afterMotionUpdate", applyRestPose\)/u);
   assert.match(stage, /internalModel\.on\("beforeModelUpdate", applyRestEyeHandoff\)/u);
   assert.match(stage, /internalModel\.off\("beforeModelUpdate", applyRestEyeHandoff\)/u);
   assert.doesNotMatch(stage, /internalModel\.on\("beforeModelUpdate", applyRestPose\)/u);
@@ -136,6 +201,38 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /const tempoBinsBySource = \[new Float32Array\(26\), new Float32Array\(26\)\]/u);
   assert.match(stage, /learnedBeatIntervalBySource\[source\] = 0\.51 \+ strongestBin \* 0\.02/u);
   assert.match(stage, /const scheduledBeat = hasNoddedSincePlay && beatClock >= beatInterval/u);
+  assert.match(stage, /const phraseBoundary = beatCount % 8 === 0/u);
+  assert.match(stage, /const gestureInterval = energeticPhrase \? 8 : 16/u);
+  assert.match(stage, /const GESTURE_MOTION_SEQUENCE = \["m03"\] as const/u);
+  assert.match(stage, /const WELCOME_MOTION_SEQUENCE = \["m06", "m08"\] as const/u);
+  assert.match(stage, /motion\.mode === "welcome"[\s\S]*?variantRef\.current === "welcome"/u);
+  assert.match(stage, /const setArmRigOwnership = \(welcomeArms: boolean\)/u);
+  const armOwnershipBlock = stage.match(/const setArmRigOwnership = \(welcomeArms: boolean\) => \{([\s\S]*?)\n[ ]{8}\};/u)?.[1] ?? "";
+  assert.match(armOwnershipBlock, /pose\?\.reset\(core\);[\s\S]*?pose\?\.updateParameters\(core, 0\);[\s\S]*?setPartOpacityById\("PartArmB"[\s\S]*?pose\?\.updateParameters\(core, 0\)/u);
+  assert.match(stage, /internalModel\.pose\?\.reset\(core\)/u);
+  assert.match(stage, /core\.setParameterValueByIndex\(armAParameter, welcomeArms \? 0 : 1\)/u);
+  assert.match(stage, /core\.setParameterValueByIndex\(armBParameter, welcomeArms \? 1 : 0\)/u);
+  assert.match(stage, /core\.setPartOpacityById\("PartArmA", welcomeArms \? 0 : 1\)/u);
+  assert.match(stage, /core\.setPartOpacityById\("PartArmB", welcomeArms \? 1 : 0\)/u);
+  assert.match(stage, /internalModel\.pose\?\.updateParameters\(core, 0\)/u);
+  assert.match(stage, /hardResetForStageVariant\(activeStageVariant\)/u);
+  assert.match(stage, /setArmRigOwnership\(false\)/u);
+  assert.match(stage, /activeMotion\.mode === "welcome"[\s\S]*?dwellBeforeChange/u);
+  assert.match(stage, /const dwellBeforeChange = activeMotion\.duration \* 0\.55/u);
+  assert.doesNotMatch(stage, /activeMotion\.duration \* 1\.8/u);
+  assert.match(stage, /let canvasRevealed = false/u);
+  assert.match(stage, /if \("fonts" in document\) await document\.fonts\.ready/u);
+  assert.match(stage, /await new Promise<void>\(\(resolve\) => requestAnimationFrame\(\(\) => resolve\(\)\)\)/u);
+  assert.match(stage, /canvasRevealed = true;[\s\S]*?canvas\.style\.visibility = ""/u);
+  assert.match(stage, /const baseCameraZoom = variantRef\.current === "welcome"[\s\S]*?\? 1[\s\S]*?: cameraModeRef\.current/u);
+  assert.doesNotMatch(stage, /variantRef\.current === "welcome"[\s\S]{0,120}?Math\.max\(1\.42/u);
+  assert.match(stage, /gestureMotionCursor % GESTURE_MOTION_SEQUENCE\.length/u);
+  assert.match(stage, /BASE_MOTION_SEQUENCE\[baseMotionCursor % BASE_MOTION_SEQUENCE\.length\]/u);
+  assert.match(stage, /activeMotion\.role === "gesture"/u);
+  assert.match(stage, /let pendingMotion: OfficialMotion \| null = null/u);
+  assert.match(stage, /const atConnectorAnchor/u);
+  assert.match(stage, /motionElapsed >= activeMotion\.duration - transitionWindow/u);
+  assert.match(stage, /beginPoseTransition\(nextMotion\)/u);
   assert.match(stage, /pendingBeatAccent/u);
   assert.match(stage, /const firstAudibleBeat = !hasNoddedSincePlay/u);
   assert.match(stage, /nodGestureTime = 0;[\s\S]*?nodGestureStrength = gestureStrength \* gestureVariation;/u);
@@ -224,19 +321,36 @@ test("animates both directions of Focus Mode", async () => {
 
   assert.match(app, /focusTransition \? `focus-transition-\$\{focusTransition\}`/u);
   assert.match(app, /setFocusTransition\(nextFocusMode \? "enter" : "exit"\)/u);
-  assert.match(styles, /@keyframes focus-stage-exit/u);
+  assert.match(app, /withSceneTransition\(\(\) => \{[\s\S]*?setFocusMode\(nextFocusMode\)[\s\S]*?nextFocusMode \? "focus-enter" : "focus-exit"\)/u);
+  assert.match(app, /scene-curtain-copy-focus-enter/u);
+  assert.match(app, /scene-curtain-copy-focus-exit/u);
+  assert.match(styles, /html\[data-scene-transition="focus-enter"\] \.scene-curtain-disc/u);
+  assert.match(styles, /html\[data-scene-transition="focus-exit"\] \.scene-curtain-disc/u);
+  assert.doesNotMatch(styles, /@keyframes focus-stage-enter/u);
+  assert.doesNotMatch(styles, /@keyframes focus-stage-exit/u);
+  assert.match(
+    styles,
+    /\.app-shell\.focus-transition-enter \.live2d-stage-player,\s*\.app-shell\.focus-transition-exit \.live2d-stage-player \{ animation: none; \}/u,
+  );
   assert.match(styles, /\.app-shell\.focus-transition-exit \.track-score-strip/u);
   assert.match(styles, /\.app-shell\.focus-transition-exit \.workspace \.player/u);
   assert.match(styles, /@keyframes focus-button-enter/u);
   assert.match(styles, /@keyframes focus-button-exit/u);
   assert.match(styles, /\.is-focus-mode\.focus-transition-enter \.track-score-strip/u);
   assert.match(styles, /@keyframes focus-camera-control-exit/u);
-  assert.match(styles, /The canvas backing store must not be resized/u);
+  assert.match(styles, /Do not promote the[\s\S]*?stage or canvas into a transient transform layer/u);
+  assert.doesNotMatch(styles, /\.live2d-stage-player,\s*\.live2d-canvas \{[\s\S]*?transform: translateZ\(0\)/u);
   assert.doesNotMatch(styles, /min-height \.86s/u);
   assert.match(styles, /\.live2d-canvas \{[\s\S]*?backface-visibility: hidden/u);
   assert.match(stage, /previousHostBounds\.top - nextHostBounds\.top/u);
   assert.match(stage, /currentRigY \+= previousHostBounds\.top - nextHostBounds\.top/u);
   assert.match(stage, /currentPortraitOffset = follow\(/u);
+  assert.match(stage, /focusCameraTransitioning \? 2\.8/u);
+  assert.match(stage, /if \(changingFocus && sceneCovered\) \{[\s\S]*?focusCameraSnapRef\.current = true/u);
+  assert.match(stage, /if \(focusCameraSnapRef\.current\) \{[\s\S]*?cameraZoom = targetCameraZoom/u);
+  assert.match(stage, /currentModelScale = targetModelScale/u);
+  assert.match(stage, /currentRigX = targetRigX/u);
+  assert.match(stage, /currentRigY = targetRigY/u);
   assert.match(stage, /disc\.animate\(/u);
   assert.match(styles, /\.is-focus-mode\.focus-transition-enter \.track-score-strip \{[\s\S]*?position: absolute;/u);
 });

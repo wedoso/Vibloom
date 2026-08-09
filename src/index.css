@@ -1494,8 +1494,14 @@ footer p { margin: 0; }
 }
 
 .scene-curtain-copy-exit,
-html[data-scene-transition="exit"] .scene-curtain-copy-enter { display: none; }
+.scene-curtain-copy-focus-enter,
+.scene-curtain-copy-focus-exit,
+html[data-scene-transition="exit"] .scene-curtain-copy-enter,
+html[data-scene-transition="focus-enter"] .scene-curtain-copy-enter,
+html[data-scene-transition="focus-exit"] .scene-curtain-copy-enter { display: none; }
 html[data-scene-transition="exit"] .scene-curtain-copy-exit { display: grid; }
+html[data-scene-transition="focus-enter"] .scene-curtain-copy-focus-enter,
+html[data-scene-transition="focus-exit"] .scene-curtain-copy-focus-exit { display: grid; }
 
 .scene-curtain-copy small,
 .scene-curtain-copy i {
@@ -1533,6 +1539,24 @@ html[data-scene-transition="exit"] .scene-curtain-copy-exit { display: grid; }
 }
 
 html[data-scene-transition="exit"] .scene-curtain-disc { background: #efcdd2; }
+
+html[data-scene-transition="focus-enter"] .scene-curtain-disc {
+  background: #202b46;
+  box-shadow: inset 0 0 0 1px rgba(255, 252, 247, .12), 0 0 90px rgba(32, 43, 70, .34);
+}
+
+html[data-scene-transition="focus-enter"] .scene-curtain-copy {
+  color: #fffaf2;
+}
+
+html[data-scene-transition="focus-enter"] .scene-curtain-copy small,
+html[data-scene-transition="focus-enter"] .scene-curtain-copy i {
+  color: rgba(255, 250, 242, .66);
+}
+
+html[data-scene-transition="focus-enter"] .scene-curtain-copy strong em { color: #9cc8bf; }
+html[data-scene-transition="focus-enter"] .scene-curtain-line { background: rgba(255, 250, 242, .22); }
+html[data-scene-transition="focus-exit"] .scene-curtain-disc { background: #e8ded4; }
 
 html.is-scene-transitioning .scene-curtain {
   opacity: 1;
@@ -1913,19 +1937,9 @@ html[data-scene-transition="exit"].is-scene-revealing .welcome-choices {
 .app-shell.is-focus-mode .play-button { width: 46px; height: 46px; }
 .app-shell.is-focus-mode .camera-capsule { top: auto; bottom: 205px; }
 
-/* Focus mode is a stage change, so both directions receive their own motion.
-   Exit restores the surrounding listening desk in layers instead of snapping
-   every hidden element back on the same frame. */
-@keyframes focus-stage-enter {
-  from { opacity: .82; transform: scale(.985); filter: saturate(.82); }
-  to { opacity: 1; transform: scale(1); filter: saturate(1); }
-}
-
-@keyframes focus-stage-exit {
-  from { opacity: .9; transform: scale(1.025); filter: saturate(1.08); }
-  to { opacity: 1; transform: scale(1); filter: saturate(1); }
-}
-
+/* Focus mode moves the Live2D camera only inside Pixi. CSS animates the desk
+   around it; applying a second transform to the canvas stage causes a visible
+   one-frame scale conflict when the WebGL backing buffer also resizes. */
 @keyframes focus-desk-enter {
   from { opacity: 0; transform: translateY(18px) scale(.975); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -1936,16 +1950,8 @@ html[data-scene-transition="exit"].is-scene-revealing .welcome-choices {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.app-shell.focus-transition-enter .live2d-stage-player {
-  animation: focus-stage-enter .68s cubic-bezier(.16, 1, .3, 1) both;
-}
-
 .app-shell.focus-transition-enter .player {
   animation: focus-desk-enter .58s .06s cubic-bezier(.16, 1, .3, 1) both;
-}
-
-.app-shell.focus-transition-exit .live2d-stage-player {
-  animation: focus-stage-exit .72s cubic-bezier(.16, 1, .3, 1) both;
 }
 
 .app-shell.focus-transition-exit .track-score-strip,
@@ -2582,13 +2588,10 @@ html[data-scene-transition="exit"].is-scene-revealing .welcome-choices {
     margin .86s cubic-bezier(.16, 1, .3, 1);
 }
 
-/* The canvas backing store must not be resized on every frame of a CSS height
-   tween. Focus choreography comes from the persistent camera rig instead. */
-.live2d-stage-player,
-.live2d-canvas {
-  backface-visibility: hidden;
-  transform: translateZ(0);
-}
+/* Focus choreography comes from the persistent camera rig. Do not promote the
+   stage or canvas into a transient transform layer: Safari/Chromium can briefly
+   invalidate that layer when the WebGL backing store changes size. */
+.live2d-canvas { backface-visibility: hidden; }
 
 @keyframes focus-chrome-leave {
   0% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }

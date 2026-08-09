@@ -13,7 +13,7 @@ Audiff is a private, browser-based visual music player and sample-accurate A/B c
 ![Audiff listening room](docs/assets/listening-room.png)
 
 - Audio is decoded and analyzed locally in the current browser tab.
-- Live2D's official Hiyori `hiyori_m01` motion leads the listening performance.
+- A semantically reviewed subset of Hiyori's official motions forms a beat- and phrase-aware listening performance.
 - Learned body beats add restrained nod accents without replacing the authored pose.
 - A solid A/B-colored disc accumulates three low-frequency size tiers, then releases slowly instead of flashing on every transient.
 - Director mode frames phrase-scale energy automatically; the mouse wheel switches to manual framing.
@@ -22,7 +22,7 @@ Audiff is a private, browser-based visual music player and sample-accurate A/B c
 
 ![Audiff Focus mode](docs/assets/focus-mode.png)
 
-Press `F` to move into a close listening view. Hiyori and the solid music disc begin moving at the same moment the score strip and header context withdraw; exit reverses the same shared timeline. The persistent Pixi canvas is never recreated or continuously resized during the shot. The existing waveform and A/B selector remain available—Focus mode does not create a second control system.
+Press `F` to move into a close listening view through a full-screen editorial iris. The curtain becomes fully opaque before the layout changes; Hiyori's Pixi camera, rig, scale, contact shadow, and backing buffer settle during two hidden paint frames, then the finished composition is revealed. The canvas is never recreated, and the existing waveform and A/B selector remain available—Focus mode does not create a second control system.
 
 ### Timed LRC lyrics
 
@@ -42,11 +42,15 @@ The lyric font stack includes system fallbacks for English, Simplified and Tradi
 
 ## Live2D behavior
 
-Audiff uses Hiyori's official motion as the primary performance instead of rebuilding character movement from raw coordinates.
+Audiff uses Hiyori's official motions as the primary performance instead of rebuilding character movement from raw coordinates.
 
-- **Playing:** the official `Idle[0]` loop supplies coordinated face, head, torso, arm, hair, and ribbon movement. A queue watchdog restarts that same motion only if the SDK genuinely has no active listening motion.
-- **Paused:** the authored motion stops and its complete pose eases to neutral over 680 ms. SDK blink, Natural Breath, pointer focus, Physics, and subtle secondary motion remain alive.
-- **Loop continuity:** six non-matching endpoints in the official 4.7-second clip are corrected over the final 720 ms using Cubism's actual motion clock.
+- **Homepage:** PRO raised-arm `m06` and celebratory `m08` form a separate Arm B welcome performance. Their speaking-mouth channel is masked, and they connect only to each other through the single-pose trajectory.
+- **Playing:** `m01`, `m02`, and `m05` rotate as Arm A listening motions, with neutral `m03` as the phrase gesture. Unsuitable mouth and expression curves are masked.
+- **Motion semantics:** upset, startled, angry, or shouting clips (`m04`, `m07`, `m09`, `m10`) are never loaded or scheduled. The incompatible Arm A and Arm B sets never connect visibly: the fully opaque scene curtain hides a deterministic mesh and pose reset before the destination scene is revealed. A/B audio changes use gaze and a restrained body accent instead of a character reaction clip.
+- **Beat contact:** every accepted learned beat starts the independent 360 ms nod, so long authored gestures add variety without weakening precise head-to-beat timing.
+- **Motion connection:** SDK motion fades and per-loop fade restarts are disabled. Clip changes wait for an authored return window, then one pose controller follows a velocity-matched cubic Hermite joint path to the target clip's exact first keyframe. That endpoint is rendered for a complete frame before the authored clip starts at the identical pose; two motions are never opacity- or weight-blended.
+- **Paused:** the authored motion stops and its complete PRO pose eases visibly to neutral over 1.2 seconds. SDK blink, Natural Breath, pointer focus, Physics, Pose, and subtle secondary motion remain alive.
+- **Loop continuity:** each clip's non-matching endpoints are corrected over the final 720 ms using Cubism's actual motion clock, including the exact frame where the SDK resets that clock to zero.
 - **Beat response:** broadband and bass onsets learn a per-track 0.5–1.0 second body groove. Scheduled beats produce one eased 360 ms nod accent rather than hi-hat-speed twitching.
 
 See [docs/architecture.md](docs/architecture.md) for parameter ownership, signal processing, camera rules, transitions, and deployment invariants.
@@ -131,7 +135,7 @@ src/
   lrc.ts                   LRC decoding, metadata, offsets, and timed lines
   index.css                Responsive visual and motion system
 public/
-  live2d/hiyori/           Official Hiyori model, motion, physics, and notice
+  live2d/hiyori-pro/       Official Hiyori PRO runtime, motions, Pose, and Physics
   live2d/live2dcubismcore.min.js
   og.png                   Current social preview
 docs/

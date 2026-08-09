@@ -58,20 +58,29 @@ Each scheduled beat starts a 360 ms asymmetric nod envelope: a quick eased downw
 
 ## Live2D motion orchestration
 
-Hiyori's official `hiyori_m01` clip contains coordinated head, torso, face, arm, and hair movement. Audiff treats those authored curves as the main listening performance rather than reconstructing them from isolated parameters.
+Audiff uses the official Hiyori PRO `t11` runtime, but the clips' emotional and structural meanings are not interchangeable. The player choreography whitelist contains `m01`, `m02`, `m03`, and `m05`; the homepage has a separate welcome whitelist containing raised-arm `m06` and compact celebratory `m08`. `m04` (upset/pouting), `m07` (startled), `m09` (angry/shouting), and `m10` (distressed/shouting) remain in the official package but are never loaded or scheduled.
 
 The motion manager has two explicit states:
 
-- **Playing:** the official `Idle[0]` / `hiyori_m01` motion owns its complete authored parameter set. Audiff adds only a small beat accent to `ParamAngleY`, `ParamBodyAngleY`, and two low-weight sway channels after the motion update and before Physics.
+- **Homepage:** `m06` supplies the raised-arm greeting and `m08` supplies a short celebratory accent. Each leaves during its first authored return window, before Cubism wraps the PRO loop clock; this avoids an endpoint correction/reset frame on the landing page. Both keep Arm A hidden and Arm B visible, mask the speaking-mouth channel, and transition only within this compatible set.
+- **Playing:** `m01`, `m02`, and `m05` form the base listening rotation and `m03` supplies the restrained phrase gesture. All four keep Arm A visible and Arm B hidden at their boundaries. `m02` ignores blush, smile, brow, and mouth expression curves; `m05` ignores its speaking/singing mouth. Audiff then adds only a small beat accent after the official motion update.
 - **Paused or ready:** the Idle group is disabled and all authored motions stop. The SDK's automatic blink, Natural Breath, pointer focus, and Physics remain active, producing a quiet living pose rather than a frozen image.
 
-The official `hiyori_m01` asset declares a 4.7-second loop, but six curves have different start and end values: head X/Y/Z, eye X/Y, and torso Z. A direct modulo loop therefore produces a visible one-frame pose jump. Audiff leaves the authored motion unchanged until its final 720 ms, then applies a smooth endpoint correction that brings those six curves back to their exact starting values. The correction reads Cubism's active motion-queue clock directly rather than integrating the renderer's capped `dt`; a dropped frame therefore cannot put the correction and official loop on different phases. At the wrap boundary the correction returns to zero as the official first frame begins, so position and velocity remain visually continuous.
+Every admitted motion declares itself as looping, but several authored curves have different start and end values. A direct modulo loop can therefore produce a visible one-frame pose jump. Audiff stores the measured endpoint delta for every whitelisted clip, leaves the authored motion unchanged until its final 720 ms, then smoothly returns those curves to their exact starting values. The correction reads Cubism's active motion-queue clock directly rather than integrating the renderer's capped `dt`. It also detects the exact update in which Cubism has already reset that clock to zero while still rendering the old endpoint; that boundary frame receives the complete correction instead of exposing one raw end pose.
 
-The SDK's automatic Idle group remains disabled during both rest and playback. Audiff starts only `Idle[0]` explicitly. This prevents the motion manager from briefly selecting the more dramatic `m02` or `m05` while the listening motion request is loading.
+The SDK's automatic Idle group remains disabled during both rest and playback. Audiff starts every clip explicitly, preventing an unscheduled random action from landing between beats.
+
+The PRO files omit fade metadata, which makes the Cubism runtime inject a one-second motion fade and restart it at every loop. Audiff explicitly disables motion fade-in, fade-out, and loop fade-in for the admitted clips.
+
+Clip changes use a single synthesized joint trajectory. A phrase first queues its requested action; the switch waits for a learned beat inside the outgoing clip's authored return window. At the join, Audiff stops the outgoing authored controller, captures the one visible pose and its measured joint velocities, and moves that same pose along a cubic Hermite path to the target clip's exact first keyframe. The path is distance-scaled from 380 to 680 ms, preserves the outgoing velocity, and arrives with zero velocity because every admitted clip has a stationary first keyframe. No incoming motion runs underneath it, no two poses are weighted together, and no opacity channel is animated. The exact endpoint is rendered for a complete frame; only on the following update does the target authored clip start at that identical parameter state.
+
+The two compatible sets never use that connector across their boundary. Loading or clearing the first track opens the solid scene curtain; React changes the stage variant only after the curtain fully covers the viewport. During that hidden commit, Audiff stops the current controller, restores model parameters, sets Arm A/Arm B ownership directly for the destination, and prepares its first pose. The curtain remains opaque for two more paint opportunities before reveal. The unavoidable mesh swap is therefore a scene cut, never a visible motion fade or hard pose jump.
+
+The beat tracker remains the timing authority. Its 360 ms nod begins on every accepted learned beat, independent of the longer authored clip. Full motions may change only on that same beat edge: energetic material can introduce a reviewed gesture after eight beats, restrained material waits sixteen, and all normal changes land on eight-beat phrase boundaries. Gestures return to the rotating base motion on a beat near their authored ending; quiet passages still rotate base motions after a complete cycle. A/B source changes affect gaze and the existing low-weight body accent only.
 
 The first `startMotion` request can occasionally be rejected while Cubism still owns a stale loading or priority reservation. Playback therefore clears stale reservations before requesting `Idle[0]`, then runs a 550 ms watchdog. The watchdog requests the same official motion only when playback is active, no request is in flight, and Cubism's motion queue is genuinely empty. It never stacks multiple motions or falls back to a random Idle clip.
 
-When pause lands partway through a large authored gesture, Audiff captures every parameter authored by `hiyori_m01` and eases that complete pose to model defaults for 680 ms with zero velocity at both ends. The handoff runs before Physics, so hair and ribbon inertia follows the body's deceleration instead of snapping separately. Eye openness uses a shorter 280 ms blend into the SDK's live blink value. After the handoff, every channel is released; there is no permanent parameter override and no custom blink implementation.
+When pause lands partway through an authored gesture or synthesized transition, Audiff cancels that controller, captures every parameter authored by the admitted whitelist, and eases the complete pose to model defaults for 1.2 seconds with zero velocity at both ends. The handoff runs before Physics and Pose. Eye openness uses a shorter 360 ms transfer into the SDK's live blink value. After the handoff, every channel is released.
 
 ## Playback states
 
@@ -79,14 +88,14 @@ When pause lands partway through a large authored gesture, Audiff captures every
 
 - No new onset or scheduled beat can start.
 - The listening motion stops and all queued musical beats are cleared immediately.
-- The complete authored pose—including arms, brows, gaze, breath, and ahoge—eases upright over 680 ms before Physics.
+- The complete authored pose—including admitted arm/hand channels, brows, gaze, shoulder, leg, breath, and ahoge—eases upright over 1.2 seconds before Physics and Pose.
 - A/B listening gaze returns to center; pointer gaze remains available.
 - SDK blink, restrained Natural Breath, pointer focus, and Physics remain alive.
 - The automatic camera holds the framing captured at pause instead of continuing to push or pull.
 
 ### Playing
 
-- The official `hiyori_m01` performance starts from its authored beginning.
+- The restrained official `hiyori_m01` performance starts from its authored beginning, then the beat/phrase scheduler introduces only the reviewed whitelist.
 - Facial timing, arms, torso motion, and secondary movement come from the official motion and Physics.
 - Scheduled body beats add a restrained, visible nod accent without replacing the authored pose.
 - In comparison mode, gaze follows the currently audible A or B track.
@@ -106,14 +115,17 @@ The paused state is intentionally quiet, not a frozen bitmap. Natural secondary 
 
 Focus mode changes the composition rather than simply hiding elements:
 
-- the header context and track score leave first;
-- the transport reforms as a floating desk;
-- the Focus and camera controls enter from their new edges;
-- Hiyori's Pixi camera receives an additional 0.2× close-up bias;
-- the stage switches layout once while the persistent camera rig, model scale, and contact shadow interpolate continuously;
-- leaving Focus reverses the camera before the score, header, and desk return in staggered layers.
+- a navy editorial iris covers the viewport when entering; a warm paper iris covers it when leaving;
+- React commits the focus layout only after the iris is fully opaque;
+- Hiyori's Pixi camera receives its additional 0.2× close-up bias, while rig position, model scale, portrait offset, contact shadow, and renderer size snap to the final composition during the hidden frame;
+- the curtain stays opaque for two further paint opportunities before revealing the settled stage;
+- the score strip, header context, compact transport, Focus button, and camera controls may still use staggered entrance animation after the structural cut.
 
-The Live2D canvas remains mounted throughout. Stage height is not CSS-tweened because that would repeatedly clear and resize Pixi's WebGL backing buffer. The leaving score strip becomes an absolute overlay immediately, releasing its layout space while it fades; Hiyori's camera rig and the solid disc then start their FLIP-style movement on the same frame. Resize observations are coalesced, and the renderer repaints synchronously after a genuine size change.
+The Live2D canvas remains mounted throughout. Stage height is not CSS-tweened because that would repeatedly clear and resize Pixi's WebGL backing buffer. Resize observations are coalesced, and the renderer repaints synchronously after a genuine size change. No visible frame contains both a layout resize and a moving Live2D camera, removing the compositor race that previously appeared as character shake.
+
+On initial landing load, the canvas stays hidden while fonts settle and two animation frames recompute the final host bounds. The renderer, model scale, camera rig, and first PRO pose are then painted once at their target geometry before the canvas becomes visible. There is no visible easing from provisional loading coordinates. The welcome camera is fixed at `1.0x`; the player's `1.42x` automatic minimum never leaks into the homepage.
+
+Arm B ownership is assigned only after CubismPose has initialized its model cache, preventing its implicit first-update reset and 0.5-second part fade. Motion connectors use the complete authored first keyframe—including explicit zero-valued Arm B hand channels—so the final connector frame and the target motion's first frame are identical.
 
 The standard waveform and A/B selector remain the only track controls in both layouts. `prefers-reduced-motion: reduce` disables decorative choreography while preserving the state change.
 
