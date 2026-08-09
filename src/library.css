@@ -351,7 +351,7 @@
 .track-row {
   min-height: 58px;
   display: grid;
-  grid-template-columns: 36px minmax(190px, 1.6fr) minmax(120px, 0.8fr) minmax(130px, 0.75fr) 58px 34px;
+  grid-template-columns: 36px minmax(240px, 1fr) minmax(150px, auto) 58px 34px;
   column-gap: 10px;
   border-bottom: 1px solid var(--library-line);
   border-radius: 10px;
@@ -927,12 +927,7 @@
   }
 
   .track-row {
-    grid-template-columns: 32px minmax(180px, 1fr) minmax(90px, 0.6fr) 46px 30px;
-  }
-
-  .track-row > :nth-child(3),
-  .track-table-header > :nth-child(3) {
-    display: none;
+    grid-template-columns: 32px minmax(180px, 1fr) minmax(125px, auto) 46px 30px;
   }
 
   .library-transport {
@@ -995,9 +990,7 @@
   }
 
   .track-row > :nth-child(3),
-  .track-row > :nth-child(4),
-  .track-table-header > :nth-child(3),
-  .track-table-header > :nth-child(4) {
+  .track-table-header > :nth-child(3) {
     display: none;
   }
 
@@ -1433,27 +1426,53 @@ button.track-index,
   background: rgba(255, 255, 255, 0.68);
 }
 
-.track-states i {
-  padding: 3px 7px;
+.track-availability {
+  min-width: 68px;
+  height: 24px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   color: #786c61;
   background: rgba(121, 102, 88, 0.1);
-  font-size: 10px;
-  font-style: normal;
+  font-size: 9px;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
-.track-states i.is-cached,
-.track-states i.has-lyrics,
-.track-states i.availability-available {
+.track-availability.is-cached,
+.track-availability.availability-available {
   color: #476553;
   background: rgba(97, 142, 110, 0.13);
 }
 
-.track-states i.availability-missing,
-.track-states i.availability-reconnect {
+.track-availability.availability-missing,
+.track-availability.availability-reconnect {
   color: #9c503c;
   background: rgba(182, 92, 63, 0.13);
 }
+
+.track-feature-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.track-feature-icons > span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(71, 58, 47, .1);
+  border-radius: 8px;
+  color: #6f645b;
+  background: rgba(255, 252, 247, .72);
+}
+
+.track-feature-icons > .has-lyrics { color: #527360; }
+.track-feature-icons > .has-version-b { color: #a04d5a; background: rgba(200, 95, 109, .08); }
+.track-feature-icons > .comparison-reconnect { border-color: rgba(200, 95, 109, .28); background: transparent; }
 
 .library-lyrics p.is-current {
   color: var(--library-ink);
@@ -2037,23 +2056,6 @@ button.track-index,
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list p { padding: 11px 0; font-size: clamp(15px, 1.55vw, 21px); }
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list p.is-current { font-size: clamp(21px, 2.35vw, 31px); }
 
-/* Adjacent library pills use one measured capsule geometry. */
-.track-states i {
-  width: 72px;
-  min-width: 72px;
-  height: 22px;
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 750;
-  line-height: 1;
-  letter-spacing: .015em;
-  white-space: nowrap;
-}
-
 @media (max-width: 900px) {
   .is-player-shell .console-lower:has(.library-lyrics) { min-height: 136px; }
   .is-player-shell .console-lower .library-lyrics.lyrics-variant-console { height: 136px; }
@@ -2082,30 +2084,15 @@ button.track-index,
 .comparison-duration-alert strong { margin-right: 7px; color: #493d19; }
 .comparison-ended-alert { color: #8e4239; border: 1px solid rgba(200,95,109,.26); background: rgba(200,95,109,.09); }
 
-.track-states i.has-version-b { color: #9c4352; background: rgba(200,95,109,.13); }
-.track-states i.has-version-b.comparison-reconnect { border: 1px solid rgba(200,95,109,.28); background: transparent; }
-
 .stage-source-indicator > button { width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border: 1px solid var(--library-line); border-radius: 50%; color: #8d8177; background: rgba(255,255,255,.52); font-size: 10px; font-weight: 800; cursor: pointer; }
 .stage-source-indicator > button.is-active { color: #fff; border-color: var(--library-accent); background: var(--library-accent); }
 
-.transport-ab-switch { display: inline-grid; grid-template-columns: 30px 30px; gap: 2px; padding: 2px; border: 1px solid var(--library-line); border-radius: 999px; background: rgba(235,226,217,.7); }
-.transport-secondary .transport-ab-switch button { width: 30px; height: 28px; padding: 0; border-radius: 999px; color: var(--library-muted); background: transparent; font-size: 10px; font-weight: 850; }
-.transport-secondary .transport-ab-switch button.is-active.source-a { color: #fff; background: rgb(84 127 121); }
-.transport-secondary .transport-ab-switch button.is-active.source-b { color: #fff; background: rgb(200 95 109); }
+.transport-ab-switch { height: 36px; display: inline-grid; grid-template-columns: 33px 33px; gap: 3px; padding: 3px; border: 1px solid rgba(71,58,47,.14); border-radius: 12px; background: rgba(255,252,247,.88); box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 3px 12px rgba(47,41,36,.045); }
+.transport-secondary .transport-ab-switch button { width: 33px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 8px; color: #8a7e74; background: transparent; font-size: 10px; font-weight: 850; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+.transport-secondary .transport-ab-switch button:hover { color: var(--library-ink); background: rgba(71,58,47,.055); }
+.transport-secondary .transport-ab-switch button.is-active.source-a { color: #fffaf3; border-color: rgb(68 111 104); background: rgb(84 127 121); box-shadow: 0 2px 6px rgb(84 127 121 / .22); }
+.transport-secondary .transport-ab-switch button.is-active.source-b { color: #fffaf3; border-color: rgb(181 78 94); background: rgb(200 95 109); box-shadow: 0 2px 6px rgb(200 95 109 / .2); }
 .transport-source-ended { position: absolute; bottom: 5px; color: rgb(200 95 109); font-size: 9px; font-weight: 750; }
-
-.focus-compare-waveforms { width: min(520px, 52vw); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.focus-compare-waveforms > button { min-width: 0; height: 34px; padding: 4px 7px; display: grid; grid-template-columns: 18px minmax(0,1fr); align-items: center; gap: 5px; border: 1px solid var(--library-line); border-radius: 9px; color: var(--library-muted); background: rgba(255,252,247,.66); cursor: pointer; opacity: .48; }
-.focus-compare-waveforms > button.is-active { opacity: 1; border-color: rgb(84 127 121 / .42); }
-.focus-compare-waveforms > button:nth-child(2).is-active { border-color: rgb(200 95 109 / .42); }
-.focus-compare-waveforms > button > span { font-size: 9px; font-weight: 850; }
-.focus-compare-waveforms .precision-waveform { height: 24px; margin: 0; border-radius: 5px; }
-.focus-compare-waveforms .waveform-bars { inset: 3px 4px; }
-.focus-compare-waveforms .precision-waveform > b { top: 2px; bottom: 2px; }
-.library-app.is-library-focus:has(.focus-compare-waveforms) { grid-template-rows: minmax(0,1fr) 138px; }
-.library-app.is-library-focus:has(.focus-compare-waveforms) .library-transport { height: 138px; padding-block: 8px; }
-.library-app.is-library-focus:has(.focus-compare-waveforms) .transport-center { gap: 4px; }
-.library-app.is-library-focus:has(.focus-compare-waveforms) .transport-track { align-self: end; }
 
 @media (max-width: 1120px) {
   .transport-buttons { gap: 3px; }
@@ -2241,3 +2228,44 @@ button.track-index,
     transition: none !important;
   }
 }
+
+/* Library keeps the complete camera language visible as a quiet right-side dock. */
+.is-library-shell .persistent-stage-canvas .camera-capsule {
+  top: 50%;
+  right: 0;
+  left: auto;
+  padding: 6px;
+  flex-direction: column;
+  gap: 4px;
+  transform: translateY(-50%);
+  transform-origin: center right;
+  z-index: 9;
+}
+
+.is-library-shell .persistent-stage-canvas .camera-capsule button {
+  width: 88px;
+  min-width: 88px;
+  padding: 0 9px;
+  justify-content: flex-start;
+}
+
+.is-library-shell .persistent-stage-canvas .camera-capsule button span { display: inline; }
+.is-library-shell .persistent-stage-canvas .camera-capsule > i { width: 62px; height: 1px; }
+.is-library-shell .persistent-stage-canvas .camera-hint { display: none; }
+
+.library-app.is-library-focus .persistent-stage-canvas .camera-capsule {
+  top: 12px;
+  right: 18px;
+  padding: 5px 7px 5px 8px;
+  flex-direction: row;
+  transform: none;
+}
+
+.library-app.is-library-focus .persistent-stage-canvas .camera-capsule button {
+  width: auto;
+  min-width: 32px;
+  padding: 0 7px;
+  justify-content: center;
+}
+
+.library-app.is-library-focus .persistent-stage-canvas .camera-capsule > i { width: 1px; height: 15px; }

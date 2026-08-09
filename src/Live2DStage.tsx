@@ -247,6 +247,8 @@ export default function Live2DStage({
     }
     previousVariantRef.current = variant;
     previousFocusModeRef.current = focusMode;
+    stageRef.current?.style.removeProperty("--stage-subject-x");
+    stageRef.current?.style.removeProperty("--stage-subject-y");
     layoutRef.current?.();
   }, [containModel, focusMode, layoutKey, variant]);
 
@@ -397,11 +399,11 @@ export default function Live2DStage({
           const isCompact = host.clientWidth < 600;
           isCompactLayout = isCompact;
           const focused = focusModeRef.current && !isWelcome;
-          const targetHeight = host.clientHeight * (focused ? 0.68 : 0.88);
+          const targetHeight = host.clientHeight * (focused ? 0.68 : 0.84);
           const targetWidth = host.clientWidth * (isCompact ? 0.84 : isWelcome ? 0.68 : focused ? 0.64 : 0.64);
           targetModelScale = Math.min(targetHeight / naturalHeight, targetWidth / naturalWidth);
           targetRigX = host.clientWidth * (isWelcome && !isCompact ? 0.58 : 0.5);
-          targetRigY = host.clientHeight * (focused ? 0.51 : 0.54);
+          targetRigY = host.clientHeight * (focused ? 0.58 : 0.56);
           if (!layoutInitialized) {
             currentModelScale = targetModelScale;
             currentRigX = targetRigX;
@@ -1272,6 +1274,7 @@ export default function Live2DStage({
             stage.style.setProperty("--camera-rig-x", currentRigX.toFixed(3));
             stage.style.setProperty("--camera-rig-y", (currentRigY + currentPortraitOffset).toFixed(3));
             stage.style.setProperty("--model-scale", currentModelScale.toFixed(5));
+            stage.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * cameraZoom}px`);
           }
         }, undefined, UPDATE_PRIORITY.HIGH);
 

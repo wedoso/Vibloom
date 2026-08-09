@@ -1141,7 +1141,7 @@ footer p { margin: 0; }
   position: absolute;
   z-index: 1;
   pointer-events: none;
-  width: min(560px, 52%);
+  width: calc(var(--stage-model-width, 320px) * .812);
   aspect-ratio: 1;
   left: var(--stage-subject-x, 50%);
   top: var(--stage-subject-y, 47%);

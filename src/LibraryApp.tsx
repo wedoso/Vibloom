@@ -1627,20 +1627,20 @@ export default function LibraryApp() {
               <label><Search size={15} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your library" /></label>
             </div>
             <div className="track-table" role="table" aria-label="Local music library">
-              <div className="track-row track-table-header" role="row"><span>#</span><span>Track</span><span>Source</span><span>Status</span><span>Time</span><span /></div>
+              <div className="track-row track-table-header" role="row"><span>#</span><span>Track</span><span>Status</span><span>Time</span><span /></div>
               {filteredTracks.map((track, index) => {
                 const active = track.id === session.currentTrackId;
                 const unavailable = track.availability === "reconnect" || track.availability === "missing";
                 return (
                   <div className={`track-row ${active ? "is-active" : ""} ${unavailable ? "is-unavailable" : ""}`} role="row" key={track.id} onDoubleClick={() => void startTrack(track.id, true, 0)}>
                     <button className="track-index" type="button" aria-label={`Play ${trackDisplayName(track.name)}`} onClick={() => void startTrack(track.id, true, 0)}>{active && isPlaying ? <AudioLines size={14} /> : String(index + 1).padStart(2, "0")}</button>
-                    <span className="track-title"><strong>{trackDisplayName(track.name)}</strong><small>{track.name}</small></span>
-                    <span className="track-source">{track.sourceLabel}</span>
+                    <span className="track-title"><strong>{trackDisplayName(track.name)}</strong><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
                     <span className="track-states">
-                      <i className={`availability-${track.availability}`}>{track.availability === "available" ? "Available" : track.availability === "session" ? "This session" : track.availability === "missing" ? "Missing" : "Reconnect"}</i>
-                      {track.persistence === "cached" && <i className="is-cached">On device</i>}
-                      {track.lyrics.length > 0 && <i className="has-lyrics">Lyrics</i>}
-                      {track.comparison && <i className={`has-version-b comparison-${track.comparison.availability}`} title={`${track.comparison.name} · ${track.comparison.persistence === "cached" ? "kept on device" : "reconnect next visit"}`}>Version B</i>}
+                      <span className={`track-availability availability-${track.availability} ${track.persistence === "cached" ? "is-cached" : ""}`}>{track.persistence === "cached" ? "On device" : track.availability === "available" ? "Available" : track.availability === "session" ? "This session" : track.availability === "missing" ? "Missing" : "Reconnect"}</span>
+                      <span className="track-feature-icons">
+                        {track.lyrics.length > 0 && <span className="has-lyrics" role="img" aria-label="Synced lyrics attached" title="Synced lyrics attached"><FileText size={13} /></span>}
+                        {track.comparison && <span className={`has-version-b comparison-${track.comparison.availability}`} role="img" aria-label="Version B attached" title={`${track.comparison.name} · ${track.comparison.persistence === "cached" ? "kept on device" : "reconnect next visit"}`}><ArrowLeftRight size={13} /></span>}
+                      </span>
                     </span>
                     <span className="track-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
                     <span className="track-menu-wrap"><button type="button" aria-label={`Actions for ${trackDisplayName(track.name)}`} onClick={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)}><MoreHorizontal size={18} /></button>
@@ -1666,7 +1666,6 @@ export default function LibraryApp() {
       {tracks.length > 0 && <footer className="library-transport">
         <div className="transport-track"><span className="transport-disc"><Music2 size={20} /></span><span><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Nothing selected"}</strong><small>{currentTrack ? currentTrack.persistence === "cached" ? "Kept on this device" : currentTrack.sourceLabel : `${session.queue.length} tracks in queue`}</small></span></div>
         <div className="transport-center">
-          {focusMode && comparisonReady && <div className="focus-compare-waveforms" aria-label="Focus comparison waveforms"><button type="button" className={activeSource === 0 ? "is-active" : ""} onClick={() => switchSource(0)} aria-pressed={activeSource === 0}><span>A</span><PrecisionWaveform peaks={primaryPeaks} progress={currentTime / Math.max(duration || 1, 1)} label="Focus Version A" source={0} /></button><button type="button" className={activeSource === 1 ? "is-active" : ""} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}><span>B</span><PrecisionWaveform peaks={comparePeaks} progress={currentTime / Math.max(compareSlot.duration || 1, 1)} label="Focus Version B" source={1} /></button></div>}
           <div className="transport-buttons"><button className={session.shuffle ? "is-active" : ""} type="button" aria-label="Shuffle" aria-pressed={session.shuffle} onClick={toggleShuffle}><Shuffle size={17} /></button><button type="button" aria-label="Back 5 seconds" onClick={() => void seekTo(currentTime - 5)}><Rewind size={18} /></button><button type="button" aria-label="Previous track" onClick={() => void previousTrack()}><SkipBack size={20} /></button><button className="transport-play" type="button" aria-label={isPlaying ? "Pause" : "Play"} onClick={() => void togglePlay()}>{isPlaying ? <Pause size={21} fill="currentColor" /> : <Play size={21} fill="currentColor" />}</button><button type="button" aria-label="Next track" onClick={() => void nextTrack(false)}><SkipForward size={20} /></button><button type="button" aria-label="Forward 5 seconds" onClick={() => void seekTo(currentTime + 5)}><FastForward size={18} /></button><button className={session.repeat !== "off" ? "is-active" : ""} type="button" aria-label={repeatLabel(session.repeat)} onClick={cycleRepeat}>{session.repeat === "one" ? <Repeat1 size={17} /> : <Repeat size={17} />}</button></div>
           <div className="transport-progress"><span>{formatTime(currentTime, comparisonReady)}</span><input aria-label="Playback position" type="range" min="0" max={Math.max(timelineDuration, 1)} step="0.001" value={Math.min(currentTime, Math.max(timelineDuration, 1))} onChange={(event) => void seekTo(Number(event.target.value))} /><span>{formatTime(timelineDuration, comparisonReady)}</span></div>
           {activeSourceEnded && <span className="transport-source-ended">Version {activeSource === 0 ? "A" : "B"} has ended · switch source</span>}

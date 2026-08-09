@@ -47,6 +47,8 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(app, /<Live2DStage containModel layoutKey=/u);
   assert.match(stage, /containModelRef/u);
   assert.match(stage, /cameraPreset/u);
+  assert.match(stage, /--stage-model-width/u);
+  assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? 0\.58 : 0\.56\)/u);
   assert.match(spec, /never remount/u);
 });
 
@@ -85,7 +87,8 @@ test("covers camera-layout changes and animates persistent side sheets", async (
   assert.match(baseStyles, /data-scene-transition="workspace-library"/u);
   assert.match(libraryStyles, /side-sheet-backdrop:not\(\.is-open\)[\s\S]*display: grid/u);
   assert.match(libraryStyles, /translate3d\(105%, 0, 0\)/u);
-  assert.match(libraryStyles, /\.track-states i[\s\S]*width: 72px[\s\S]*min-width: 72px[\s\S]*height: 22px/u);
+  assert.match(libraryStyles, /\.track-availability[\s\S]*min-width: 68px[\s\S]*height: 24px/u);
+  assert.match(libraryStyles, /\.track-feature-icons > span[\s\S]*width: 24px[\s\S]*height: 24px/u);
   assert.match(libraryStyles, /\.library-list-toolbar > div button[\s\S]*width: 88px[\s\S]*height: 32px/u);
   assert.match(libraryStyles, /\.library-lyrics-label button[\s\S]*width: 72px[\s\S]*height: 24px/u);
   assert.match(libraryStyles, /--lyrics-accent: rgb\(84 127 121\)/u);
@@ -150,11 +153,13 @@ test("completes the progressive A/B comparison workflow", async () => {
   assert.match(app, /ended at[\s\S]*Switch source to hear the remaining audio/u);
   assert.match(app, /Back 5 seconds/u);
   assert.match(app, /Forward 5 seconds/u);
-  assert.match(app, /Focus comparison waveforms/u);
+  assert.doesNotMatch(app, /Focus comparison waveforms/u);
   assert.match(app, /comparisonCacheKey\(track\.id\)/u);
   assert.match(app, /has-version-b/u);
   assert.match(store, /comparison: TrackComparison \| null/u);
   assert.match(store, /--version-b/u);
-  assert.match(styles, /\.focus-compare-waveforms/u);
+  assert.doesNotMatch(styles, /\.focus-compare-waveforms/u);
+  assert.match(styles, /\.transport-ab-switch[\s\S]*border-radius: 12px/u);
+  assert.match(styles, /\.is-library-shell \.persistent-stage-canvas \.camera-capsule/u);
   assert.match(styles, /\.comparison-duration-alert/u);
 });
