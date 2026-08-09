@@ -25,7 +25,8 @@ Browser storage can still be cleared by private-browsing rules, site-data cleanu
 - Reorder the queue and choose **Play next** without changing the library.
 - Search your collection and resume the last track and position after reopening.
 - Use `Space` to play or pause, arrow keys to seek five seconds, and `F` to enter or leave Focus mode.
-- Switch between Director, Portrait, and Wide camera framing while listening.
+- Start in Portrait, switch to a larger full-body Wide shot, or use the mouse wheel for manual framing up to 235%.
+- Camera framing keeps Hiyori and the background circle aligned, preserves a near-full-body view around 162%, and protects the title area at close zoom.
 
 ## Hear the difference
 
@@ -41,9 +42,9 @@ The current library track is always Version A. Add or drop a Version B only when
 
 ## Focus on the music
 
-![Vibloom Focus mode with synchronized A/B waveforms](docs/assets/focus-mode.png)
+![Vibloom Focus mode with synchronized lyrics and a compact transport](docs/assets/focus-mode.png)
 
-Press `F` for a distraction-free stage. Focus mode keeps the same player, playhead, camera, A/B selector, and both comparison waveforms—there is no duplicate playback bar or restarted audio. Press `F` again or `Esc` to leave.
+Press `F` for a distraction-free stage. Focus mode removes the waveform cards while keeping the same audio clock, playhead, camera, synchronized lyrics, compact A/B selector, and single bottom transport. The stage now reaches the transport instead of leaving a large empty band below Hiyori. Press `F` again or `Esc` to leave.
 
 ## Synchronized lyrics
 

@@ -47,7 +47,7 @@ Local File(s)
 - Switching tracks changes gain only. It never seeks, changes playback rate, or restarts the clock.
 - An 18 ms crossfade prevents clicks while preserving comparison timing.
 - The longer decoded file defines the shared timeline. A shorter selected source intentionally becomes silent after its own end.
-- The Player and Focus surfaces expose both decoded waveforms, explicit A/B source controls, different-duration and ended-source notices, and visible five-second seek controls.
+- Player exposes both decoded waveforms, explicit A/B source controls, different-duration and ended-source notices, and visible five-second seek controls. Focus keeps source switching and transport controls but omits the waveform cards.
 - Pausing updates the interaction ref, silences the master output, and stops sources in the same input frame.
 
 ## Browser storage and recovery
@@ -125,6 +125,7 @@ The paused state is intentionally quiet, not a frozen bitmap. Natural secondary 
 - The single neutral contact shadow is a Pixi graphic inside Hiyori's camera rig. Its center is offset above the model texture's transparent lower padding so its soft core overlaps the visible soles. It shares the model's position and scale, so wide/close transitions cannot separate the two.
 - Automatic camera motion follows phrase-scale energy, never individual onsets.
 - Entering the player begins on an upper-body close-up. Mouse-wheel input locks manual framing; the Director control resumes automatic framing.
+- Manual framing uses a piecewise render curve: Wide is a larger full-body preset, 162% retains the visible feet, Portrait returns to the authored close-up, and zoom above Portrait adds stronger downward title-safe compensation through the 235% maximum.
 - Pausing holds the current automatic shot.
 
 ## Focus-mode transition
@@ -143,7 +144,7 @@ On initial landing load, the canvas stays hidden while fonts settle and two anim
 
 Arm B ownership is assigned only after CubismPose has initialized its model cache, preventing its implicit first-update reset and 0.5-second part fade. Motion connectors use the complete authored first keyframe—including explicit zero-valued Arm B hand channels—so the final connector frame and the target motion's first frame are identical.
 
-The standard waveform and A/B selector remain the only track controls in both layouts. `prefers-reduced-motion: reduce` disables decorative choreography while preserving the state change.
+The standard waveform cards remain in Player. Focus removes them and retains synchronized lyrics, a compact A/B selector, and the single persistent transport. `prefers-reduced-motion: reduce` disables decorative choreography while preserving the state change.
 
 ## Landing-to-player transition
 
