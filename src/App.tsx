@@ -4,7 +4,6 @@ import {
   FastForward,
   Headphones,
   FileText,
-  Music2,
   Maximize2,
   Minimize2,
   Pause,
@@ -275,6 +274,7 @@ export default function Home() {
 
   const maxDuration = Math.max(slots[0].duration, slots[1].duration, 0);
   const bothReady = slots[0].status === "ready" && slots[1].status === "ready";
+  const comparisonRequested = slots[1].status !== "empty";
   const durationDelta = bothReady ? Math.abs(slots[0].duration - slots[1].duration) : 0;
   const progress = maxDuration ? Math.min(100, (currentTime / maxDuration) * 100) : 0;
   const hasAnyTrack = slots.some((slot) => slot.status !== "empty");
@@ -719,7 +719,7 @@ export default function Home() {
     event.target.value = "";
   }
 
-  function handleDrop(event: DragEvent<HTMLElement>, index: 0 | 1) {
+  function handleDrop(event: DragEvent<HTMLElement>, index: 0 | 1, acceptPair = true) {
     event.preventDefault();
     setDragging(null);
     const files = Array.from(event.dataTransfer.files);
@@ -727,7 +727,7 @@ export default function Home() {
     const audioFiles = files.filter((file) => !/\.lrc$/iu.test(file.name));
     if (lyricFile) void loadLyricsFile(lyricFile);
     if (audioFiles[0]) void loadFile(audioFiles[0], index);
-    if (audioFiles[1]) void loadFile(audioFiles[1], index === 0 ? 1 : 0);
+    if (acceptPair && audioFiles[1]) void loadFile(audioFiles[1], index === 0 ? 1 : 0);
   }
 
   function handleDropKey(event: ReactKeyboardEvent<HTMLDivElement>, index: 0 | 1) {
@@ -1008,7 +1008,6 @@ export default function Home() {
         ref={inputARef}
         type="file"
         accept="audio/*,.flac,.aiff,.aif"
-        multiple
         hidden
         onChange={(event) => handleInput(event, 0)}
       />
@@ -1033,7 +1032,7 @@ export default function Home() {
         onDragEnter={(event) => { event.preventDefault(); if (!hasAnyTrack) setDragging(0); }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(null); }}
-        onDrop={(event) => { if (!hasAnyTrack) handleDrop(event, 0); }}
+        onDrop={(event) => { if (!hasAnyTrack) handleDrop(event, 0, false); }}
       >
         {!hasAnyTrack ? (
           <div className="welcome-copy">
@@ -1042,14 +1041,24 @@ export default function Home() {
             <p>Hiyori listens locally in your browser. Learned beats guide her accents, the active track guides her attention, and low frequencies shape the stage.</p>
           </div>
         ) : (
-          <div className="track-score-strip" aria-label="Loaded tracks">
+          <div className={`track-score-strip ${comparisonRequested ? "is-comparing" : "is-solo"}`} aria-label={comparisonRequested ? "A/B comparison tracks" : "Loaded track and comparison option"}>
             {renderTrackSlot(0)}
-            <div className="score-session">
-              <span>{bothReady ? "Continuous A/B sync" : "Solo listening"}</span>
-              <strong>{bothReady ? `Hearing ${active === 0 ? "A" : "B"}` : isPlaying ? "Now playing" : "Ready"}</strong>
-              {durationDelta > 0.05 && <small>{slots[0].duration > slots[1].duration ? "A" : "B"} is {formatTime(durationDelta, true)} longer</small>}
-            </div>
-            {renderTrackSlot(1)}
+            {comparisonRequested ? (
+              <>
+                <div className="score-session">
+                  <span>{bothReady ? "Continuous A/B sync" : "Preparing comparison"}</span>
+                  <strong>{bothReady ? `Hearing ${active === 0 ? "A" : "B"}` : "Loading B"}</strong>
+                  {durationDelta > 0.05 && <small>{slots[0].duration > slots[1].duration ? "A" : "B"} is {formatTime(durationDelta, true)} longer</small>}
+                </div>
+                {renderTrackSlot(1)}
+              </>
+            ) : (
+              <button className="comparison-entry" type="button" onClick={() => inputAt(1)?.click()}>
+                <span className="comparison-entry-icon"><Plus size={18} strokeWidth={1.7} /></span>
+                <span><b>Enable A/B mode</b><small>Add a comparison track</small></span>
+                <ArrowLeftRight size={16} strokeWidth={1.7} />
+              </button>
+            )}
           </div>
         )}
 
@@ -1068,23 +1077,6 @@ export default function Home() {
           <LyricsOverlay lyrics={lyrics.lines} currentTime={currentTime} fileName={lyrics.fileName} activeSource={active} />
         )}
 
-        {!hasAnyTrack && (
-          <>
-            <div className="welcome-choices" aria-label="Choose a listening mode">
-              <button type="button" onClick={() => inputAt(0)?.click()}>
-                <span className="choice-icon"><Music2 size={19} strokeWidth={1.7} /></span>
-                <span><b>Play one track</b><small>Music player + interactive Hiyori</small></span>
-                <Plus size={17} strokeWidth={1.7} />
-              </button>
-              <button type="button" onClick={() => inputAt(0)?.click()}>
-                <span className="choice-icon is-compare"><ArrowLeftRight size={19} strokeWidth={1.7} /></span>
-                <span><b>Compare two tracks</b><small>Select two files together for synced A/B</small></span>
-                <Plus size={17} strokeWidth={1.7} />
-              </button>
-            </div>
-            <p className="welcome-drop-note"><Upload size={14} strokeWidth={1.7} /> You can also drop one or two audio files anywhere on this stage</p>
-          </>
-        )}
       </section>
 
       {hasAnyTrack && (
@@ -1100,7 +1092,7 @@ export default function Home() {
             <span className="total-time">/ {formatTime(maxDuration, true)}</span>
           </div>
 
-          <div className="timeline" style={{ "--progress": `${progress}%` } as React.CSSProperties}>
+          <div className={`timeline ${comparisonRequested ? "is-comparing" : "is-solo"}`} style={{ "--progress": `${progress}%` } as React.CSSProperties}>
             <div className={`wave-row wave-a ${active === 0 ? "is-audible" : ""} ${isPlaying && active === 0 ? "is-playing" : ""}`}>
               <span className="wave-label">A</span>
               <div className="wave-track">
@@ -1108,13 +1100,15 @@ export default function Home() {
                 {slots[0].duration > 0 && slots[0].duration < maxDuration && <span className="audio-end" style={{ left: `${(slots[0].duration / maxDuration) * 100}%` }}>ends</span>}
               </div>
             </div>
-            <div className={`wave-row wave-b ${active === 1 ? "is-audible" : ""} ${isPlaying && active === 1 ? "is-playing" : ""}`}>
-              <span className="wave-label">B</span>
-              <div className="wave-track">
-                <Waveform peaks={slots[1].peaks} label="Audio B" />
-                {slots[1].duration > 0 && slots[1].duration < maxDuration && <span className="audio-end" style={{ left: `${(slots[1].duration / maxDuration) * 100}%` }}>ends</span>}
+            {comparisonRequested && (
+              <div className={`wave-row wave-b ${active === 1 ? "is-audible" : ""} ${isPlaying && active === 1 ? "is-playing" : ""}`}>
+                <span className="wave-label">B</span>
+                <div className="wave-track">
+                  <Waveform peaks={slots[1].peaks} label="Audio B" />
+                  {slots[1].duration > 0 && slots[1].duration < maxDuration && <span className="audio-end" style={{ left: `${(slots[1].duration / maxDuration) * 100}%` }}>ends</span>}
+                </div>
               </div>
-            </div>
+            )}
             <div className="timeline-track">
               <div className="playhead" aria-hidden="true"><span /></div>
               <input
@@ -1139,10 +1133,14 @@ export default function Home() {
               <button className={`control-button ${loop ? "selected" : ""}`} type="button" title="Loop timeline" aria-label="Loop timeline" aria-pressed={loop} disabled={!maxDuration} onClick={() => setLoop(!loop)}><Repeat2 size={18} strokeWidth={1.7} /></button>
             </div>
 
-            <div className="ab-switch" aria-label="Choose audible source">
-              <button type="button" className={active === 0 ? "active" : ""} disabled={slots[0].status !== "ready"} onClick={() => void switchSource(0)}><kbd>1</kbd> Track A</button>
-              <button type="button" className={active === 1 ? "active" : ""} disabled={slots[1].status !== "ready"} onClick={() => void switchSource(1)}><kbd>2</kbd> Track B</button>
-            </div>
+            {comparisonRequested ? (
+              <div className="ab-switch" aria-label="Choose audible source">
+                <button type="button" className={active === 0 ? "active" : ""} disabled={slots[0].status !== "ready"} onClick={() => void switchSource(0)}><kbd>1</kbd> Track A</button>
+                <button type="button" className={active === 1 ? "active" : ""} disabled={slots[1].status !== "ready"} onClick={() => void switchSource(1)}><kbd>2</kbd> Track B</button>
+              </div>
+            ) : (
+              <div className="solo-mode-label"><AudioLines size={15} strokeWidth={1.7} /> Single track mode</div>
+            )}
 
             <label className="volume-control" title="Output volume">
               <Volume2 size={18} strokeWidth={1.7} />

@@ -1,6 +1,6 @@
 # Vibloom
 
-Vibloom is a private, browser-based visual music player and sample-accurate A/B comparison tool. Load one local track to listen with an interactive Live2D companion, or load two versions and switch between them without losing the shared playback position.
+Vibloom is a private, browser-based visual music player and sample-accurate A/B comparison tool. Start with one local track and an interactive Live2D companion, then add Track B from the player only when you want to compare versions without losing the shared playback position.
 
 [Open the live app](https://wedoso.github.io/Vibloom/) · [Architecture](docs/architecture.md)
 
@@ -22,7 +22,7 @@ Vibloom is a private, browser-based visual music player and sample-accurate A/B 
 
 ![Vibloom Focus mode](docs/assets/focus-mode.png)
 
-Press `F` to move into a close listening view through a full-screen editorial iris. The curtain becomes fully opaque before the layout changes; Hiyori's Pixi camera, rig, scale, contact shadow, and backing buffer settle during two hidden paint frames, then the finished composition is revealed. The canvas is never recreated, and the existing waveform and A/B selector remain available—Focus mode does not create a second control system.
+Press `F` to move into a close listening view through a full-screen editorial iris. The curtain becomes fully opaque before the layout changes; Hiyori's Pixi camera, rig, scale, contact shadow, and backing buffer settle during two hidden paint frames, then the finished composition is revealed. The canvas is never recreated, and the active waveform remains available. When Track B exists, the same A/B selector stays available too—Focus mode never creates a second control system.
 
 ### Timed LRC lyrics
 
@@ -34,6 +34,7 @@ The lyric font stack includes system fallbacks for English, Simplified and Tradi
 
 ### Two-track comparison
 
+- Choose **Enable A/B mode** beside Track A, then add the comparison file. Track B's score, waveform, and source switch appear only when comparison is requested.
 - Both decoded files start from one `AudioContext` clock.
 - Switching A/B changes gain only; it never seeks, restarts, or changes playback speed.
 - An 18 ms gain crossfade prevents clicks without hiding meaningful differences.

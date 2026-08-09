@@ -18,17 +18,18 @@ Vibloom is a private, browser-only music player and synchronized A/B comparison 
 
 ## Layout
 
-- Listening mode uses a record-book hierarchy with no overlap: editorial masthead, a separate A / session / B score strip, an uninterrupted Live2D stage, then one synchronized transport shelf.
+- Listening mode uses a record-book hierarchy with no overlap: editorial masthead, a progressive track score strip, an uninterrupted Live2D stage, then one synchronized transport shelf.
 - A and B are structurally above the stage and aligned to its left and right edges. Hiyori's damped eye and head focus can look upward-left or upward-right toward credible spatial targets without any connector decoration.
-- Solo retains the same score strip so adding B feels like completing the facing page.
-- Mobile keeps both compact track notes above the character, followed by the uninterrupted stage and transport. Never place cards across the model's feet or body.
+- The landing page exposes one audio entrance integrated into Hiyori's stage invitation; never duplicate it with a second upload card elsewhere on the page. In solo mode Track A owns the score strip, with a compact Add Track B affordance at its right edge; never reserve an equal empty B panel.
+- Selecting B immediately resolves the strip to A / session / B, with equal A and B portions. Only then reveal the B waveform and A/B selector.
+- Mobile keeps the active track note above the character and stacks the comparison affordance below it. Once B is added, both compact notes remain above the uninterrupted stage and transport. Never place cards across the model's feet or body.
 
 ## Components
 
 - Track notes: flat manuscript rows inside the score strip, separated by fine ink rules rather than floating rounded cards. Use a hanko-like A/B identity marker, concise metadata, restrained active underline, and no decorative connector.
 - Track state language: use `READY` for a decoded inactive track, `CUED` for the selected paused track, and `PLAYING` only while audio is audible. Do not pair a generic success checkmark with overlapping hover-only actions. Replace and Remove remain stable, separately labeled controls that reserve their own layout space.
 - Status capsule: compact text only; it can state Listening to A/B but must not draw a line toward a target.
-- Transport: shared clock and play control are primary. A/B selector is adjacent and unambiguous. Waveform-like amplitude bars are functional seeking context only.
+- Transport: shared clock and play control are primary. Solo mode shows only A's waveform and a quiet single-track label. The adjacent A/B selector and B waveform appear only after B has been requested. Waveform-like amplitude bars are functional seeking context only.
 - Buttons: navy primary, ivory paper secondary, pencil-soft icon treatment, clear keyboard focus. Every interactive surface has exactly one persistent boundary; never duplicate its border with an offset pseudo-element or inset ring. Depth comes from a soft diffuse shadow, while an extra outline appears only for `:focus-visible`.
 - Icon system: secondary actions use one optically balanced 1.7px rounded monoline family with geometric SVG rendering and 32–40px hit areas. Filled geometry is reserved for the primary play/pause control. Product title, session title, status, and metadata must remain four distinct typographic levels.
 - Brand mark: one navy rounded-square silhouette with no permanent outer contour, inset ring, or hard bottom-edge shadow.
@@ -51,7 +52,7 @@ Vibloom is a private, browser-only music player and synchronized A/B comparison 
 - Only gated low-frequency accents may pulse the solid A/B music disc. Give them a roughly 340ms refractory period and a softened attack/decay envelope; broadband transients and treble subdivisions may affect sparse particles but never the disc. Never add an ambient bloom or floor light. Keep the physical contact shadow narrow, centered, and independent from the colored field.
 - Music color is one solid, edge-clean A/B circle behind Hiyori. It remembers consecutive gated low-frequency accents: the first downbeat enters a small size tier, the second a medium tier, and the third the largest tier, followed by a slow release. The full accumulated range is roughly 24% plus a small 4% hit accent; opacity remains nearly stable so the motion reads clearly without flashing. It has no gradient, blur, floor-light duplicate, or relationship to the contact shadow.
 - On the landing stage, the solid circle and Hiyori share one subject anchor: 58% / 54% on the desktop composition and 50% / 54% on narrow screens. Do not add a second welcome halo, scan light, or decorative orbit behind it.
-- Hiyori has exactly one neutral contact shadow: a narrow blurred ellipse directly beneath her feet inside the same Pixi camera rig as the model. It follows model framing, zoom, and position exactly, but never reads music features or changes color with the music circle.
+- Hiyori has exactly one neutral contact shadow: a narrow blurred ellipse whose soft core overlaps the visible sole line inside the same Pixi camera rig as the model. The model texture contains transparent padding below the feet, so the shadow must use the measured visual foot offset rather than the texture bottom. It follows model framing, zoom, and position exactly, but never reads music features or changes color with the music circle.
 - Loading or decoding progress may extend the file-copy column downward, but the audio icon keeps the same top baseline before, during, and after processing.
 - Focus Mode is always reversible. Keep a persistent high-contrast Leave Focus control above the scene, support `F` to toggle and `Escape` to leave, and never fade the exit control with the surrounding chrome.
 - Focus Mode preserves A/B listening without adding a second control set. Keep the existing transport A/B selector and make the audible waveform unmistakably dominant while the inactive waveform recedes.

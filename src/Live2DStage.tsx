@@ -352,10 +352,14 @@ export default function Live2DStage({
         const naturalWidth = model.width;
         const naturalHeight = model.height;
         const contactShadow = new Graphics();
-        contactShadow.beginFill(0x202b46, 0.17);
-        contactShadow.drawEllipse(0, naturalHeight * 0.49, naturalWidth * 0.28, naturalHeight * 0.011);
+        // The model canvas includes transparent space below the visible soles.
+        // Pull the shadow into the rendered foot line instead of using the
+        // texture's geometric bottom, which makes Hiyori appear to float.
+        const contactShadowY = naturalHeight * 0.463;
+        contactShadow.beginFill(0x202b46, 0.19);
+        contactShadow.drawEllipse(0, contactShadowY, naturalWidth * 0.25, naturalHeight * 0.009);
         contactShadow.endFill();
-        contactShadow.filters = [new BlurFilter(5, 2)];
+        contactShadow.filters = [new BlurFilter(4, 2)];
         cameraRig.addChild(contactShadow, model);
         let targetModelScale = 1;
         let currentModelScale = 1;
@@ -1396,7 +1400,8 @@ export default function Live2DStage({
         <div className="stage-invitation">
           <span>YOUR MUSIC, HER MOVEMENT</span>
           <strong>Hiyori is ready to listen.</strong>
-          <button type="button" onClick={onPickAudio}>Choose an audio file</button>
+          <button type="button" onClick={onPickAudio}>Choose audio</button>
+          <small>or drop one audio file anywhere on the stage</small>
         </div>
       )}
     </section>

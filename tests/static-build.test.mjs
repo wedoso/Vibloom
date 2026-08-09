@@ -369,6 +369,25 @@ test("keeps A/B switching and audible waveform emphasis in Focus Mode", async ()
   assert.doesNotMatch(styles, /\.stage-backdrop \{/u);
 });
 
+test("reveals A/B comparison progressively from the player", async () => {
+  const [app, styles] = await Promise.all([
+    readFile(new URL("src/App.tsx", root), "utf8"),
+    readFile(new URL("src/index.css", root), "utf8"),
+  ]);
+
+  assert.match(app, /const comparisonRequested = slots\[1\]\.status !== "empty"/u);
+  assert.doesNotMatch(app, /Compare two tracks/u);
+  assert.doesNotMatch(app, /className="welcome-choices"/u);
+  assert.match(app, /onPickAudio=\{\(\) => inputAt\(0\)\?\.click\(\)\}/u);
+  assert.doesNotMatch(app, /ref=\{inputARef\}[\s\S]{0,180}\bmultiple\b/u);
+  assert.match(app, /Enable A\/B mode/u);
+  assert.match(app, /comparisonRequested \? "is-comparing" : "is-solo"/u);
+  assert.match(app, /\{comparisonRequested && \([\s\S]*?wave-row wave-b/u);
+  assert.match(app, /\{comparisonRequested \? \([\s\S]*?className="ab-switch"/u);
+  assert.match(styles, /\.track-score-strip\.is-solo \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 240px;/u);
+  assert.match(styles, /\.track-score-strip\.is-comparing \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 210px minmax\(0, 1fr\);/u);
+});
+
 test("contains no server runtime or backend dependency", async () => {
   const [packageJson, config, app] = await Promise.all([
     readFile(new URL("package.json", root), "utf8"),
@@ -501,6 +520,9 @@ test("separates the static contact shadow from ambient music lighting", async ()
   const musicDisc = styles.match(/\.stage-music-disc\s*\{([^}]*)\}/u)?.[1] ?? "";
 
   assert.match(stage, /const contactShadow = new Graphics\(\)/u);
+  assert.match(stage, /const contactShadowY = naturalHeight \* 0\.463/u);
+  assert.match(stage, /contactShadow\.drawEllipse\(0, contactShadowY, naturalWidth \* 0\.25, naturalHeight \* 0\.009\)/u);
+  assert.match(stage, /or drop one audio file anywhere on the stage/u);
   assert.match(stage, /contactShadow\.drawEllipse/u);
   assert.match(stage, /cameraRig\.addChild\(contactShadow, model\)/u);
   assert.match(stage, /contactShadow\.scale\.set\(currentModelScale\)/u);
