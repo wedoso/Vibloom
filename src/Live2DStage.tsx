@@ -52,6 +52,7 @@ const PORTRAIT_ZOOM = 1.92;
 const FOCUS_PORTRAIT_OFFSET_FACTOR = 0.14;
 const FOCUS_MODEL_HEIGHT_FACTOR = 0.84;
 const FOCUS_VIEWPORT_HEIGHT_FACTOR = 0.72;
+const FOCUS_RIG_Y_FACTOR = 0.65;
 const LIBRARY_PORTRAIT_OFFSET_FACTOR = 0.1;
 const ROOM_PORTRAIT_OFFSET_FACTOR = 0.18;
 const DISC_MODEL_CENTER_OFFSET_FACTOR = 0.1;
@@ -415,14 +416,14 @@ export default function Live2DStage({
           isCompactLayout = isCompact;
           const focused = focusModeRef.current && !isWelcome;
           const tallViewportProgress = Math.max(0, Math.min(1, (window.innerHeight - 720) / 600));
-          const roomRigYFactor = 0.62 - tallViewportProgress * (containModelRef.current ? 0.18 : 0.12);
+          const roomRigYFactor = 0.62 - tallViewportProgress * (containModelRef.current ? 0.18 : 0.04);
           const targetHeight = focused
             ? Math.min(host.clientHeight * FOCUS_MODEL_HEIGHT_FACTOR, window.innerHeight * FOCUS_VIEWPORT_HEIGHT_FACTOR)
             : host.clientHeight * 0.84;
           const targetWidth = host.clientWidth * (isCompact ? 0.84 : isWelcome ? 0.68 : focused ? 0.64 : 0.64);
           targetModelScale = Math.min(targetHeight / naturalHeight, targetWidth / naturalWidth);
           targetRigX = host.clientWidth * (isWelcome && !isCompact ? 0.58 : 0.5);
-          targetRigY = host.clientHeight * (focused ? 0.58 : roomRigYFactor);
+          targetRigY = host.clientHeight * (focused ? FOCUS_RIG_Y_FACTOR : roomRigYFactor);
           if (!layoutInitialized) {
             currentModelScale = targetModelScale;
             currentRigX = targetRigX;

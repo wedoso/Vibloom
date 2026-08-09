@@ -51,6 +51,7 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /startsInPortrait \? "portrait" : "director"/u);
   assert.match(stage, /FOCUS_MODEL_HEIGHT_FACTOR = 0\.84/u);
   assert.match(stage, /FOCUS_VIEWPORT_HEIGHT_FACTOR = 0\.72/u);
+  assert.match(stage, /FOCUS_RIG_Y_FACTOR = 0\.65/u);
   assert.match(stage, /LIBRARY_PORTRAIT_OFFSET_FACTOR = 0\.1/u);
   assert.match(stage, /ROOM_PORTRAIT_OFFSET_FACTOR = 0\.18/u);
   assert.match(stage, /DISC_MODEL_CENTER_OFFSET_FACTOR = 0\.1/u);
@@ -61,8 +62,8 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /--stage-model-width/u);
   assert.match(stage, /--stage-subject-y/u);
   assert.match(stage, /tallViewportProgress = Math\.max\(0, Math\.min\(1, \(window\.innerHeight - 720\) \/ 600\)\)/u);
-  assert.match(stage, /roomRigYFactor = 0\.62 - tallViewportProgress \* \(containModelRef\.current \? 0\.18 : 0\.12\)/u);
-  assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? 0\.58 : roomRigYFactor\)/u);
+  assert.match(stage, /roomRigYFactor = 0\.62 - tallViewportProgress \* \(containModelRef\.current \? 0\.18 : 0\.04\)/u);
+  assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? FOCUS_RIG_Y_FACTOR : roomRigYFactor\)/u);
   assert.match(spec, /never remount/u);
 });
 
