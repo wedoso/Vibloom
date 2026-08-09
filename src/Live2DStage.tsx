@@ -48,6 +48,9 @@ const RESTING_IDLE_GROUP = "__vibloom_resting__";
 const MOTION_LOOP_SEAM_SECONDS = 0.72;
 const POSE_TRANSITION_MIN_SECONDS = 0.38;
 const POSE_TRANSITION_MAX_SECONDS = 0.68;
+const PORTRAIT_ZOOM = 1.92;
+const FOCUS_PORTRAIT_OFFSET_FACTOR = 0.14;
+const ROOM_PORTRAIT_OFFSET_FACTOR = 0.43;
 
 type OfficialMotionId = "m01" | "m02" | "m03" | "m05" | "m06" | "m08";
 
@@ -192,6 +195,7 @@ export default function Live2DStage({
   layoutKey,
   onPickAudio,
 }: Live2DStageProps) {
+  const startsInPortrait = variant === "player";
   const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneLayoutSnapRef = useRef(false);
@@ -203,18 +207,19 @@ export default function Live2DStage({
   const containModelRef = useRef(containModel);
   const focusCameraTransitionUntilRef = useRef(0);
   const layoutRef = useRef<(() => void) | null>(null);
-  const cameraModeRef = useRef<"auto" | "locked">("auto");
-  const manualZoomRef = useRef(1);
-  const currentCameraZoomRef = useRef(1);
+  const cameraModeRef = useRef<"auto" | "locked">(startsInPortrait ? "locked" : "auto");
+  const manualZoomRef = useRef(startsInPortrait ? PORTRAIT_ZOOM : 1);
+  const currentCameraZoomRef = useRef(startsInPortrait ? PORTRAIT_ZOOM : 1);
   const autoSuspendUntilRef = useRef(0);
   const zoomTimerRef = useRef<number | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [cameraMode, setCameraMode] = useState<"auto" | "locked">("auto");
-  const [cameraPreset, setCameraPreset] = useState<"director" | "portrait" | "wide" | "manual">("director");
-  const [zoomReadout, setZoomReadout] = useState(100);
+  const [cameraMode, setCameraMode] = useState<"auto" | "locked">(startsInPortrait ? "locked" : "auto");
+  const [cameraPreset, setCameraPreset] = useState<"director" | "portrait" | "wide" | "manual">(startsInPortrait ? "portrait" : "director");
+  const [zoomReadout, setZoomReadout] = useState(startsInPortrait ? Math.round(PORTRAIT_ZOOM * 100) : 100);
   const [showZoom, setShowZoom] = useState(false);
 
   useLayoutEffect(() => {
+    let nextCameraUi: { mode: "auto" | "locked"; preset: "director" | "portrait" } | null = null;
     const enteringPlayer = previousVariantRef.current === "welcome" && variant === "player";
     const leavingPlayer = previousVariantRef.current === "player" && variant === "welcome";
     const changingFocus = previousFocusModeRef.current !== focusMode;
@@ -230,26 +235,31 @@ export default function Live2DStage({
     }
     if ((enteringPlayer || leavingPlayer) && sceneCovered) sceneLayoutSnapRef.current = true;
     if (enteringPlayer) {
-      // Establish an intimate first shot before the phrase director takes over.
-      // The camera rig moves; Hiyori's authored model coordinates stay untouched.
-      manualZoomRef.current = containModel ? 1 : 2.12;
-      autoSuspendUntilRef.current = performance.now() + 2800;
-      cameraModeRef.current = "auto";
-      setCameraMode("auto");
-      setCameraPreset("director");
+      manualZoomRef.current = PORTRAIT_ZOOM;
+      currentCameraZoomRef.current = PORTRAIT_ZOOM;
+      autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
+      cameraModeRef.current = "locked";
+      nextCameraUi = { mode: "locked", preset: "portrait" };
     } else if (leavingPlayer) {
       manualZoomRef.current = 1;
       currentCameraZoomRef.current = 1;
       autoSuspendUntilRef.current = 0;
       cameraModeRef.current = "auto";
-      setCameraMode("auto");
-      setCameraPreset("director");
+      nextCameraUi = { mode: "auto", preset: "director" };
     }
     previousVariantRef.current = variant;
     previousFocusModeRef.current = focusMode;
     stageRef.current?.style.removeProperty("--stage-subject-x");
     stageRef.current?.style.removeProperty("--stage-subject-y");
     layoutRef.current?.();
+    if (!nextCameraUi) return;
+    const cameraUi = nextCameraUi;
+    const frame = requestAnimationFrame(() => {
+      setCameraMode(cameraUi.mode);
+      setCameraPreset(cameraUi.preset);
+      setZoomReadout(cameraUi.mode === "locked" ? Math.round(PORTRAIT_ZOOM * 100) : 100);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [containModel, focusMode, layoutKey, variant]);
 
   useEffect(() => {
@@ -371,7 +381,7 @@ export default function Live2DStage({
         let currentPortraitOffset = 0;
         let layoutInitialized = false;
         let canvasRevealed = false;
-        let isCompactLayout = host.clientWidth < 600;
+        let isCompactLayout = window.innerWidth < 600;
         let previousHostBounds: DOMRect | null = null;
 
         let rendererWidth = 0;
@@ -396,7 +406,7 @@ export default function Live2DStage({
             app.renderer.resize(nextWidth, nextHeight);
           }
           const isWelcome = variantRef.current === "welcome";
-          const isCompact = host.clientWidth < 600;
+          const isCompact = window.innerWidth < 600;
           isCompactLayout = isCompact;
           const focused = focusModeRef.current && !isWelcome;
           const targetHeight = host.clientHeight * (focused ? 0.68 : 0.84);
@@ -421,7 +431,7 @@ export default function Live2DStage({
             currentRigX = targetRigX;
             currentRigY = targetRigY;
             const snapZoom = currentCameraZoomRef.current;
-            const snapPortraitFactor = focused || isCompactLayout ? 0.14 : 0.29;
+            const snapPortraitFactor = focused || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = Math.max(0, snapZoom - 1) * host.clientHeight * snapPortraitFactor;
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
@@ -876,7 +886,7 @@ export default function Live2DStage({
             currentModelScale = targetModelScale;
             currentRigX = targetRigX;
             currentRigY = targetRigY;
-            const snapPortraitFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
+            const snapPortraitFactor = focusModeRef.current || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * snapPortraitFactor;
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
@@ -1201,7 +1211,7 @@ export default function Live2DStage({
           const focusCameraBias = focusModeRef.current ? 0.2 : 0;
           const targetCameraZoom = Math.min(2.35, containedCameraZoom + focusCameraBias);
           const focusCameraTransitioning = performance.now() < focusCameraTransitionUntilRef.current;
-          const portraitOffsetFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
+          const portraitOffsetFactor = focusModeRef.current || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
           if (focusCameraSnapRef.current) {
             // Focus layout commits only while the solid scene curtain is opaque.
             // Snap the complete Pixi camera composition in that hidden frame;
@@ -1290,12 +1300,12 @@ export default function Live2DStage({
         currentModelScale = targetModelScale;
         currentRigX = targetRigX;
         currentRigY = targetRigY;
-        cameraZoom = containModelRef.current && !focusModeRef.current
+        cameraZoom = containModelRef.current && !focusModeRef.current && cameraModeRef.current === "auto"
           ? 1
           : variantRef.current === "player"
           ? Math.min(2.35, manualZoomRef.current + (focusModeRef.current ? 0.2 : 0))
           : 1;
-        const initialPortraitFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
+        const initialPortraitFactor = focusModeRef.current || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
         currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * initialPortraitFactor;
         currentCameraZoomRef.current = cameraZoom;
         model.scale.set(currentModelScale);
@@ -1390,12 +1400,12 @@ export default function Live2DStage({
             aria-label="Portrait upper-body framing"
             className={cameraPreset === "portrait" ? "is-active" : ""}
             onClick={() => {
-              manualZoomRef.current = 2.12;
+              manualZoomRef.current = PORTRAIT_ZOOM;
               cameraModeRef.current = "locked";
               autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
               setCameraMode("locked");
               setCameraPreset("portrait");
-              setZoomReadout(212);
+              setZoomReadout(Math.round(PORTRAIT_ZOOM * 100));
               setShowZoom(true);
               if (zoomTimerRef.current !== null) window.clearTimeout(zoomTimerRef.current);
               zoomTimerRef.current = window.setTimeout(() => setShowZoom(false), 1100);

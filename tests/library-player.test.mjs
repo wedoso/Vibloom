@@ -47,6 +47,10 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(app, /<Live2DStage containModel layoutKey=/u);
   assert.match(stage, /containModelRef/u);
   assert.match(stage, /cameraPreset/u);
+  assert.match(stage, /const PORTRAIT_ZOOM = 1\.92/u);
+  assert.match(stage, /startsInPortrait \? "portrait" : "director"/u);
+  assert.match(stage, /ROOM_PORTRAIT_OFFSET_FACTOR = 0\.43/u);
+  assert.match(stage, /const isCompact = window\.innerWidth < 600/u);
   assert.match(stage, /--stage-model-width/u);
   assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? 0\.58 : 0\.56\)/u);
   assert.match(spec, /never remount/u);
@@ -83,7 +87,7 @@ test("covers camera-layout changes and animates persistent side sheets", async (
   assert.match(app, /filesFromDroppedEntry/u);
   assert.match(app, /"workspace-player" \| "workspace-library" \| "focus-enter" \| "focus-exit"/u);
   assert.match(app, /toggleFocusMode\(\)/u);
-  assert.match(app, /Exit focus <kbd>F<\/kbd><span>or Esc<\/span>/u);
+  assert.match(app, /<span>Exit focus<\/span><kbd>Esc<\/kbd>/u);
   assert.match(baseStyles, /data-scene-transition="workspace-library"/u);
   assert.match(libraryStyles, /side-sheet-backdrop:not\(\.is-open\)[\s\S]*display: grid/u);
   assert.match(libraryStyles, /translate3d\(105%, 0, 0\)/u);
@@ -159,7 +163,10 @@ test("completes the progressive A/B comparison workflow", async () => {
   assert.match(store, /comparison: TrackComparison \| null/u);
   assert.match(store, /--version-b/u);
   assert.doesNotMatch(styles, /\.focus-compare-waveforms/u);
-  assert.match(styles, /\.transport-ab-switch[\s\S]*border-radius: 12px/u);
+  assert.match(styles, /\.transport-ab-switch[\s\S]*border-radius: 999px/u);
+  assert.match(styles, /\.transport-ab-switch\.is-source-b::before[\s\S]*translateX\(34px\)/u);
+  assert.match(styles, /\.transport-secondary \.transport-ab-switch button[\s\S]*place-items: center/u);
+  assert.match(styles, /\.focus-exit-control kbd[\s\S]*border-radius: 999px/u);
   assert.match(styles, /\.is-library-shell \.persistent-stage-canvas \.camera-capsule/u);
   assert.match(styles, /\.comparison-duration-alert/u);
 });

@@ -501,11 +501,10 @@ test("keeps phrase camera motion separate from Live2D music pose", async () => {
   assert.match(stage, /resizeFrame = requestAnimationFrame/u);
   assert.match(stage, /Math\.max\(1\.42, Math\.min\(2\.1, autoZoom\)\)/u);
   assert.match(stage, /Math\.min\(2\.35, currentCameraZoomRef/u);
-  assert.match(stage, /manualZoomRef\.current = 2\.12/u);
+  assert.match(stage, /manualZoomRef\.current = PORTRAIT_ZOOM/u);
   assert.match(stage, /previousVariantRef\.current === "welcome" && variant === "player"/u);
-  assert.match(stage, /autoSuspendUntilRef\.current = performance\.now\(\) \+ 2800/u);
   assert.match(stage, /autoSuspendUntilRef\.current = Number\.POSITIVE_INFINITY/u);
-  assert.match(stage, /setCameraMode\("locked"\)/u);
+  assert.match(stage, /nextCameraUi = \{ mode: "locked", preset: "portrait" \}/u);
   assert.match(stage, /host\.addEventListener\("wheel", handleWheel/u);
   assert.doesNotMatch(stage, /autoZoom[^;]*lightPulse/u);
   assert.match(stage, /ParamEyeBallX/u);
