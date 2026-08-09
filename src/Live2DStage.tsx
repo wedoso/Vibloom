@@ -42,7 +42,7 @@ const REST_EYE_OPEN_PARAM_IDS = new Set(["ParamEyeLOpen", "ParamEyeROpen"]);
 const REST_SETTLE_SECONDS = 1.2;
 const REST_EYE_HANDOFF_SECONDS = 0.36;
 
-const RESTING_IDLE_GROUP = "__audiff_resting__";
+const RESTING_IDLE_GROUP = "__vibloom_resting__";
 const MOTION_LOOP_SEAM_SECONDS = 0.72;
 const POSE_TRANSITION_MIN_SECONDS = 0.38;
 const POSE_TRANSITION_MAX_SECONDS = 0.68;
@@ -332,7 +332,7 @@ export default function Live2DStage({
             const asset = await internalModel.motionManager.loadMotion(motion.group, motion.index);
             if (!asset) return;
             // The PRO files omit fade metadata, so Cubism otherwise injects a
-            // one-second SDK fade and restarts it on every loop. Audiff inserts
+            // one-second SDK fade and restarts it on every loop. Vibloom inserts
             // an explicit single-pose joint transition instead; SDK weights
             // would overlap controllers and can expose a pale boundary frame.
             asset.setFadeInTime(0);

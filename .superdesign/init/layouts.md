@@ -1,6 +1,6 @@
 # Layouts
 
-Audiff is a single-page application. `App` owns the complete shell: header, listening scene, track workspace, transport, keyboard help, and footer.
+Vibloom is a single-page application. `App` owns the complete shell: header, listening scene, track workspace, transport, keyboard help, and footer.
 
 ## App shell
 - Path: `src/App.tsx`
@@ -650,9 +650,9 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="site-header">
-        <a className="brand" href="#top" aria-label="Audiff home">
+        <a className="brand" href="#top" aria-label="Vibloom home">
           <span className="brand-mark"><ArrowLeftRight size={18} strokeWidth={2.4} /></span>
-          <span>Audiff</span>
+          <span>Vibloom</span>
         </a>
         <div className="local-note"><ShieldCheck size={15} /> Files stay on this device</div>
       </header>
@@ -897,11 +897,10 @@ export default function Home() {
       )}
 
       <footer>
-        <span>Audiff</span>
+        <span>Vibloom</span>
         <p>Private by design. Audio is decoded locally and never uploaded.</p>
       </footer>
     </main>
   );
 }
 ```
-

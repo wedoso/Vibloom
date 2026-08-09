@@ -1,8 +1,8 @@
-# Audiff design system
+# Vibloom design system
 
 ## Product and experience
 
-Audiff is a private, browser-only music player and synchronized A/B comparison tool. Hiyori is not a mascot in a card; she is the living center of the listening room. The interface must make three states legible without changing visual language: no track, one-track listening, and two-track comparison.
+Vibloom is a private, browser-only music player and synchronized A/B comparison tool. Hiyori is not a mascot in a card; she is the living center of the listening room. The interface must make three states legible without changing visual language: no track, one-track listening, and two-track comparison.
 
 ## Visual direction
 

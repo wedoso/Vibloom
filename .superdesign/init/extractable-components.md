@@ -26,5 +26,4 @@
 - Category: layout
 - Description: header, listening scene, workspace, shortcut rail, and privacy footer.
 - Extractable props: none
-- Hardcoded: Audiff branding and local-processing message
-
+- Hardcoded: Vibloom branding and local-processing message

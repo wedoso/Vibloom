@@ -18,7 +18,7 @@ test("parses multilingual, offset, repeated, and UTF-16 LRC lyrics", async () =>
   const { decodeLrc, parseLrc } = await importTypeScriptModule(new URL("src/lrc.ts", root));
   const parsed = parseLrc([
     "[ti:多语言测试]",
-    "[ar:Audiff]",
+    "[ar:Vibloom]",
     "[offset:250]",
     "[00:01.00]Hello",
     "[00:02.5][00:03.500]简体中文",
@@ -27,7 +27,7 @@ test("parses multilingual, offset, repeated, and UTF-16 LRC lyrics", async () =>
   ].join("\n"));
 
   assert.equal(parsed.title, "多语言测试");
-  assert.equal(parsed.artist, "Audiff");
+  assert.equal(parsed.artist, "Vibloom");
   assert.deepEqual(parsed.lines, [
     { time: 1.25, text: "Hello" },
     { time: 2.75, text: "简体中文" },
@@ -44,7 +44,7 @@ test("produces a portable static site", async () => {
   const html = await readFile(new URL("index.html", dist), "utf8");
   const assets = await readdir(new URL("assets/", dist));
 
-  assert.match(html, /<title>Audiff — Live2D Listening Room & A\/B Player<\/title>/);
+  assert.match(html, /<title>Vibloom — Live2D Music Player & Listening Room<\/title>/);
   assert.match(html, /href="\.\/favicon\.svg"/u);
   assert.match(html, /type="module"/);
   assert.match(html, /\.\/assets\//);
@@ -142,7 +142,7 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /MOTION_LOOP_CORRECTIONS\[activeMotion\.id\]/u);
   assert.match(stage, /activeMotion\.ignoreParamIds\?\.includes\(id\)/u);
   assert.doesNotMatch(stage, /officialMotionTime = \(officialMotionTime \+ dt/u);
-  assert.match(stage, /const RESTING_IDLE_GROUP = "__audiff_resting__"/u);
+  assert.match(stage, /const RESTING_IDLE_GROUP = "__vibloom_resting__"/u);
   assert.match(stage, /internalModel\.motionManager\.groups\.idle = RESTING_IDLE_GROUP/u);
   assert.doesNotMatch(stage, /groups\.idle = PLAYING_IDLE_GROUP/u);
   assert.match(stage, /internalModel\.motionManager\.stopAllMotions\(\)/u);
@@ -299,7 +299,7 @@ test("covers the landing/player swap without snapshotting the Live2D canvas", as
   assert.match(app, /className="scene-curtain"/u);
   assert.match(app, /The room/u);
   assert.match(app, /is listening\./u);
-  assert.doesNotMatch(app, /scene-curtain-title">Audiff/u);
+  assert.doesNotMatch(app, /scene-curtain-title">Vibloom/u);
   assert.match(app, /sceneCoverTimer = window\.setTimeout\(\(\) => \{[\s\S]*?commit\(\);[\s\S]*?is-scene-revealing/u);
   assert.match(app, /sceneRevealFrame = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?sceneRevealFrame = window\.requestAnimationFrame/u);
   assert.match(stage, /sceneLayoutSnapRef\.current = true/u);

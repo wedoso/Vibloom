@@ -1,6 +1,6 @@
 # Pages
 
-## / (Audiff listening room)
+## / (Vibloom listening room)
 Entry: `src/main.tsx`
 Dependencies:
 - `src/App.tsx`
@@ -11,4 +11,3 @@ Dependencies:
   - `src/index.css`
 
 The same page transitions between welcome, solo, and A/B states without remounting the Live2D stage.
-

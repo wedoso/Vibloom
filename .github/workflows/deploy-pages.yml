@@ -1,4 +1,4 @@
-name: Deploy Audiff to GitHub Pages
+name: Deploy Vibloom to GitHub Pages
 
 on:
   push:

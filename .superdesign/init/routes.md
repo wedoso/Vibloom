@@ -17,7 +17,7 @@ import "./index.css";
 const root = document.getElementById("root");
 
 if (!root) {
-  throw new Error("Audiff could not find its application root.");
+  throw new Error("Vibloom could not find its application root.");
 }
 
 createRoot(root).render(
@@ -94,4 +94,3 @@ export function sampleAnalyser(
   };
 }
 ```
-

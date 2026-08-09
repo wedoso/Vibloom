@@ -284,10 +284,10 @@ export default function Home() {
 
   useEffect(() => {
     document.title = bothReady
-      ? `${isPlaying ? "Comparing A/B" : "A/B Ready"} — Audiff`
+      ? `${isPlaying ? "Comparing A/B" : "A/B Ready"} — Vibloom`
       : hasAnyTrack
-        ? `${isPlaying ? "Listening with Hiyori" : "Track Ready"} — Audiff`
-        : "Audiff — Live2D Listening Room & A/B Player";
+        ? `${isPlaying ? "Listening with Hiyori" : "Track Ready"} — Vibloom`
+        : "Vibloom — Live2D Music Player & Listening Room";
   }, [bothReady, hasAnyTrack, isPlaying]);
 
   function inputAt(index: 0 | 1) {
@@ -962,9 +962,9 @@ export default function Home() {
         </span>
       </div>
       <header className="site-header">
-        <a className="brand" href="#top" aria-label="Audiff home">
+        <a className="brand" href="#top" aria-label="Vibloom home">
           <span className="brand-mark"><ArrowLeftRight size={18} strokeWidth={2} /></span>
-          <span className="brand-copy"><strong>Audiff</strong><small>Live2D listening room</small></span>
+          <span className="brand-copy"><strong>Vibloom</strong><small>Live2D music player</small></span>
         </a>
         {hasAnyTrack && (
           <div className="header-session" aria-live="polite">
@@ -1162,7 +1162,7 @@ export default function Home() {
       )}
 
       {!hasAnyTrack && <footer>
-        <span>Audiff</span>
+        <span>Vibloom</span>
         <p>Private by design. Audio is decoded locally and never uploaded.</p>
       </footer>}
     </main>
