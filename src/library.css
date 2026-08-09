@@ -639,6 +639,8 @@
   box-shadow: 0 10px 26px rgba(45, 34, 27, 0.2);
 }
 
+.library-app.is-empty .library-status { bottom: 28px; }
+
 .modal-backdrop,
 .side-sheet-backdrop {
   position: fixed;
@@ -1158,7 +1160,7 @@
 .is-player-shell .console-lower .library-lyrics p.is-current { display: block; margin: 4px 0; font-size: 12px; }
 .is-player-shell .console-lower .library-lyrics-empty { height: 42px; display: flex; justify-content: flex-start; gap: 7px; }
 
-.is-player-shell .persistent-stage-panel { grid-column: 3; grid-row: 1; z-index: 3; padding: 18px 18px 72px; border: 0; background: transparent; pointer-events: none; }
+.is-player-shell .persistent-stage-panel { grid-column: 3; grid-row: 1; z-index: 3; padding: 18px 18px 12px; border: 0; background: transparent; pointer-events: none; }
 .is-player-shell .persistent-stage-panel > * { pointer-events: auto; }
 .is-player-shell .now-listening-heading { flex-basis: 64px; text-align: center; }
 .is-player-shell .now-listening-heading h2 { font-size: 19px; }
@@ -1169,7 +1171,7 @@
 .camera-capsule button.is-active { color: #fffaf3; background: var(--library-ink); }
 
 .library-app.is-library-focus .focus-exit-control { display: inline-flex; }
-.library-app.is-library-focus .persistent-stage-panel { padding: 24px 24px 82px; background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.38), transparent 42%); }
+.library-app.is-library-focus .persistent-stage-panel { padding: 24px 24px 12px; background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.38), transparent 42%); }
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule { top: 12px; right: 18px; transform: none; }
 
 @media (max-width: 1120px) {
@@ -1807,6 +1809,7 @@ button.track-index,
 .library-app.is-library-focus .workspace-surface { display: none; }
 .library-app.is-library-focus .unified-shell { grid-row: 1; grid-template-columns: 1fr; }
 .library-app.is-library-focus .persistent-stage-panel { grid-column: 1; border: 0; }
+.library-app.is-library-focus .library-transport { grid-row: 2; }
 
 @media (max-width: 1120px) {
   .unified-shell { grid-template-columns: 64px minmax(440px, 1fr) minmax(330px, 36vw); }

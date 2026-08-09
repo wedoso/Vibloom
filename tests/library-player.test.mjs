@@ -35,10 +35,11 @@ test("ships the local library as the primary application", async () => {
 });
 
 test("keeps playback and Hiyori inside one player-first shell", async () => {
-  const [app, stage, spec] = await Promise.all([
+  const [app, stage, spec, libraryStyles] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
     readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
     readFile(new URL("docs/library-player.md", root), "utf8"),
+    readFile(new URL("src/library.css", root), "utf8"),
   ]);
 
   assert.match(app, /changeWorkspace\("player"\)/u);
@@ -48,6 +49,13 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /containModelRef/u);
   assert.match(stage, /cameraPreset/u);
   assert.match(stage, /const PORTRAIT_ZOOM = 1\.92/u);
+  assert.match(stage, /const FULL_BODY_SAFE_ZOOM = 1\.62/u);
+  assert.match(stage, /const FULL_BODY_RENDER_ZOOM = 1\.4/u);
+  assert.match(stage, /const WIDE_ZOOM = 1\.18/u);
+  assert.match(stage, /HIGH_ZOOM_SAFE_OFFSET_FACTOR = 0\.5/u);
+  assert.match(stage, /function portraitOffsetForZoom/u);
+  assert.match(stage, /function renderZoomForFraming/u);
+  assert.match(stage, /const portraitProgress = Math\.max\(0, Math\.min\(1,/u);
   assert.match(stage, /startsInPortrait \? "portrait" : "director"/u);
   assert.match(stage, /FOCUS_MODEL_HEIGHT_FACTOR = 0\.84/u);
   assert.match(stage, /FOCUS_VIEWPORT_HEIGHT_FACTOR = 0\.72/u);
@@ -63,7 +71,13 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /--stage-subject-y/u);
   assert.match(stage, /tallViewportProgress = Math\.max\(0, Math\.min\(1, \(window\.innerHeight - 720\) \/ 600\)\)/u);
   assert.match(stage, /roomRigYFactor = 0\.62 - tallViewportProgress \* \(containModelRef\.current \? 0\.18 : 0\.04\)/u);
-  assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? FOCUS_RIG_Y_FACTOR : roomRigYFactor\)/u);
+  assert.match(stage, /targetRigX = host\.clientWidth \* \(isWelcome && !isCompact \? 0\.52 : 0\.5\)/u);
+  assert.match(stage, /targetRigY = host\.clientHeight \* \(isWelcome \? 0\.52 : focused \? FOCUS_RIG_Y_FACTOR : roomRigYFactor\)/u);
+  assert.match(stage, /manualZoomRef\.current = WIDE_ZOOM/u);
+  assert.match(libraryStyles, /\.library-app\.is-empty \.library-status \{ bottom: 28px; \}/u);
+  assert.match(libraryStyles, /\.is-player-shell \.persistent-stage-panel \{[^}]*padding: 18px 18px 12px;/u);
+  assert.match(libraryStyles, /\.library-app\.is-library-focus \.persistent-stage-panel \{ padding: 24px 24px 12px;/u);
+  assert.match(libraryStyles, /\.library-app\.is-library-focus \.library-transport \{ grid-row: 2; \}/u);
   assert.match(spec, /never remount/u);
 });
 

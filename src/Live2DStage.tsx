@@ -48,7 +48,11 @@ const RESTING_IDLE_GROUP = "__vibloom_resting__";
 const MOTION_LOOP_SEAM_SECONDS = 0.72;
 const POSE_TRANSITION_MIN_SECONDS = 0.38;
 const POSE_TRANSITION_MAX_SECONDS = 0.68;
+const FULL_BODY_SAFE_ZOOM = 1.62;
+const FULL_BODY_RENDER_ZOOM = 1.4;
 const PORTRAIT_ZOOM = 1.92;
+const WIDE_ZOOM = 1.18;
+const HIGH_ZOOM_SAFE_OFFSET_FACTOR = 0.5;
 const FOCUS_PORTRAIT_OFFSET_FACTOR = 0.14;
 const FOCUS_MODEL_HEIGHT_FACTOR = 0.84;
 const FOCUS_VIEWPORT_HEIGHT_FACTOR = 0.72;
@@ -57,6 +61,23 @@ const LIBRARY_PORTRAIT_OFFSET_FACTOR = 0.1;
 const ROOM_PORTRAIT_OFFSET_FACTOR = 0.18;
 const DISC_MODEL_CENTER_OFFSET_FACTOR = 0.1;
 const DISC_ZOOM_CENTER_OFFSET_FACTOR = 0.09;
+
+function portraitOffsetForZoom(zoom: number, stageHeight: number, baseFactor: number) {
+  const portraitProgress = Math.max(0, Math.min(1, (zoom - FULL_BODY_SAFE_ZOOM) / (PORTRAIT_ZOOM - FULL_BODY_SAFE_ZOOM)));
+  const portraitDelta = portraitProgress * (PORTRAIT_ZOOM - 1);
+  const highZoomDelta = Math.max(0, zoom - PORTRAIT_ZOOM);
+  return stageHeight * (portraitDelta * baseFactor + highZoomDelta * HIGH_ZOOM_SAFE_OFFSET_FACTOR);
+}
+
+function renderZoomForFraming(zoom: number) {
+  if (zoom <= WIDE_ZOOM || zoom >= PORTRAIT_ZOOM) return zoom;
+  if (zoom <= FULL_BODY_SAFE_ZOOM) {
+    const progress = (zoom - WIDE_ZOOM) / (FULL_BODY_SAFE_ZOOM - WIDE_ZOOM);
+    return WIDE_ZOOM + progress * (FULL_BODY_RENDER_ZOOM - WIDE_ZOOM);
+  }
+  const progress = (zoom - FULL_BODY_SAFE_ZOOM) / (PORTRAIT_ZOOM - FULL_BODY_SAFE_ZOOM);
+  return FULL_BODY_RENDER_ZOOM + progress * (PORTRAIT_ZOOM - FULL_BODY_RENDER_ZOOM);
+}
 
 type OfficialMotionId = "m01" | "m02" | "m03" | "m05" | "m06" | "m08";
 
@@ -422,8 +443,8 @@ export default function Live2DStage({
             : host.clientHeight * 0.84;
           const targetWidth = host.clientWidth * (isCompact ? 0.84 : isWelcome ? 0.68 : focused ? 0.64 : 0.64);
           targetModelScale = Math.min(targetHeight / naturalHeight, targetWidth / naturalWidth);
-          targetRigX = host.clientWidth * (isWelcome && !isCompact ? 0.58 : 0.5);
-          targetRigY = host.clientHeight * (focused ? FOCUS_RIG_Y_FACTOR : roomRigYFactor);
+          targetRigX = host.clientWidth * (isWelcome && !isCompact ? 0.52 : 0.5);
+          targetRigY = host.clientHeight * (isWelcome ? 0.52 : focused ? FOCUS_RIG_Y_FACTOR : roomRigYFactor);
           if (!layoutInitialized) {
             currentModelScale = targetModelScale;
             currentRigX = targetRigX;
@@ -446,11 +467,11 @@ export default function Live2DStage({
               : containModelRef.current
                 ? LIBRARY_PORTRAIT_OFFSET_FACTOR
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
-            currentPortraitOffset = Math.max(0, snapZoom - 1) * host.clientHeight * snapPortraitFactor;
+            currentPortraitOffset = portraitOffsetForZoom(snapZoom, host.clientHeight, snapPortraitFactor);
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
             cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
-            cameraRig.scale.set(snapZoom);
+            cameraRig.scale.set(renderZoomForFraming(snapZoom));
           } else if (!canvasRevealed) {
             // Model loading and late font/layout resolution happen while the
             // canvas is hidden. Keep replacing the provisional geometry with
@@ -905,11 +926,11 @@ export default function Live2DStage({
               : containModelRef.current
                 ? LIBRARY_PORTRAIT_OFFSET_FACTOR
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
-            currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * snapPortraitFactor;
+            currentPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, snapPortraitFactor);
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
             cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
-            cameraRig.scale.set(cameraZoom);
+            cameraRig.scale.set(renderZoomForFraming(cameraZoom));
             sceneLayoutSnapRef.current = false;
           }
 
@@ -1243,7 +1264,7 @@ export default function Live2DStage({
             currentModelScale = targetModelScale;
             currentRigX = targetRigX;
             currentRigY = targetRigY;
-            currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * portraitOffsetFactor;
+            currentPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, portraitOffsetFactor);
             focusCameraSnapRef.current = false;
           } else {
             cameraZoom = follow(cameraZoom, targetCameraZoom, focusCameraTransitioning ? 2.8 : autoSuspended ? 5.2 : 0.95);
@@ -1251,7 +1272,7 @@ export default function Live2DStage({
             currentModelScale = follow(currentModelScale, targetModelScale, 3.6);
             currentRigX = follow(currentRigX, targetRigX, 3.2);
             currentRigY = follow(currentRigY, targetRigY, 3.2);
-            const targetPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * portraitOffsetFactor;
+            const targetPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, portraitOffsetFactor);
             currentPortraitOffset = follow(
               currentPortraitOffset,
               targetPortraitOffset,
@@ -1261,7 +1282,8 @@ export default function Live2DStage({
           model.scale.set(currentModelScale);
           contactShadow.scale.set(currentModelScale);
           cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
-          cameraRig.scale.set(cameraZoom);
+          const renderCameraZoom = renderZoomForFraming(cameraZoom);
+          cameraRig.scale.set(renderCameraZoom);
 
           if (lastSource !== features.source) {
             lastSource = features.source;
@@ -1296,7 +1318,7 @@ export default function Live2DStage({
           const stage = stageRef.current;
           if (stage) {
             const discCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
-              + Math.max(0, cameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
+              + Math.max(0, renderCameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
             stage.style.setProperty("--music-energy", energy.toFixed(3));
             stage.style.setProperty("--music-energy-long", energyLong.toFixed(3));
             stage.style.setProperty("--music-bass", bass.toFixed(3));
@@ -1308,7 +1330,7 @@ export default function Live2DStage({
             stage.style.setProperty("--camera-rig-x", currentRigX.toFixed(3));
             stage.style.setProperty("--camera-rig-y", (currentRigY + currentPortraitOffset).toFixed(3));
             stage.style.setProperty("--model-scale", currentModelScale.toFixed(5));
-            stage.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * cameraZoom}px`);
+            stage.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * renderCameraZoom}px`);
             stage.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
             stage.style.setProperty(
               "--stage-subject-y",
@@ -1339,15 +1361,16 @@ export default function Live2DStage({
           : containModelRef.current
             ? LIBRARY_PORTRAIT_OFFSET_FACTOR
             : ROOM_PORTRAIT_OFFSET_FACTOR;
-        currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * initialPortraitFactor;
+        currentPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, initialPortraitFactor);
         currentCameraZoomRef.current = cameraZoom;
         model.scale.set(currentModelScale);
         contactShadow.scale.set(currentModelScale);
         cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
-        cameraRig.scale.set(cameraZoom);
+        const initialRenderZoom = renderZoomForFraming(cameraZoom);
+        cameraRig.scale.set(initialRenderZoom);
         const initialDiscCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
-          + Math.max(0, cameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
-        stageRef.current?.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * cameraZoom}px`);
+          + Math.max(0, initialRenderZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
+        stageRef.current?.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * initialRenderZoom}px`);
         stageRef.current?.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
         stageRef.current?.style.setProperty(
           "--stage-subject-y",
@@ -1462,12 +1485,12 @@ export default function Live2DStage({
             aria-label="Wide full-body framing"
             className={cameraPreset === "wide" ? "is-active" : ""}
             onClick={() => {
-              manualZoomRef.current = 1;
+              manualZoomRef.current = WIDE_ZOOM;
               autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
               cameraModeRef.current = "locked";
               setCameraMode("locked");
               setCameraPreset("wide");
-              setZoomReadout(100);
+              setZoomReadout(Math.round(WIDE_ZOOM * 100));
               setShowZoom(true);
               if (zoomTimerRef.current !== null) window.clearTimeout(zoomTimerRef.current);
               zoomTimerRef.current = window.setTimeout(() => setShowZoom(false), 1100);
