@@ -2244,7 +2244,7 @@ button.track-index,
 /* Library keeps the complete camera language visible as a quiet right-side dock. */
 .is-library-shell .persistent-stage-canvas .camera-capsule {
   top: 50%;
-  right: 0;
+  right: 18px;
   left: auto;
   padding: 6px;
   flex-direction: column;
@@ -2255,14 +2255,14 @@ button.track-index,
 }
 
 .is-library-shell .persistent-stage-canvas .camera-capsule button {
-  width: 88px;
-  min-width: 88px;
-  padding: 0 9px;
-  justify-content: flex-start;
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  justify-content: center;
 }
 
-.is-library-shell .persistent-stage-canvas .camera-capsule button span { display: inline; }
-.is-library-shell .persistent-stage-canvas .camera-capsule > i { width: 62px; height: 1px; }
+.is-library-shell .persistent-stage-canvas .camera-capsule button span { display: none; }
+.is-library-shell .persistent-stage-canvas .camera-capsule > i { width: 15px; height: 1px; }
 .is-library-shell .persistent-stage-canvas .camera-hint { display: none; }
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule {

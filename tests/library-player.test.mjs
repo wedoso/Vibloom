@@ -49,14 +49,20 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /cameraPreset/u);
   assert.match(stage, /const PORTRAIT_ZOOM = 1\.92/u);
   assert.match(stage, /startsInPortrait \? "portrait" : "director"/u);
-  assert.match(stage, /FOCUS_MODEL_HEIGHT_FACTOR = 0\.78/u);
-  assert.match(stage, /LIBRARY_PORTRAIT_OFFSET_FACTOR = 0\.34/u);
-  assert.match(stage, /ROOM_PORTRAIT_OFFSET_FACTOR = 0\.43/u);
-  assert.match(stage, /focused \? FOCUS_MODEL_HEIGHT_FACTOR : 0\.84/u);
+  assert.match(stage, /FOCUS_MODEL_HEIGHT_FACTOR = 0\.84/u);
+  assert.match(stage, /FOCUS_VIEWPORT_HEIGHT_FACTOR = 0\.72/u);
+  assert.match(stage, /LIBRARY_PORTRAIT_OFFSET_FACTOR = 0\.1/u);
+  assert.match(stage, /ROOM_PORTRAIT_OFFSET_FACTOR = 0\.18/u);
+  assert.match(stage, /DISC_MODEL_CENTER_OFFSET_FACTOR = 0\.1/u);
+  assert.match(stage, /DISC_ZOOM_CENTER_OFFSET_FACTOR = 0\.09/u);
+  assert.match(stage, /window\.innerHeight \* FOCUS_VIEWPORT_HEIGHT_FACTOR/u);
   assert.match(stage, /containModelRef\.current[\s\S]*LIBRARY_PORTRAIT_OFFSET_FACTOR/u);
   assert.match(stage, /const isCompact = window\.innerWidth < 600/u);
   assert.match(stage, /--stage-model-width/u);
-  assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? 0\.58 : 0\.56\)/u);
+  assert.match(stage, /--stage-subject-y/u);
+  assert.match(stage, /tallViewportProgress = Math\.max\(0, Math\.min\(1, \(window\.innerHeight - 720\) \/ 600\)\)/u);
+  assert.match(stage, /roomRigYFactor = 0\.62 - tallViewportProgress \* \(containModelRef\.current \? 0\.18 : 0\.12\)/u);
+  assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? 0\.58 : roomRigYFactor\)/u);
   assert.match(spec, /never remount/u);
 });
 
@@ -172,5 +178,7 @@ test("completes the progressive A/B comparison workflow", async () => {
   assert.match(styles, /\.transport-secondary \.transport-ab-switch button[\s\S]*place-items: center/u);
   assert.match(styles, /\.focus-exit-control kbd[\s\S]*border-radius: 999px/u);
   assert.match(styles, /\.is-library-shell \.persistent-stage-canvas \.camera-capsule/u);
+  assert.match(styles, /\.is-library-shell \.persistent-stage-canvas \.camera-capsule button[\s\S]*width: 34px/u);
+  assert.match(styles, /\.is-library-shell \.persistent-stage-canvas \.camera-capsule button span \{ display: none; \}/u);
   assert.match(styles, /\.comparison-duration-alert/u);
 });

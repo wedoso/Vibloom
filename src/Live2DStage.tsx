@@ -50,9 +50,12 @@ const POSE_TRANSITION_MIN_SECONDS = 0.38;
 const POSE_TRANSITION_MAX_SECONDS = 0.68;
 const PORTRAIT_ZOOM = 1.92;
 const FOCUS_PORTRAIT_OFFSET_FACTOR = 0.14;
-const FOCUS_MODEL_HEIGHT_FACTOR = 0.78;
-const LIBRARY_PORTRAIT_OFFSET_FACTOR = 0.34;
-const ROOM_PORTRAIT_OFFSET_FACTOR = 0.43;
+const FOCUS_MODEL_HEIGHT_FACTOR = 0.84;
+const FOCUS_VIEWPORT_HEIGHT_FACTOR = 0.72;
+const LIBRARY_PORTRAIT_OFFSET_FACTOR = 0.1;
+const ROOM_PORTRAIT_OFFSET_FACTOR = 0.18;
+const DISC_MODEL_CENTER_OFFSET_FACTOR = 0.1;
+const DISC_ZOOM_CENTER_OFFSET_FACTOR = 0.09;
 
 type OfficialMotionId = "m01" | "m02" | "m03" | "m05" | "m06" | "m08";
 
@@ -411,11 +414,15 @@ export default function Live2DStage({
           const isCompact = window.innerWidth < 600;
           isCompactLayout = isCompact;
           const focused = focusModeRef.current && !isWelcome;
-          const targetHeight = host.clientHeight * (focused ? FOCUS_MODEL_HEIGHT_FACTOR : 0.84);
+          const tallViewportProgress = Math.max(0, Math.min(1, (window.innerHeight - 720) / 600));
+          const roomRigYFactor = 0.62 - tallViewportProgress * (containModelRef.current ? 0.18 : 0.12);
+          const targetHeight = focused
+            ? Math.min(host.clientHeight * FOCUS_MODEL_HEIGHT_FACTOR, window.innerHeight * FOCUS_VIEWPORT_HEIGHT_FACTOR)
+            : host.clientHeight * 0.84;
           const targetWidth = host.clientWidth * (isCompact ? 0.84 : isWelcome ? 0.68 : focused ? 0.64 : 0.64);
           targetModelScale = Math.min(targetHeight / naturalHeight, targetWidth / naturalWidth);
           targetRigX = host.clientWidth * (isWelcome && !isCompact ? 0.58 : 0.5);
-          targetRigY = host.clientHeight * (focused ? 0.58 : 0.56);
+          targetRigY = host.clientHeight * (focused ? 0.58 : roomRigYFactor);
           if (!layoutInitialized) {
             currentModelScale = targetModelScale;
             currentRigX = targetRigX;
@@ -1287,6 +1294,8 @@ export default function Live2DStage({
 
           const stage = stageRef.current;
           if (stage) {
+            const discCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
+              + Math.max(0, cameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
             stage.style.setProperty("--music-energy", energy.toFixed(3));
             stage.style.setProperty("--music-energy-long", energyLong.toFixed(3));
             stage.style.setProperty("--music-bass", bass.toFixed(3));
@@ -1299,6 +1308,11 @@ export default function Live2DStage({
             stage.style.setProperty("--camera-rig-y", (currentRigY + currentPortraitOffset).toFixed(3));
             stage.style.setProperty("--model-scale", currentModelScale.toFixed(5));
             stage.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * cameraZoom}px`);
+            stage.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
+            stage.style.setProperty(
+              "--stage-subject-y",
+              `${((currentRigY + currentPortraitOffset - naturalHeight * currentModelScale * cameraZoom * discCenterOffsetFactor) / Math.max(1, host.clientHeight)) * 100}%`,
+            );
           }
         }, undefined, UPDATE_PRIORITY.HIGH);
 
@@ -1330,6 +1344,14 @@ export default function Live2DStage({
         contactShadow.scale.set(currentModelScale);
         cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
         cameraRig.scale.set(cameraZoom);
+        const initialDiscCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
+          + Math.max(0, cameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
+        stageRef.current?.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * cameraZoom}px`);
+        stageRef.current?.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
+        stageRef.current?.style.setProperty(
+          "--stage-subject-y",
+          `${((currentRigY + currentPortraitOffset - naturalHeight * currentModelScale * cameraZoom * initialDiscCenterOffsetFactor) / Math.max(1, host.clientHeight)) * 100}%`,
+        );
         model.automator.autoUpdate = true;
         model.update(16.67);
         app.render();
