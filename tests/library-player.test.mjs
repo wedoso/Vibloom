@@ -49,7 +49,11 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /cameraPreset/u);
   assert.match(stage, /const PORTRAIT_ZOOM = 1\.92/u);
   assert.match(stage, /startsInPortrait \? "portrait" : "director"/u);
+  assert.match(stage, /FOCUS_MODEL_HEIGHT_FACTOR = 0\.78/u);
+  assert.match(stage, /LIBRARY_PORTRAIT_OFFSET_FACTOR = 0\.34/u);
   assert.match(stage, /ROOM_PORTRAIT_OFFSET_FACTOR = 0\.43/u);
+  assert.match(stage, /focused \? FOCUS_MODEL_HEIGHT_FACTOR : 0\.84/u);
+  assert.match(stage, /containModelRef\.current[\s\S]*LIBRARY_PORTRAIT_OFFSET_FACTOR/u);
   assert.match(stage, /const isCompact = window\.innerWidth < 600/u);
   assert.match(stage, /--stage-model-width/u);
   assert.match(stage, /targetRigY = host\.clientHeight \* \(focused \? 0\.58 : 0\.56\)/u);

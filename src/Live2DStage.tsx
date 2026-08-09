@@ -50,6 +50,8 @@ const POSE_TRANSITION_MIN_SECONDS = 0.38;
 const POSE_TRANSITION_MAX_SECONDS = 0.68;
 const PORTRAIT_ZOOM = 1.92;
 const FOCUS_PORTRAIT_OFFSET_FACTOR = 0.14;
+const FOCUS_MODEL_HEIGHT_FACTOR = 0.78;
+const LIBRARY_PORTRAIT_OFFSET_FACTOR = 0.34;
 const ROOM_PORTRAIT_OFFSET_FACTOR = 0.43;
 
 type OfficialMotionId = "m01" | "m02" | "m03" | "m05" | "m06" | "m08";
@@ -409,7 +411,7 @@ export default function Live2DStage({
           const isCompact = window.innerWidth < 600;
           isCompactLayout = isCompact;
           const focused = focusModeRef.current && !isWelcome;
-          const targetHeight = host.clientHeight * (focused ? 0.68 : 0.84);
+          const targetHeight = host.clientHeight * (focused ? FOCUS_MODEL_HEIGHT_FACTOR : 0.84);
           const targetWidth = host.clientWidth * (isCompact ? 0.84 : isWelcome ? 0.68 : focused ? 0.64 : 0.64);
           targetModelScale = Math.min(targetHeight / naturalHeight, targetWidth / naturalWidth);
           targetRigX = host.clientWidth * (isWelcome && !isCompact ? 0.58 : 0.5);
@@ -431,7 +433,11 @@ export default function Live2DStage({
             currentRigX = targetRigX;
             currentRigY = targetRigY;
             const snapZoom = currentCameraZoomRef.current;
-            const snapPortraitFactor = focused || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
+            const snapPortraitFactor = focused || isCompactLayout
+              ? FOCUS_PORTRAIT_OFFSET_FACTOR
+              : containModelRef.current
+                ? LIBRARY_PORTRAIT_OFFSET_FACTOR
+                : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = Math.max(0, snapZoom - 1) * host.clientHeight * snapPortraitFactor;
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
@@ -886,7 +892,11 @@ export default function Live2DStage({
             currentModelScale = targetModelScale;
             currentRigX = targetRigX;
             currentRigY = targetRigY;
-            const snapPortraitFactor = focusModeRef.current || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
+            const snapPortraitFactor = focusModeRef.current || isCompactLayout
+              ? FOCUS_PORTRAIT_OFFSET_FACTOR
+              : containModelRef.current
+                ? LIBRARY_PORTRAIT_OFFSET_FACTOR
+                : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * snapPortraitFactor;
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
@@ -1211,7 +1221,11 @@ export default function Live2DStage({
           const focusCameraBias = focusModeRef.current ? 0.2 : 0;
           const targetCameraZoom = Math.min(2.35, containedCameraZoom + focusCameraBias);
           const focusCameraTransitioning = performance.now() < focusCameraTransitionUntilRef.current;
-          const portraitOffsetFactor = focusModeRef.current || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
+          const portraitOffsetFactor = focusModeRef.current || isCompactLayout
+            ? FOCUS_PORTRAIT_OFFSET_FACTOR
+            : containModelRef.current
+              ? LIBRARY_PORTRAIT_OFFSET_FACTOR
+              : ROOM_PORTRAIT_OFFSET_FACTOR;
           if (focusCameraSnapRef.current) {
             // Focus layout commits only while the solid scene curtain is opaque.
             // Snap the complete Pixi camera composition in that hidden frame;
@@ -1305,7 +1319,11 @@ export default function Live2DStage({
           : variantRef.current === "player"
           ? Math.min(2.35, manualZoomRef.current + (focusModeRef.current ? 0.2 : 0))
           : 1;
-        const initialPortraitFactor = focusModeRef.current || isCompactLayout ? FOCUS_PORTRAIT_OFFSET_FACTOR : ROOM_PORTRAIT_OFFSET_FACTOR;
+        const initialPortraitFactor = focusModeRef.current || isCompactLayout
+          ? FOCUS_PORTRAIT_OFFSET_FACTOR
+          : containModelRef.current
+            ? LIBRARY_PORTRAIT_OFFSET_FACTOR
+            : ROOM_PORTRAIT_OFFSET_FACTOR;
         currentPortraitOffset = Math.max(0, cameraZoom - 1) * host.clientHeight * initialPortraitFactor;
         currentCameraZoomRef.current = cameraZoom;
         model.scale.set(currentModelScale);
