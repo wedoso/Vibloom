@@ -351,7 +351,9 @@ test("animates both directions of Focus Mode", async () => {
   assert.match(stage, /currentModelScale = targetModelScale/u);
   assert.match(stage, /currentRigX = targetRigX/u);
   assert.match(stage, /currentRigY = targetRigY/u);
-  assert.match(stage, /disc\.animate\(/u);
+  assert.doesNotMatch(stage, /disc\.animate\(/u);
+  assert.doesNotMatch(stage, /musicDiscAnimationRef/u);
+  assert.match(styles, /html\.is-scene-covering\[data-scene-transition\^="focus"\] \.persistent-stage-canvas[\s\S]*visibility: hidden/u);
   assert.match(styles, /\.is-focus-mode\.focus-transition-enter \.track-score-strip \{[\s\S]*?position: absolute;/u);
 });
 
@@ -537,7 +539,7 @@ test("separates the static contact shadow from ambient music lighting", async ()
   assert.doesNotMatch(styles, /\.stage-floor-light/u);
   assert.doesNotMatch(styles, /\.welcome-screen::before|\.stage-glow|\.stage-orbit/u);
   assert.doesNotMatch(stage, /className="stage-glow"/u);
-  assert.match(styles, /\.live2d-stage-welcome \{[\s\S]*?--stage-subject-x: 58%;[\s\S]*?--stage-subject-y: 54%;/u);
+  assert.match(styles, /\.live2d-stage-welcome \{[\s\S]*?--stage-subject-x: 50%;[\s\S]*?--stage-subject-y: 54%;/u);
   assert.match(styles, /left: var\(--stage-subject-x, 50%\);[\s\S]*?top: var\(--stage-subject-y, 47%\);/u);
   assert.match(styles, /@media \(max-width: 600px\)[\s\S]*?\.live2d-stage-welcome \{ --stage-subject-x: 50%; \}/u);
   assert.doesNotMatch(styles, /\.player-hero::before/u);

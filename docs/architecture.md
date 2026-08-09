@@ -1,5 +1,7 @@
 # Vibloom architecture
 
+The approved local-library, playlist, cache, reconnect, and cross-browser product contract is documented in [library-player.md](library-player.md). This document continues to describe the existing playback and Live2D runtime invariants that the library implementation must preserve.
+
 Vibloom is a static React/Vite application. Audio decoding, analysis, playback, Live2D rendering, and A/B switching all run inside the browser tab. The production build has no server runtime and remains deployable directly to GitHub Pages.
 
 ## Runtime flow
@@ -7,7 +9,8 @@ Vibloom is a static React/Vite application. Audio decoding, analysis, playback, 
 ```text
 Local File(s)
     │
-    ├─ FileReader progress → Web Audio decode → AudioBuffer A/B
+    ├─ Library index → demand-decoded AudioBuffer A/B → Web Audio gain/analyser graph
+    ├─ Focused legacy comparison → same AudioBuffer scheduling model
     ├─ optional LRC → Unicode decode → timestamp/offset parser → lyric timeline
     │
     ├─ one shared AudioContext clock → synchronized BufferSource nodes
@@ -21,28 +24,39 @@ Local File(s)
                     └─ phrase-scale automatic camera
 ```
 
-`src/App.tsx` owns files, decoded buffers, the shared playback clock, seeking, A/B gain switching, timed lyric state, and the current interaction state. `src/lrc.ts` decodes and parses optional lyrics. `src/audioVisual.ts` samples the analyser. `src/Live2DStage.tsx` consumes the latest features through a ref so the render loop does not require React state updates at 60 fps.
+`src/LibraryApp.tsx` is the primary application and owns the persistent Player/Library shell, queue, demand-decoded AudioBuffers, synchronized A/B gains, seeking, persistence, and sheets. Its playback core extends the original `src/App.tsx` single-clock engine instead of running independent media elements. `src/lrc.ts` decodes and parses optional lyrics. `src/audioVisual.ts` samples the audible analyser. `src/Live2DStage.tsx` consumes the latest features through a ref so the render loop does not require React state updates at 60 fps.
 
 ## Optional LRC timeline
 
-- One optional lyric timeline belongs to the listening session and remains synchronized when the user switches Audio A/B.
+- One optional lyric timeline belongs to each library track and remains synchronized when the user switches Audio A/B.
 - `src/lrc.ts` accepts UTF-8 plus BOM-marked UTF-16LE/UTF-16BE, parses centisecond or millisecond timestamps, applies `[offset:]`, expands repeated timestamps, and combines distinct same-time lines for bilingual lyrics.
 - React derives the active line from the same `currentTime` used by the waveform and playhead. The next timestamp defines the current line's fill progress.
 - Only the lyric viewport scrolls. Its active line is centered programmatically without moving the document.
 - The active fill uses the current source accent: green for A and rose for B. A registered CSS color property smooths the transition during track switching.
 - The font stack explicitly falls back through English, Simplified Chinese, Traditional Chinese, and Japanese system/CJK families.
-- LRC text is never uploaded or persisted; clearing the session removes the parsed timeline.
+- LRC text is never uploaded. Parsed lines and the source filename are stored with the local library record so the association survives refresh; removing lyrics clears only that track's association.
 
 ## Audio clock and A/B behavior
 
 - The landing page accepts one Track A file through a single invitation integrated into Hiyori's stage. The same surface contains the file-picker action and drag/drop hint; a compact player-side action requests Track B, so neither a duplicate homepage uploader nor an empty comparison panel competes with the primary listening path.
 - Before B is requested, React renders only Track A's score note and waveform. Requesting B immediately changes the score strip to equal A/B portions; the B waveform and source selector then share the same state boundary.
-- A and B use one `AudioContext.currentTime` reference.
-- Both sources start at the same scheduled time and timeline offset.
+- The library player decodes A and B into AudioBuffers, starts both BufferSource nodes at the same future `AudioContext.currentTime`, and keeps the muted source running on that exact clock. There is no periodic `currentTime` correction loop.
+- The decoded buffer also produces the 144-column waveform, avoiding a second decode and its associated CPU/memory spike during playback.
+- The two waveforms are visual evidence only. The persistent bottom transport is the sole seek/play control and switches to millisecond readouts while B is present.
+- Queue playback and focused comparison use the same scheduled `AudioContext.currentTime` reference for decoded AudioBuffers.
 - Switching tracks changes gain only. It never seeks, changes playback rate, or restarts the clock.
 - An 18 ms crossfade prevents clicks while preserving comparison timing.
 - The longer decoded file defines the shared timeline. A shorter selected source intentionally becomes silent after its own end.
+- The Player and Focus surfaces expose both decoded waveforms, explicit A/B source controls, different-duration and ended-source notices, and visible five-second seek controls.
 - Pausing updates the interaction ref, silences the master output, and stops sources in the same input frame.
+
+## Browser storage and recovery
+
+- IndexedDB stores the library index, queue, lyrics, playback position, and each track's Version B relationship.
+- OPFS stores browser-owned audio copies. Automatic caching is enabled for new users and applies to both the library master and Version B after a quota check.
+- Reload restoration verifies every cached blob before marking it available. Missing copies are downgraded to Reconnect rather than producing a playback failure.
+- Clearing cached audio preserves metadata, lyrics, and queue order. Reset Vibloom removes both the index and cached audio.
+- Storage persistence requests are best-effort; private browsing, user site-data cleanup, and operating-system pressure can still remove browser-owned files.
 
 ## Music feature pipeline
 

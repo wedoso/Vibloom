@@ -13,6 +13,8 @@ type Live2DStageProps = {
   isComparing: boolean;
   isPlaying: boolean;
   focusMode: boolean;
+  containModel?: boolean;
+  layoutKey?: string;
   onPickAudio?: () => void;
 };
 
@@ -186,20 +188,19 @@ export default function Live2DStage({
   isComparing,
   isPlaying,
   focusMode,
+  containModel = false,
+  layoutKey,
   onPickAudio,
 }: Live2DStageProps) {
   const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
-  const musicDiscRef = useRef<HTMLDivElement>(null);
-  const previousDiscCenterRef = useRef<{ x: number; y: number } | null>(null);
-  const previousDiscFocusRef = useRef(focusMode);
-  const musicDiscAnimationRef = useRef<Animation | null>(null);
   const sceneLayoutSnapRef = useRef(false);
   const focusCameraSnapRef = useRef(false);
   const variantRef = useRef(variant);
   const previousVariantRef = useRef(variant);
   const previousFocusModeRef = useRef(focusMode);
   const focusModeRef = useRef(focusMode);
+  const containModelRef = useRef(containModel);
   const focusCameraTransitionUntilRef = useRef(0);
   const layoutRef = useRef<(() => void) | null>(null);
   const cameraModeRef = useRef<"auto" | "locked">("auto");
@@ -209,6 +210,7 @@ export default function Live2DStage({
   const zoomTimerRef = useRef<number | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [cameraMode, setCameraMode] = useState<"auto" | "locked">("auto");
+  const [cameraPreset, setCameraPreset] = useState<"director" | "portrait" | "wide" | "manual">("director");
   const [zoomReadout, setZoomReadout] = useState(100);
   const [showZoom, setShowZoom] = useState(false);
 
@@ -218,6 +220,7 @@ export default function Live2DStage({
     const changingFocus = previousFocusModeRef.current !== focusMode;
     variantRef.current = variant;
     focusModeRef.current = focusMode;
+    containModelRef.current = containModel;
     const sceneCovered = document.documentElement.classList.contains("is-scene-covering");
     if (changingFocus && sceneCovered) {
       focusCameraSnapRef.current = true;
@@ -229,44 +232,23 @@ export default function Live2DStage({
     if (enteringPlayer) {
       // Establish an intimate first shot before the phrase director takes over.
       // The camera rig moves; Hiyori's authored model coordinates stay untouched.
-      manualZoomRef.current = 2.12;
+      manualZoomRef.current = containModel ? 1 : 2.12;
       autoSuspendUntilRef.current = performance.now() + 2800;
       cameraModeRef.current = "auto";
       setCameraMode("auto");
+      setCameraPreset("director");
     } else if (leavingPlayer) {
       manualZoomRef.current = 1;
       currentCameraZoomRef.current = 1;
       autoSuspendUntilRef.current = 0;
       cameraModeRef.current = "auto";
       setCameraMode("auto");
+      setCameraPreset("director");
     }
     previousVariantRef.current = variant;
     previousFocusModeRef.current = focusMode;
     layoutRef.current?.();
-  }, [focusMode, variant]);
-
-  useLayoutEffect(() => {
-    const disc = musicDiscRef.current;
-    if (!disc) return;
-    const bounds = disc.getBoundingClientRect();
-    const nextCenter = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
-    const previousCenter = previousDiscCenterRef.current;
-    const changedFocus = previousDiscFocusRef.current !== focusMode;
-    musicDiscAnimationRef.current?.cancel();
-    if (previousCenter && changedFocus && variant === "player" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const offsetX = previousCenter.x - nextCenter.x;
-      const offsetY = previousCenter.y - nextCenter.y;
-      musicDiscAnimationRef.current = disc.animate(
-        [
-          { translate: `${offsetX}px ${offsetY}px` },
-          { translate: "0 0" },
-        ],
-        { duration: 880, easing: "cubic-bezier(.16, 1, .3, 1)" },
-      );
-    }
-    previousDiscCenterRef.current = nextCenter;
-    previousDiscFocusRef.current = focusMode;
-  }, [focusMode, variant]);
+  }, [containModel, focusMode, layoutKey, variant]);
 
   useEffect(() => {
     cameraModeRef.current = cameraMode;
@@ -282,6 +264,14 @@ export default function Live2DStage({
     let resizeFrame: number | null = null;
     let cleanupPointer: (() => void) | null = null;
     let cleanupMotionPose: (() => void) | null = null;
+    let cleanupModel: (() => void) | null = null;
+    let appDestroyed = false;
+    const destroyApp = () => {
+      if (!app || appDestroyed) return;
+      appDestroyed = true;
+      app.destroy(true, { children: true, texture: true, baseTexture: true });
+      app = null;
+    };
 
     async function mountModel() {
       try {
@@ -318,7 +308,9 @@ export default function Live2DStage({
           ticker: app.ticker,
         });
         if (disposed || !app) {
+          model.automator.autoUpdate = false;
           model.destroy();
+          destroyApp();
           return;
         }
         model.anchor.set(0.5, 0.5);
@@ -341,7 +333,9 @@ export default function Live2DStage({
           }),
         );
         if (disposed) {
+          model.automator.autoUpdate = false;
           model.destroy();
+          destroyApp();
           return;
         }
         // Rest is intentionally not an authored looping motion. The official m01
@@ -361,6 +355,11 @@ export default function Live2DStage({
         contactShadow.endFill();
         contactShadow.filters = [new BlurFilter(4, 2)];
         cameraRig.addChild(contactShadow, model);
+        cleanupModel = () => {
+          model.automator.autoUpdate = false;
+          cameraRig.removeChild(model);
+          model.destroy();
+        };
         let targetModelScale = 1;
         let currentModelScale = 1;
         let targetRigX = host.clientWidth * 0.5;
@@ -380,7 +379,8 @@ export default function Live2DStage({
           const nextWidth = Math.max(1, Math.round(host.clientWidth));
           const nextHeight = Math.max(1, Math.round(host.clientHeight));
           const nextHostBounds = host.getBoundingClientRect();
-          if (layoutInitialized && previousHostBounds && canvasRevealed) {
+          const sceneCovered = document.documentElement.classList.contains("is-scene-covering");
+          if (layoutInitialized && previousHostBounds && canvasRevealed && !sceneCovered) {
             // Keep Hiyori at the same viewport pixel while the header/score strip
             // changes the stage's origin. The camera then eases from that exact
             // screen-space pose into its new focus composition.
@@ -410,6 +410,21 @@ export default function Live2DStage({
             contactShadow.scale.set(currentModelScale);
             cameraRig.position.set(currentRigX, currentRigY);
             layoutInitialized = true;
+          } else if (sceneCovered) {
+            // Resolve the destination camera under the opaque scene curtain.
+            // This applies to Player/Library changes as well as Focus, including
+            // position-only layout changes that ResizeObserver cannot detect.
+            sceneLayoutSnapRef.current = true;
+            currentModelScale = targetModelScale;
+            currentRigX = targetRigX;
+            currentRigY = targetRigY;
+            const snapZoom = currentCameraZoomRef.current;
+            const snapPortraitFactor = focused || isCompactLayout ? 0.14 : 0.29;
+            currentPortraitOffset = Math.max(0, snapZoom - 1) * host.clientHeight * snapPortraitFactor;
+            model.scale.set(currentModelScale);
+            contactShadow.scale.set(currentModelScale);
+            cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
+            cameraRig.scale.set(snapZoom);
           } else if (!canvasRevealed) {
             // Model loading and late font/layout resolution happen while the
             // canvas is hidden. Keep replacing the provisional geometry with
@@ -458,6 +473,7 @@ export default function Live2DStage({
           autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
           cameraModeRef.current = "locked";
           setCameraMode("locked");
+          setCameraPreset("manual");
           revealZoom();
         };
         host.addEventListener("pointermove", handlePointer);
@@ -1179,8 +1195,9 @@ export default function Live2DStage({
             : cameraModeRef.current === "locked" || autoSuspended
               ? manualZoomRef.current
               : Math.max(1.42, Math.min(2.1, autoZoom));
+          const containedCameraZoom = containModelRef.current && !focusModeRef.current && cameraModeRef.current === "auto" ? 1 : baseCameraZoom;
           const focusCameraBias = focusModeRef.current ? 0.2 : 0;
-          const targetCameraZoom = Math.min(2.35, baseCameraZoom + focusCameraBias);
+          const targetCameraZoom = Math.min(2.35, containedCameraZoom + focusCameraBias);
           const focusCameraTransitioning = performance.now() < focusCameraTransitionUntilRef.current;
           const portraitOffsetFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
           if (focusCameraSnapRef.current) {
@@ -1252,6 +1269,9 @@ export default function Live2DStage({
             stage.style.setProperty("--particle-strength", particlePulse.toFixed(3));
             stage.style.setProperty("--music-active", activity.toFixed(3));
             stage.style.setProperty("--camera-zoom", cameraZoom.toFixed(3));
+            stage.style.setProperty("--camera-rig-x", currentRigX.toFixed(3));
+            stage.style.setProperty("--camera-rig-y", (currentRigY + currentPortraitOffset).toFixed(3));
+            stage.style.setProperty("--model-scale", currentModelScale.toFixed(5));
           }
         }, undefined, UPDATE_PRIORITY.HIGH);
 
@@ -1267,7 +1287,9 @@ export default function Live2DStage({
         currentModelScale = targetModelScale;
         currentRigX = targetRigX;
         currentRigY = targetRigY;
-        cameraZoom = variantRef.current === "player"
+        cameraZoom = containModelRef.current && !focusModeRef.current
+          ? 1
+          : variantRef.current === "player"
           ? Math.min(2.35, manualZoomRef.current + (focusModeRef.current ? 0.2 : 0))
           : 1;
         const initialPortraitFactor = focusModeRef.current || isCompactLayout ? 0.14 : 0.29;
@@ -1297,10 +1319,12 @@ export default function Live2DStage({
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
       cleanupPointer?.();
       cleanupMotionPose?.();
-      musicDiscAnimationRef.current?.cancel();
       if (zoomTimerRef.current !== null) window.clearTimeout(zoomTimerRef.current);
       try {
-        app?.destroy(true, { children: true, texture: true, baseTexture: true });
+        if (cleanupModel) {
+          cleanupModel();
+          destroyApp();
+        }
       } catch (error) {
         console.warn("Live2D cleanup completed with a renderer warning", error);
       }
@@ -1317,7 +1341,7 @@ export default function Live2DStage({
 
   return (
     <section ref={stageRef} className={`live2d-stage live2d-stage-${variant} light-${activeSource === 0 ? "a" : "b"} ${isPlaying ? "is-playing" : "is-paused"} ${focusMode ? "is-focused" : ""}`} aria-label="Interactive music companion">
-      <div ref={musicDiscRef} className="stage-music-disc" />
+      <div className="stage-music-disc" />
       <div className="stage-particles" aria-hidden="true">
         {PARTICLES.map(([left, top, delay, duration], index) => (
           <span
@@ -1338,16 +1362,18 @@ export default function Live2DStage({
         <div className="camera-capsule" aria-label="Camera controls">
           <button
             type="button"
-            className={cameraMode === "auto" ? "is-active" : ""}
+            className={cameraPreset === "director" ? "is-active" : ""}
             aria-pressed={cameraMode === "auto"}
             title="Toggle automatic phrase-level framing"
             onClick={() => {
               if (cameraMode === "auto") {
                 manualZoomRef.current = currentCameraZoomRef.current;
                 setCameraMode("locked");
+                setCameraPreset("manual");
               } else {
                 autoSuspendUntilRef.current = 0;
                 setCameraMode("auto");
+                setCameraPreset("director");
               }
             }}
           >
@@ -1359,11 +1385,13 @@ export default function Live2DStage({
             type="button"
             title="Portrait framing — Hiyori from the waist up"
             aria-label="Portrait upper-body framing"
+            className={cameraPreset === "portrait" ? "is-active" : ""}
             onClick={() => {
               manualZoomRef.current = 2.12;
               cameraModeRef.current = "locked";
               autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
               setCameraMode("locked");
+              setCameraPreset("portrait");
               setZoomReadout(212);
               setShowZoom(true);
               if (zoomTimerRef.current !== null) window.clearTimeout(zoomTimerRef.current);
@@ -1378,11 +1406,13 @@ export default function Live2DStage({
             type="button"
             title="Wide framing"
             aria-label="Wide full-body framing"
+            className={cameraPreset === "wide" ? "is-active" : ""}
             onClick={() => {
               manualZoomRef.current = 1;
               autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
               cameraModeRef.current = "locked";
               setCameraMode("locked");
+              setCameraPreset("wide");
               setZoomReadout(100);
               setShowZoom(true);
               if (zoomTimerRef.current !== null) window.clearTimeout(zoomTimerRef.current);
@@ -1396,7 +1426,7 @@ export default function Live2DStage({
           <span className="camera-hint"><Mouse size={11} strokeWidth={1.7} /> scroll to frame</span>
         </div>
       )}
-      {variant === "welcome" && (
+      {variant === "welcome" && onPickAudio && (
         <div className="stage-invitation">
           <span>YOUR MUSIC, HER MOVEMENT</span>
           <strong>Hiyori is ready to listen.</strong>
