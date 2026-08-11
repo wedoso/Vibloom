@@ -125,6 +125,7 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(main, /sandbox: true/u);
   assert.match(main, /setPermissionRequestHandler/u);
   assert.match(main, /setWindowOpenHandler\(\(\) => \(\{ action: "deny" \}\)\)/u);
+  assert.match(main, /state\.appVersion !== `v\$\{app\.getVersion\(\)\}`/u);
   assert.doesNotMatch(main, /shell\.openExternal|contextBridge|ipcRenderer/u);
 
   const manifest = JSON.parse(packageJson);

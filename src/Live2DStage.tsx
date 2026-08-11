@@ -62,6 +62,16 @@ const LIBRARY_PORTRAIT_OFFSET_FACTOR = 0.1;
 const ROOM_PORTRAIT_OFFSET_FACTOR = 0.18;
 const DISC_MODEL_CENTER_OFFSET_FACTOR = 0.1;
 const DISC_ZOOM_CENTER_OFFSET_FACTOR = 0.09;
+const DISC_MODEL_WIDTH_FACTOR = 0.812;
+const DISC_MAX_VISUAL_SCALE = 1.24;
+const PLAYER_DISC_SAFE_TOP = 18;
+
+function safeDiscWidth(modelWidth: number, centerY: number, variant: StageVariant) {
+  const preferredWidth = modelWidth * DISC_MODEL_WIDTH_FACTOR;
+  if (variant !== "player") return preferredWidth;
+  const topSafeWidth = Math.max(0, centerY - PLAYER_DISC_SAFE_TOP) * 2 / DISC_MAX_VISUAL_SCALE;
+  return Math.min(preferredWidth, topSafeWidth);
+}
 
 function portraitOffsetForZoom(zoom: number, stageHeight: number, baseFactor: number) {
   const portraitProgress = Math.max(0, Math.min(1, (zoom - FULL_BODY_SAFE_ZOOM) / (PORTRAIT_ZOOM - FULL_BODY_SAFE_ZOOM)));
@@ -279,6 +289,7 @@ export default function Live2DStage({
     previousFocusModeRef.current = focusMode;
     stageRef.current?.style.removeProperty("--stage-subject-x");
     stageRef.current?.style.removeProperty("--stage-subject-y");
+    stageRef.current?.style.removeProperty("--stage-disc-width");
     layoutRef.current?.();
     if (!nextCameraUi) return;
     const cameraUi = nextCameraUi;
@@ -1320,6 +1331,9 @@ export default function Live2DStage({
           if (stage) {
             const discCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
               + Math.max(0, renderCameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
+            const renderedModelWidth = naturalWidth * currentModelScale * renderCameraZoom;
+            const discCenterY = currentRigY + currentPortraitOffset
+              - naturalHeight * currentModelScale * cameraZoom * discCenterOffsetFactor;
             stage.style.setProperty("--music-energy", energy.toFixed(3));
             stage.style.setProperty("--music-energy-long", energyLong.toFixed(3));
             stage.style.setProperty("--music-bass", bass.toFixed(3));
@@ -1331,11 +1345,12 @@ export default function Live2DStage({
             stage.style.setProperty("--camera-rig-x", currentRigX.toFixed(3));
             stage.style.setProperty("--camera-rig-y", (currentRigY + currentPortraitOffset).toFixed(3));
             stage.style.setProperty("--model-scale", currentModelScale.toFixed(5));
-            stage.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * renderCameraZoom}px`);
+            stage.style.setProperty("--stage-model-width", `${renderedModelWidth}px`);
+            stage.style.setProperty("--stage-disc-width", `${safeDiscWidth(renderedModelWidth, discCenterY, variantRef.current)}px`);
             stage.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
             stage.style.setProperty(
               "--stage-subject-y",
-              `${((currentRigY + currentPortraitOffset - naturalHeight * currentModelScale * cameraZoom * discCenterOffsetFactor) / Math.max(1, host.clientHeight)) * 100}%`,
+              `${(discCenterY / Math.max(1, host.clientHeight)) * 100}%`,
             );
           }
         }, undefined, UPDATE_PRIORITY.HIGH);
@@ -1371,11 +1386,15 @@ export default function Live2DStage({
         cameraRig.scale.set(initialRenderZoom);
         const initialDiscCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
           + Math.max(0, initialRenderZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
-        stageRef.current?.style.setProperty("--stage-model-width", `${naturalWidth * currentModelScale * initialRenderZoom}px`);
+        const initialRenderedModelWidth = naturalWidth * currentModelScale * initialRenderZoom;
+        const initialDiscCenterY = currentRigY + currentPortraitOffset
+          - naturalHeight * currentModelScale * cameraZoom * initialDiscCenterOffsetFactor;
+        stageRef.current?.style.setProperty("--stage-model-width", `${initialRenderedModelWidth}px`);
+        stageRef.current?.style.setProperty("--stage-disc-width", `${safeDiscWidth(initialRenderedModelWidth, initialDiscCenterY, variantRef.current)}px`);
         stageRef.current?.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
         stageRef.current?.style.setProperty(
           "--stage-subject-y",
-          `${((currentRigY + currentPortraitOffset - naturalHeight * currentModelScale * cameraZoom * initialDiscCenterOffsetFactor) / Math.max(1, host.clientHeight)) * 100}%`,
+          `${(initialDiscCenterY / Math.max(1, host.clientHeight)) * 100}%`,
         );
         model.automator.autoUpdate = true;
         model.update(16.67);

@@ -52,6 +52,7 @@ Private browsing or unavailable storage falls back to session-only playback with
 - A/B are decoded once and scheduled against the same `AudioContext.currentTime`; source changes only use the existing short gain handoff to prevent clicks, with no media-element chasing or scene fade.
 - Keyboard shortcuts are global outside form controls: Space toggles playback, F toggles Focus, Escape exits Focus/sheets, 1 or A selects source A, 2 or B selects source B, and Left/Right seeks five seconds.
 - Focus always exposes a high-contrast Exit focus control. F enters and exits Focus; Escape remains an exit alternative.
+- The shared renderer shows the package version beside the Vibloom brand and in the Storage sheet so web and desktop users can compare their build with a published release.
 - Focus removes both waveform cards, preserves synchronized lyrics and the compact A/B selector, and places the stage source indicator directly above the single transport without an implicit empty grid row.
 - Homepage import, Player, Library, Focus enter, and Focus exit reuse the opaque scene curtain from the original listening room. The destination layout is committed only after the curtain covers the Live2D canvas, then held for four paint frames before reveal so camera repositioning and WebGL buffer clearing are never visible.
 - The Pixi rig receives an explicit layout key for Player, Library, and Focus. Model scale, rig position, portrait offset, and camera zoom snap synchronously during the covered commit and must remain numerically stable after reveal.
@@ -132,7 +133,7 @@ Persistence:
 - `cached`: audio is copied into OPFS and can resume without the original file. This is the default for newly imported tracks and their Version B files when space is available.
 - `indexed`: metadata and relationships are saved, but audio is not copied.
 
-Lyrics are stored as a separate matched/unmatched state. In addition to automatic basename matching during import, every track exposes Attach lyrics / Replace lyrics / Remove lyrics actions, and the current-track lyric panel exposes the same controls. The complete parsed LRC is rendered; the active line scrolls to the viewport center and receives timestamp-relative progress coloring in both Player and Focus. Progress uses the exact music-field source color: `rgb(84 127 121)` for A and `rgb(200 95 109)` for B. A successful replacement updates only that track's parsed lines and filename; removal clears only that association. UI copy must not expose IndexedDB, OPFS, or FileSystemHandle names.
+Lyrics are stored as a separate matched/unmatched state. In addition to automatic basename matching during import, every track exposes Attach lyrics / Replace lyrics / Remove lyrics actions, and the current-track lyric panel exposes the same controls. Attaching or replacing an LRC animates the panel and the first visible lyric lines into place. The complete parsed LRC is rendered; the active line scrolls to the viewport center and receives timestamp-relative progress coloring in both Player and Focus. Progress uses the exact music-field source color: `rgb(84 127 121)` for A and `rgb(200 95 109)` for B. A successful replacement updates only that track's parsed lines and filename; removal clears only that association. UI copy must not expose IndexedDB, OPFS, or FileSystemHandle names.
 
 ## Import and indexing
 
@@ -230,7 +231,7 @@ Autoplay is never attempted on page load. Resume restores context and waits for 
 - Verify Queue and Storage animate in and out, remain non-interactive while closed, and become immediate under reduced motion.
 - Verify the storage sheet has no text inside the capacity bar and every action remains a full-width, non-overflowing row.
 - Verify Hiyori's hair and shoes are both visible at default desktop framing.
-- Verify manual 162% framing keeps Hiyori's feet visible above the source indicator, and Player/Focus 235% framing stays below the now-listening title.
+- Verify manual 162% framing keeps Hiyori's feet visible above the source indicator, Player/Focus 235% framing stays below the now-listening title, and the solid music disc scales down before its maximum beat pulse can cross the title-safe top edge.
 - Verify the Focus source indicator finishes within 20 CSS pixels of the transport at the 1280×720 desktop viewport.
 - Verify Player renders exactly one playback transport while retaining two synchronized waveforms when B exists.
 - Run the common flow in Chromium, Firefox, and WebKit, plus a real Safari smoke test when available.

@@ -1153,7 +1153,7 @@ footer p { margin: 0; }
 .stage-music-disc {
   position: absolute;
   pointer-events: none;
-  width: calc(var(--stage-model-width, 320px) * .812);
+  width: var(--stage-disc-width, calc(var(--stage-model-width, 320px) * .812));
   aspect-ratio: 1;
   left: var(--stage-subject-x, 50%);
   top: var(--stage-subject-y, 47%);

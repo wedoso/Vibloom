@@ -5,9 +5,11 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("ships the local library as the primary application", async () => {
-  const [main, app, engine, styles] = await Promise.all([
+  const [main, app, appVersion, viteConfig, engine, styles] = await Promise.all([
     readFile(new URL("src/main.tsx", root), "utf8"),
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
+    readFile(new URL("src/appVersion.ts", root), "utf8"),
+    readFile(new URL("vite.config.ts", root), "utf8"),
     readFile(new URL("src/audio/SynchronizedAudioEngine.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
   ]);
@@ -31,6 +33,9 @@ test("ships the local library as the primary application", async () => {
   assert.match(app, /beginWaveformScrub/u);
   assert.match(app, /finishWaveformScrub/u);
   assert.match(app, /comparison-status-lane/u);
+  assert.match(app, /brand-version[\s\S]*APP_VERSION/u);
+  assert.match(appVersion, /__APP_VERSION__/u);
+  assert.match(viteConfig, /__APP_VERSION__:[\s\S]*packageMetadata\.version/u);
   assert.match(app, /PrecisionWaveform[\s\S]*comparison-duration-alert[\s\S]*waveform-card-foot/u);
   assert.match(app, /preloadingTrackIdRef/u);
   assert.match(app, /startTrack\(trackId, false, session\.currentTime\)/u);
@@ -77,9 +82,12 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /containModelRef\.current[\s\S]*LIBRARY_PORTRAIT_OFFSET_FACTOR/u);
   assert.match(stage, /const isCompact = window\.innerWidth < 600/u);
   assert.match(stage, /--stage-model-width/u);
+  assert.match(stage, /PLAYER_DISC_SAFE_TOP/u);
+  assert.match(stage, /safeDiscWidth/u);
   assert.match(stage, /--stage-subject-y/u);
   assert.match(stage, /stage-disc-viewport/u);
   assert.match(stageStyles, /\.live2d-stage-player \.stage-disc-viewport \{[\s\S]*mask-image: linear-gradient\(to right/u);
+  assert.match(stageStyles, /--stage-disc-width/u);
   assert.match(libraryStyles, /\.comparison-deck\.is-solo/u);
   assert.match(libraryStyles, /\.unified-shell\.is-player-shell\.is-solo-player/u);
   assert.match(libraryStyles, /comparison-card-enter/u);
@@ -136,6 +144,8 @@ test("covers camera-layout changes and animates persistent side sheets", async (
   assert.match(libraryStyles, /\.track-feature-icons > span[\s\S]*width: 24px[\s\S]*height: 24px/u);
   assert.match(libraryStyles, /\.library-list-toolbar > div button[\s\S]*width: 88px[\s\S]*height: 32px/u);
   assert.match(libraryStyles, /\.library-lyrics-label button[\s\S]*width: 72px[\s\S]*height: 24px/u);
+  assert.match(libraryStyles, /lyrics-panel-enter/u);
+  assert.match(libraryStyles, /lyric-line-enter/u);
   assert.match(libraryStyles, /--lyrics-accent: rgb\(84 127 121\)/u);
   assert.match(libraryStyles, /lyrics-source-b \{ --lyrics-accent: rgb\(200 95 109\)/u);
   assert.match(app, /waveform-source-\$\{source === 0 \? "a" : "b"\}/u);

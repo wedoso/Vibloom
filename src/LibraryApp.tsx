@@ -49,6 +49,7 @@ import Live2DStage from "./Live2DStage";
 import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
 import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
+import { APP_VERSION } from "./appVersion";
 import {
   comparisonCacheKey,
   createShuffleBag,
@@ -398,7 +399,7 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
   }
 
   return (
-    <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} aria-label={`Lyrics from ${fileName}`}>
+    <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} key={`${variant}:${fileName}`} aria-label={`Lyrics from ${fileName}`}>
       <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace .lrc</button><button type="button" onClick={onRemoveLyrics}>Remove</button></span>
       <div className="library-lyrics-viewport" ref={viewportRef}>
         <div className="library-lyrics-list">
@@ -408,7 +409,10 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
               key={`${line.time}-${index}`}
               ref={(node) => { lineRefs.current[index] = node; }}
               aria-current={index === activeIndex ? "true" : undefined}
-              style={index === activeIndex ? { "--lyric-progress": `${lineProgress}%` } as CSSProperties : undefined}
+              style={{
+                "--lyric-index": Math.min(index, 9),
+                ...(index === activeIndex ? { "--lyric-progress": `${lineProgress}%` } : {}),
+              } as CSSProperties}
             >
               {line.text.split("\n").map((part, partIndex) => <span key={partIndex}>{part}</span>)}
             </p>
@@ -1541,7 +1545,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         <button className="mobile-nav-button" type="button" aria-label="Open library navigation" onClick={() => setLibraryOpen(true)}><Menu size={20} /></button>
         <a className="brand" href="#library-top" aria-label="Vibloom home">
           <span className="brand-mark"><ArrowLeftRight size={18} strokeWidth={2} /></span>
-          <span className="brand-copy"><strong>Vibloom</strong><small>Local listening room</small></span>
+          <span className="brand-copy"><strong>Vibloom</strong><small>Local listening room <span className="brand-version" aria-label={`Vibloom version ${APP_VERSION}`}>v{APP_VERSION}</span></small></span>
         </a>
         {tracks.length > 0 && <div className="library-header-status"><span>{tracks.length} tracks</span><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Library ready"}</strong></div>}
         <div className="library-header-actions">
@@ -1696,6 +1700,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           <label className="cache-toggle"><span><strong>Automatically keep new music</strong><small>On by default. New library tracks and Version B files remain playable after reopening Vibloom.</small></span><input type="checkbox" checked={session.cacheEnabled} onChange={(event) => { if (event.target.checked) void cacheAvailableTracks(); else { patchSession({ cacheEnabled: false }); setMessage("Automatic caching paused. Existing cached audio was kept."); } }} /></label>
           {cacheProgress > 0 && <div className="cache-progress"><i><b style={{ width: `${cacheProgress}%` }} /></i><span>Caching · {cacheProgress}%</span></div>}
           <div className="storage-actions"><button type="button" onClick={() => setConfirmAction("queue")}><span><strong>Clear queue only</strong><small>Keep library and audio</small></span><X size={16} /></button><button type="button" onClick={() => setConfirmAction("cache")}><span><strong>Clear cached audio</strong><small>Keep playlists and lyrics</small></span><Trash2 size={16} /></button><button className="is-destructive" type="button" onClick={() => setConfirmAction("reset")}><span><strong>Reset Vibloom</strong><small>Remove everything from this browser</small></span><Trash2 size={16} /></button></div>
+          <div className="storage-app-version"><span>Vibloom version</span><strong>{APP_VERSION}</strong><small>Use this number when checking for updates.</small></div>
         </aside>
       </div>
 
