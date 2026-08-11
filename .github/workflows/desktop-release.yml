@@ -58,7 +58,7 @@ jobs:
           - label: macOS
             platform: mac
             os: macos-14
-            command: npm run desktop:package -- --mac --x64 --arm64 --publish never
+            command: npm run desktop:package -- --mac --x64 --arm64 --publish never -c.forceCodeSigning=true
             artifact: |
               release/*.dmg
               release/*.zip
@@ -88,14 +88,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Require macOS signing and notarization credentials
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required macOS release credential: $name" >&2
+              exit 1
+            fi
+          done
+
       - name: Build installers
         shell: bash
         run: |
-          if [[ -z "${CSC_LINK:-}" ]]; then
-            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+          if [[ "${{ matrix.platform }}" == "win" && -z "${CSC_LINK:-}" ]]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi
           ${{ matrix.command }}
+
+      - name: Verify macOS Developer ID and notarization
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=false
+          while IFS= read -r -d '' app; do
+            found=true
+            codesign --verify --deep --strict --verbose=4 "$app"
+            signature=$(codesign -dv --verbose=4 "$app" 2>&1)
+            grep -F "Authority=Developer ID Application" <<<"$signature"
+            grep -F "TeamIdentifier=$APPLE_TEAM_ID" <<<"$signature"
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose=4 "$app"
+          done < <(find release -maxdepth 3 -type d -name 'Vibloom.app' -print0)
+          if [[ "$found" != "true" ]]; then
+            echo "No packaged Vibloom.app was found for verification." >&2
+            exit 1
+          fi
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
