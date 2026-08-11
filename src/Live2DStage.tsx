@@ -49,10 +49,14 @@ const RESTING_IDLE_GROUP = "__vibloom_resting__";
 const MOTION_LOOP_SEAM_SECONDS = 0.72;
 const POSE_TRANSITION_MIN_SECONDS = 0.38;
 const POSE_TRANSITION_MAX_SECONDS = 0.68;
-const FULL_BODY_SAFE_ZOOM = 1.62;
-const FULL_BODY_RENDER_ZOOM = 1.4;
-const PORTRAIT_ZOOM = 1.92;
+const PORTRAIT_ZOOM = 2.4;
 const WIDE_ZOOM = 1.18;
+const MIN_CAMERA_ZOOM = 0.78;
+const MAX_CAMERA_ZOOM = 4;
+const WIDE_FRAME_HEIGHT_FACTOR = 1.04;
+const PORTRAIT_FRAME_HEIGHT_FACTOR = 1.72;
+const DIRECTOR_FRAME_MIN_FACTOR = 1.08;
+const DIRECTOR_FRAME_MAX_FACTOR = 1.3;
 const HIGH_ZOOM_SAFE_OFFSET_FACTOR = 0.5;
 const FOCUS_PORTRAIT_OFFSET_FACTOR = 0.14;
 const FOCUS_MODEL_HEIGHT_FACTOR = 0.84;
@@ -77,20 +81,14 @@ function titleSafeDiscCenterY(desiredY: number, renderedModelWidth: number, safe
 }
 
 function portraitOffsetForZoom(zoom: number, stageHeight: number, baseFactor: number) {
-  const portraitProgress = Math.max(0, Math.min(1, (zoom - FULL_BODY_SAFE_ZOOM) / (PORTRAIT_ZOOM - FULL_BODY_SAFE_ZOOM)));
-  const portraitDelta = portraitProgress * (PORTRAIT_ZOOM - 1);
+  const portraitProgress = Math.max(0, Math.min(1, (zoom - WIDE_ZOOM) / (PORTRAIT_ZOOM - WIDE_ZOOM)));
+  const portraitDelta = portraitProgress * Math.max(0, PORTRAIT_ZOOM - 1);
   const highZoomDelta = Math.max(0, zoom - PORTRAIT_ZOOM);
   return stageHeight * (portraitDelta * baseFactor + highZoomDelta * HIGH_ZOOM_SAFE_OFFSET_FACTOR);
 }
 
-function renderZoomForFraming(zoom: number) {
-  if (zoom <= WIDE_ZOOM || zoom >= PORTRAIT_ZOOM) return zoom;
-  if (zoom <= FULL_BODY_SAFE_ZOOM) {
-    const progress = (zoom - WIDE_ZOOM) / (FULL_BODY_SAFE_ZOOM - WIDE_ZOOM);
-    return WIDE_ZOOM + progress * (FULL_BODY_RENDER_ZOOM - WIDE_ZOOM);
-  }
-  const progress = (zoom - FULL_BODY_SAFE_ZOOM) / (PORTRAIT_ZOOM - FULL_BODY_SAFE_ZOOM);
-  return FULL_BODY_RENDER_ZOOM + progress * (PORTRAIT_ZOOM - FULL_BODY_RENDER_ZOOM);
+function zoomForRenderedHeight(stageHeight: number, modelHeight: number, factor: number) {
+  return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, stageHeight * factor / Math.max(1, modelHeight)));
 }
 
 type OfficialMotionId = "m01" | "m02" | "m03" | "m05" | "m06" | "m08";
@@ -251,6 +249,10 @@ export default function Live2DStage({
   const cameraModeRef = useRef<"auto" | "locked">(startsInPortrait ? "locked" : "auto");
   const manualZoomRef = useRef(startsInPortrait ? PORTRAIT_ZOOM : 1);
   const currentCameraZoomRef = useRef(startsInPortrait ? PORTRAIT_ZOOM : 1);
+  const portraitZoomRef = useRef(PORTRAIT_ZOOM);
+  const wideZoomRef = useRef(WIDE_ZOOM);
+  const directorZoomRangeRef = useRef({ min: 1.42, max: 2.1 });
+  const cameraPresetRef = useRef<"director" | "portrait" | "wide" | "manual">(startsInPortrait ? "portrait" : "director");
   const autoSuspendUntilRef = useRef(0);
   const zoomTimerRef = useRef<number | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -306,6 +308,10 @@ export default function Live2DStage({
   useEffect(() => {
     cameraModeRef.current = cameraMode;
   }, [cameraMode]);
+
+  useEffect(() => {
+    cameraPresetRef.current = cameraPreset;
+  }, [cameraPreset]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -462,6 +468,18 @@ export default function Live2DStage({
             : host.clientHeight * 0.84;
           const targetWidth = host.clientWidth * (isCompact ? 0.84 : isWelcome ? 0.68 : focused ? 0.64 : 0.64);
           targetModelScale = Math.min(targetHeight / naturalHeight, targetWidth / naturalWidth);
+          if (!isWelcome) {
+            const availableStageHeight = Math.max(1, host.clientHeight - stageTitleSafeTop - 10);
+            const scaledModelHeight = naturalHeight * targetModelScale;
+            wideZoomRef.current = zoomForRenderedHeight(availableStageHeight, scaledModelHeight, WIDE_FRAME_HEIGHT_FACTOR);
+            portraitZoomRef.current = zoomForRenderedHeight(availableStageHeight, scaledModelHeight, PORTRAIT_FRAME_HEIGHT_FACTOR);
+            directorZoomRangeRef.current = {
+              min: zoomForRenderedHeight(availableStageHeight, scaledModelHeight, DIRECTOR_FRAME_MIN_FACTOR),
+              max: zoomForRenderedHeight(availableStageHeight, scaledModelHeight, DIRECTOR_FRAME_MAX_FACTOR),
+            };
+            if (cameraPresetRef.current === "wide") manualZoomRef.current = wideZoomRef.current;
+            if (cameraPresetRef.current === "portrait") manualZoomRef.current = portraitZoomRef.current;
+          }
           targetRigX = host.clientWidth * (isWelcome && !isCompact ? 0.52 : 0.5);
           targetRigY = host.clientHeight * (isWelcome ? 0.52 : focused ? FOCUS_RIG_Y_FACTOR : roomRigYFactor);
           if (!layoutInitialized) {
@@ -487,7 +505,7 @@ export default function Live2DStage({
                 ? LIBRARY_PORTRAIT_OFFSET_FACTOR
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(snapZoom, host.clientHeight, snapPortraitFactor);
-            const snapRenderZoom = renderZoomForFraming(snapZoom);
+            const snapRenderZoom = snapZoom;
             const safeSnapRigY = titleSafeRigY(
               currentRigY + currentPortraitOffset,
               naturalHeight * currentModelScale * snapRenderZoom,
@@ -542,7 +560,7 @@ export default function Live2DStage({
           if (variantRef.current !== "player") return;
           event.preventDefault();
           const delta = Math.max(-80, Math.min(80, event.deltaY));
-          manualZoomRef.current = Math.max(0.78, Math.min(2.35, currentCameraZoomRef.current * Math.exp(-delta * 0.0018)));
+          manualZoomRef.current = Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, currentCameraZoomRef.current * Math.exp(-delta * 0.0018)));
           autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
           cameraModeRef.current = "locked";
           setCameraMode("locked");
@@ -953,7 +971,7 @@ export default function Live2DStage({
                 ? LIBRARY_PORTRAIT_OFFSET_FACTOR
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, snapPortraitFactor);
-            const snapRenderZoom = renderZoomForFraming(cameraZoom);
+            const snapRenderZoom = cameraZoom;
             const safeSnapRigY = titleSafeRigY(
               currentRigY + currentPortraitOffset,
               naturalHeight * currentModelScale * snapRenderZoom,
@@ -1270,18 +1288,21 @@ export default function Live2DStage({
           // framing independent. Wheel input temporarily takes priority.
           cameraPhase += dt * (0.36 + energyLong * 0.08) * listening;
           const phraseArc = (1 - Math.cos(cameraPhase)) * 0.5;
+          const directorRange = directorZoomRangeRef.current;
           const autoZoom = features.isPlaying
-            ? 1.46 + phraseArc * 0.54 + energyLong * 0.07
-            : variantRef.current === "player" ? (hasPlayed ? pausedCameraZoom : 2.02) : 1;
+            ? directorRange.min + phraseArc * (directorRange.max - directorRange.min) + energyLong * 0.035
+            : variantRef.current === "player"
+              ? hasPlayed
+                ? Math.max(directorRange.min, Math.min(directorRange.max, pausedCameraZoom))
+                : directorRange.min + (directorRange.max - directorRange.min) * 0.42
+              : 1;
           const autoSuspended = performance.now() < autoSuspendUntilRef.current;
           const baseCameraZoom = variantRef.current === "welcome"
             ? 1
             : cameraModeRef.current === "locked" || autoSuspended
               ? manualZoomRef.current
-              : Math.max(1.42, Math.min(2.1, autoZoom));
-          const containedCameraZoom = containModelRef.current && !focusModeRef.current && cameraModeRef.current === "auto" ? 1 : baseCameraZoom;
-          const focusCameraBias = focusModeRef.current ? 0.2 : 0;
-          const targetCameraZoom = Math.min(2.35, containedCameraZoom + focusCameraBias);
+              : Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, autoZoom));
+          const targetCameraZoom = Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, baseCameraZoom));
           const focusCameraTransitioning = performance.now() < focusCameraTransitionUntilRef.current;
           const portraitOffsetFactor = focusModeRef.current || isCompactLayout
             ? FOCUS_PORTRAIT_OFFSET_FACTOR
@@ -1314,7 +1335,7 @@ export default function Live2DStage({
           }
           model.scale.set(currentModelScale);
           contactShadow.scale.set(currentModelScale);
-          const renderCameraZoom = renderZoomForFraming(cameraZoom);
+          const renderCameraZoom = cameraZoom;
           const renderedModelHeight = naturalHeight * currentModelScale * renderCameraZoom;
           const safeCameraRigY = titleSafeRigY(
             currentRigY + currentPortraitOffset,
@@ -1402,10 +1423,10 @@ export default function Live2DStage({
         currentModelScale = targetModelScale;
         currentRigX = targetRigX;
         currentRigY = targetRigY;
-        cameraZoom = containModelRef.current && !focusModeRef.current && cameraModeRef.current === "auto"
-          ? 1
-          : variantRef.current === "player"
-          ? Math.min(2.35, manualZoomRef.current + (focusModeRef.current ? 0.2 : 0))
+        cameraZoom = variantRef.current === "player"
+          ? cameraModeRef.current === "auto"
+            ? directorZoomRangeRef.current.min + (directorZoomRangeRef.current.max - directorZoomRangeRef.current.min) * 0.42
+            : Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, manualZoomRef.current))
           : 1;
         const initialPortraitFactor = focusModeRef.current || isCompactLayout
           ? FOCUS_PORTRAIT_OFFSET_FACTOR
@@ -1416,7 +1437,7 @@ export default function Live2DStage({
         currentCameraZoomRef.current = cameraZoom;
         model.scale.set(currentModelScale);
         contactShadow.scale.set(currentModelScale);
-        const initialRenderZoom = renderZoomForFraming(cameraZoom);
+        const initialRenderZoom = cameraZoom;
         const initialRenderedModelHeight = naturalHeight * currentModelScale * initialRenderZoom;
         const initialSafeRigY = titleSafeRigY(
           currentRigY + currentPortraitOffset,
@@ -1533,12 +1554,12 @@ export default function Live2DStage({
             aria-label="Portrait upper-body framing"
             className={cameraPreset === "portrait" ? "is-active" : ""}
             onClick={() => {
-              manualZoomRef.current = PORTRAIT_ZOOM;
+              manualZoomRef.current = portraitZoomRef.current;
               cameraModeRef.current = "locked";
               autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
               setCameraMode("locked");
               setCameraPreset("portrait");
-              setZoomReadout(Math.round(PORTRAIT_ZOOM * 100));
+              setZoomReadout(Math.round(portraitZoomRef.current * 100));
               setShowZoom(true);
               if (zoomTimerRef.current !== null) window.clearTimeout(zoomTimerRef.current);
               zoomTimerRef.current = window.setTimeout(() => setShowZoom(false), 1100);
@@ -1554,12 +1575,12 @@ export default function Live2DStage({
             aria-label="Wide full-body framing"
             className={cameraPreset === "wide" ? "is-active" : ""}
             onClick={() => {
-              manualZoomRef.current = WIDE_ZOOM;
+              manualZoomRef.current = wideZoomRef.current;
               autoSuspendUntilRef.current = Number.POSITIVE_INFINITY;
               cameraModeRef.current = "locked";
               setCameraMode("locked");
               setCameraPreset("wide");
-              setZoomReadout(Math.round(WIDE_ZOOM * 100));
+              setZoomReadout(Math.round(wideZoomRef.current * 100));
               setShowZoom(true);
               if (zoomTimerRef.current !== null) window.clearTimeout(zoomTimerRef.current);
               zoomTimerRef.current = window.setTimeout(() => setShowZoom(false), 1100);

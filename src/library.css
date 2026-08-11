@@ -1933,7 +1933,7 @@ button.track-index,
 
 .is-player-shell .persistent-stage-canvas .camera-capsule {
   top: 50%;
-  right: 0;
+  right: 28px;
   left: auto;
   padding: 6px;
   flex-direction: column;
@@ -1958,26 +1958,26 @@ button.track-index,
 }
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule {
-  top: 12px;
+  top: 50%;
   right: 18px;
-  padding: 5px 7px 5px 8px;
-  flex-direction: row;
-  transform: none;
+  padding: 6px;
+  flex-direction: column;
+  transform: translateY(-50%);
 }
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule button {
-  width: auto;
-  min-width: 32px;
-  padding: 0 7px;
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
 }
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule button span {
-  display: inline;
+  display: none;
 }
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule > i {
-  width: 1px;
-  height: 15px;
+  width: 15px;
+  height: 1px;
 }
 
 /* Full timed-lyrics theater, restored from the original listening room. */
@@ -1994,8 +1994,8 @@ button.track-index,
 /* If lower stage information intersects the portrait, dissolve the final
    pixels instead of cutting Hiyori's legs at the container boundary. */
 .persistent-stage-canvas .live2d-host {
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 58px), rgba(0, 0, 0, .72) calc(100% - 34px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 58px), rgba(0, 0, 0, .72) calc(100% - 34px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 92px), rgba(0, 0, 0, .88) calc(100% - 68px), rgba(0, 0, 0, .38) calc(100% - 30px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 92px), rgba(0, 0, 0, .88) calc(100% - 68px), rgba(0, 0, 0, .38) calc(100% - 30px), transparent 100%);
 }
 
 .is-player-shell .console-lower:has(.library-lyrics) {
@@ -2349,18 +2349,19 @@ button.track-index,
 .is-library-shell .persistent-stage-canvas .camera-hint { display: none; }
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule {
-  top: 12px;
+  top: 50%;
   right: 18px;
-  padding: 5px 7px 5px 8px;
-  flex-direction: row;
-  transform: none;
+  padding: 6px;
+  flex-direction: column;
+  transform: translateY(-50%);
 }
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule button {
-  width: auto;
-  min-width: 32px;
-  padding: 0 7px;
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
   justify-content: center;
 }
 
-.library-app.is-library-focus .persistent-stage-canvas .camera-capsule > i { width: 1px; height: 15px; }
+.library-app.is-library-focus .persistent-stage-canvas .camera-capsule button span { display: none; }
+.library-app.is-library-focus .persistent-stage-canvas .camera-capsule > i { width: 15px; height: 1px; }

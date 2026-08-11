@@ -251,7 +251,7 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /restSettleElapsed = 0;[\s\S]*?stopAllMotions\(\);[\s\S]*?pendingBeatAccent = 0;/u);
   assert.match(stage, /nodGestureTime = Number\.POSITIVE_INFINITY;[\s\S]*?nodGestureStrength = 0;/u);
   assert.match(stage, /features\.isPlaying \? 3\.2 : 7\.5/u);
-  assert.match(stage, /hasPlayed \? pausedCameraZoom : 2\.02/u);
+  assert.match(stage, /Math\.max\(directorRange\.min, Math\.min\(directorRange\.max, pausedCameraZoom\)\)/u);
   assert.match(stage, /const followsComparedTrack = features\.isComparing && features\.isPlaying/u);
   assert.match(stage, /getParameterDefaultValue/u);
   assert.match(visual, /const bassRise = Math\.max\(0, bass - previous\.bass\)/u);
@@ -282,7 +282,7 @@ test("keeps phrase camera motion separate from Live2D music pose", async () => {
   assert.match(stage, /const cameraRig = new Container\(\)/u);
   assert.match(stage, /cameraRig\.addChild\(contactShadow, model\)/u);
   assert.match(stage, /const phraseArc = \(1 - Math\.cos\(cameraPhase\)\) \* 0\.5/u);
-  assert.match(stage, /const focusCameraBias = focusModeRef\.current \? 0\.2 : 0/u);
+  assert.match(stage, /const directorRange = directorZoomRangeRef\.current/u);
   assert.match(stage, /focusCameraTransitionUntilRef\.current/u);
   assert.match(stage, /let lightTier = 0/u);
   assert.match(stage, /lightTierStep = timeSinceLightAccent > 1\.05 \? 1 : Math\.min\(3, lightTierStep \+ 1\)/u);
@@ -290,9 +290,9 @@ test("keeps phrase camera motion separate from Live2D music pose", async () => {
   assert.doesNotMatch(stage, /radialSpectrum|radialWaveform|RADIAL_CONTOUR/u);
   assert.match(stage, /app\.render\(\)/u);
   assert.match(stage, /resizeFrame = requestAnimationFrame/u);
-  assert.match(stage, /Math\.max\(1\.42, Math\.min\(2\.1, autoZoom\)\)/u);
-  assert.match(stage, /Math\.min\(2\.35, currentCameraZoomRef/u);
-  assert.match(stage, /manualZoomRef\.current = PORTRAIT_ZOOM/u);
+  assert.match(stage, /Math\.max\(MIN_CAMERA_ZOOM, Math\.min\(MAX_CAMERA_ZOOM, autoZoom\)\)/u);
+  assert.match(stage, /currentCameraZoomRef\.current \* Math\.exp/u);
+  assert.match(stage, /manualZoomRef\.current = portraitZoomRef\.current/u);
   assert.match(stage, /previousVariantRef\.current === "welcome" && variant === "player"/u);
   assert.match(stage, /autoSuspendUntilRef\.current = Number\.POSITIVE_INFINITY/u);
   assert.match(stage, /nextCameraUi = \{ mode: "locked", preset: "portrait" \}/u);
