@@ -35,7 +35,9 @@ jobs:
         run: npm run check
 
       - name: Smoke-test the Electron renderer
-        run: xvfb-run --auto-servernum npm run desktop:smoke
+        run: |
+          npm run build
+          xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox .
 
       - name: Audit production dependencies
         run: npm run audit

@@ -137,7 +137,7 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.deepEqual(manifest.build.win.target, ["nsis"]);
   assert.match(workflow, /macos-14/u);
   assert.match(workflow, /windows-latest/u);
-  assert.match(workflow, /xvfb-run --auto-servernum npm run desktop:smoke/u);
+  assert.match(workflow, /xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox \./u);
   assert.match(workflow, /actions\/upload-artifact@v4/u);
   assert.match(workflow, /gh release create/u);
   assert.match(releaseWorkflow, /googleapis\/release-please-action@v4/u);
