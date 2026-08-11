@@ -27,6 +27,10 @@ test("ships the local library as the primary application", async () => {
   assert.match(engine, /linearRampToValueAtTime/u);
   assert.match(app, /Add version B/u);
   assert.match(app, /PrecisionWaveform/u);
+  assert.match(app, /className="waveform-seek"/u);
+  assert.match(app, /beginWaveformScrub/u);
+  assert.match(app, /finishWaveformScrub/u);
+  assert.match(app, /comparison-status-lane/u);
   assert.match(app, /preloadingTrackIdRef/u);
   assert.match(app, /startTrack\(trackId, false, session\.currentTime\)/u);
   assert.match(app, /window\.addEventListener\("keydown"/u);
@@ -77,6 +81,8 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stageStyles, /\.live2d-stage-player \.stage-disc-viewport \{[\s\S]*mask-image: linear-gradient\(to right/u);
   assert.match(libraryStyles, /\.comparison-deck\.is-solo/u);
   assert.match(libraryStyles, /\.unified-shell\.is-player-shell\.is-solo-player/u);
+  assert.match(libraryStyles, /comparison-card-enter/u);
+  assert.match(libraryStyles, /\.solo-track-context/u);
   assert.match(stage, /tallViewportProgress = Math\.max\(0, Math\.min\(1, \(window\.innerHeight - 720\) \/ 600\)\)/u);
   assert.match(stage, /roomRigYFactor = 0\.62 - tallViewportProgress \* \(containModelRef\.current \? 0\.18 : 0\.04\)/u);
   assert.match(stage, /targetRigX = host\.clientWidth \* \(isWelcome && !isCompact \? 0\.52 : 0\.5\)/u);

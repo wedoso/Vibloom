@@ -179,13 +179,90 @@ function formatTime(seconds: number, precise = false) {
   return precise ? `${base}.${String(Math.floor((seconds % 1) * 1000)).padStart(3, "0")}` : base;
 }
 
-function PrecisionWaveform({ peaks, progress, label, source }: { peaks: number[]; progress: number; label: string; source: 0 | 1 }) {
+function PrecisionWaveform({
+  peaks,
+  currentTime,
+  duration,
+  label,
+  source,
+  onSeek,
+  onScrubStart,
+  onScrub,
+  onScrubEnd,
+}: {
+  peaks: number[];
+  currentTime: number;
+  duration: number;
+  label: string;
+  source: 0 | 1;
+  onSeek: (time: number) => void;
+  onScrubStart: () => void;
+  onScrub: (time: number) => void;
+  onScrubEnd: (time: number) => void;
+}) {
+  const scrubbingRef = useRef(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubTime, setScrubTime] = useState(0);
   const bars = peaks.length ? peaks : new Array(144).fill(0.12);
+  const safeDuration = Math.max(0, duration);
+  const displayTime = Math.max(0, Math.min(safeDuration, isScrubbing ? scrubTime : currentTime));
+  const progress = safeDuration > 0 ? displayTime / safeDuration : 0;
+
+  const finishScrub = (time: number) => {
+    if (!scrubbingRef.current) return;
+    scrubbingRef.current = false;
+    setIsScrubbing(false);
+    setScrubTime(time);
+    onScrubEnd(time);
+  };
+
+  const pointerTime = (element: HTMLInputElement, clientX: number) => {
+    const bounds = element.getBoundingClientRect();
+    const progress = bounds.width > 0 ? (clientX - bounds.left) / bounds.width : 0;
+    return Math.max(0, Math.min(safeDuration, progress * safeDuration));
+  };
+
   return (
-    <div className={`precision-waveform waveform-source-${source === 0 ? "a" : "b"} ${peaks.length ? "is-ready" : "is-loading"}`} role="img" aria-label={`${label} waveform`}>
+    <div className={`precision-waveform waveform-source-${source === 0 ? "a" : "b"} ${peaks.length ? "is-ready" : "is-loading"} ${isScrubbing ? "is-scrubbing" : ""}`}>
       <div className="waveform-bars">{bars.map((peak, index) => <i key={`${label}-${index}`} style={{ height: `${Math.max(8, peak * 100)}%` }} />)}</div>
       <span className="waveform-played" style={{ width: `${Math.max(0, Math.min(100, progress * 100))}%` }} />
       <b style={{ left: `${Math.max(0, Math.min(100, progress * 100))}%` }} />
+      {isScrubbing && <output className="waveform-time-bubble" style={{ left: `${Math.max(0, Math.min(100, progress * 100))}%` }}>{formatTime(displayTime, true)}</output>}
+      <input
+        className="waveform-seek"
+        type="range"
+        min="0"
+        max={Math.max(safeDuration, 0.001)}
+        step="0.001"
+        value={displayTime}
+        disabled={safeDuration <= 0}
+        aria-label={`Seek ${label} waveform`}
+        aria-valuetext={formatTime(displayTime, true)}
+        onPointerDown={(event) => {
+          if (safeDuration <= 0) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const time = pointerTime(event.currentTarget, event.clientX);
+          scrubbingRef.current = true;
+          setIsScrubbing(true);
+          setScrubTime(time);
+          onScrubStart();
+          onScrub(time);
+        }}
+        onPointerMove={(event) => {
+          if (!scrubbingRef.current) return;
+          const time = pointerTime(event.currentTarget, event.clientX);
+          setScrubTime(time);
+          onScrub(time);
+        }}
+        onChange={(event) => {
+          const time = Number(event.currentTarget.value);
+          setScrubTime(time);
+          if (scrubbingRef.current) onScrub(time);
+          else onSeek(time);
+        }}
+        onPointerUp={(event) => finishScrub(pointerTime(event.currentTarget, event.clientX))}
+        onPointerCancel={(event) => finishScrub(pointerTime(event.currentTarget, event.clientX))}
+      />
     </div>
   );
 }
@@ -365,6 +442,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const [focusMode, setFocusMode] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace>("player");
   const [compareSlot, setCompareSlot] = useState<CompareSlot>({ ...EMPTY_COMPARE_SLOT });
+  const [comparisonMotion, setComparisonMotion] = useState<"idle" | "entering" | "leaving">("idle");
   const [primaryLoad, setPrimaryLoad] = useState<{ stage: LoadStage; progress: number }>({ stage: "idle", progress: 0 });
   const [activeSource, setActiveSource] = useState<0 | 1>(0);
   const [primaryPeaks, setPrimaryPeaks] = useState<number[]>([]);
@@ -391,6 +469,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const primaryLoadVersionRef = useRef(0);
   const compareLoadVersionRef = useRef(0);
   const playingRef = useRef(false);
+  const waveformScrubbingRef = useRef(false);
+  const waveformScrubWasPlayingRef = useRef(false);
   const shuffleBagRef = useRef<string[]>([]);
   const shuffleCycleStartedRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
@@ -410,10 +490,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const unavailableCount = tracks.filter((track) => track.availability === "reconnect" || track.availability === "missing").length;
   const comparisonReady = compareSlot.status === "ready";
   const comparisonVisible = compareSlot.status !== "empty";
-  const timelineDuration = Math.max(duration, currentTrack?.duration ?? 0, compareSlot.duration, 0);
-  const activeDuration = activeSource === 0 ? (duration || currentTrack?.duration || 0) : compareSlot.duration;
+  const comparisonExpanded = comparisonVisible && comparisonMotion !== "leaving";
+  const primaryDuration = duration || currentTrack?.duration || 0;
+  const timelineDuration = Math.max(primaryDuration, compareSlot.duration, 0);
+  const activeDuration = activeSource === 0 ? primaryDuration : compareSlot.duration;
   const activeSourceEnded = comparisonReady && activeDuration > 0 && currentTime >= activeDuration - 0.005 && currentTime < timelineDuration - 0.005;
-  const durationDelta = comparisonReady ? Math.abs((duration || currentTrack?.duration || 0) - compareSlot.duration) : 0;
+  const durationDelta = comparisonReady ? Math.abs(primaryDuration - compareSlot.duration) : 0;
 
   const patchTracks = useCallback((update: (current: LibraryTrack[]) => LibraryTrack[]) => {
     setTracks((current) => {
@@ -591,6 +673,31 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     if (playingRef.current) await startPlayback(nextTime);
   }, [audioEngine, patchSession, startPlayback]);
 
+  const previewWaveformSeek = useCallback((rawTime: number) => {
+    const maxDuration = audioEngine.getMaxDuration();
+    const nextTime = Math.max(0, Math.min(rawTime, maxDuration));
+    audioEngine.setOffset(nextTime);
+    setCurrentTime(nextTime);
+    return nextTime;
+  }, [audioEngine]);
+
+  const beginWaveformScrub = useCallback(() => {
+    if (waveformScrubbingRef.current) return;
+    waveformScrubbingRef.current = true;
+    waveformScrubWasPlayingRef.current = playingRef.current;
+    if (playingRef.current) pausePlayback();
+  }, [pausePlayback]);
+
+  const finishWaveformScrub = useCallback(async (rawTime: number) => {
+    const nextTime = previewWaveformSeek(rawTime);
+    const shouldResume = waveformScrubWasPlayingRef.current;
+    waveformScrubbingRef.current = false;
+    waveformScrubWasPlayingRef.current = false;
+    lastCheckpointRef.current = nextTime;
+    patchSession({ currentTime: nextTime });
+    if (shouldResume) await startPlayback(nextTime);
+  }, [patchSession, previewWaveformSeek, startPlayback]);
+
   const resolveTrackFile = useCallback(async (track: LibraryTrack) => {
     const runtime = runtimeFilesRef.current.get(track.id);
     if (runtime) return runtime;
@@ -600,6 +707,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
   const decodeComparisonFile = useCallback(async (file: File, trackId: string, persistence: "indexed" | "cached", announce = true, displayName = file.name) => {
     const version = ++compareLoadVersionRef.current;
+    setComparisonMotion("entering");
     setCompareSlot({
       file,
       trackId,
@@ -720,6 +828,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       if (comparisonFile) {
         await decodeComparisonFile(comparisonFile, track.id, "cached", false, track.comparison.name);
       } else {
+        setComparisonMotion("entering");
         setCompareSlot({
           ...EMPTY_COMPARE_SLOT,
           trackId: track.id,
@@ -1274,6 +1383,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       return;
     }
     if (!(file.type.startsWith("audio/") || SUPPORTED_AUDIO.test(file.name)) || file.size > MAX_FILE_BYTES) {
+      setComparisonMotion("entering");
       setCompareSlot({ ...EMPTY_COMPARE_SLOT, trackId: track.id, name: file.name, size: file.size, status: "error", error: "Choose a supported audio file smaller than 300 MB." });
       setMessage("Choose a supported audio file smaller than 300 MB.");
       return;
@@ -1329,18 +1439,27 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   async function removeComparison() {
+    if (comparisonMotion === "leaving") return;
     const trackId = compareSlot.trackId || sessionRef.current.currentTrackId;
+    setComparisonMotion("leaving");
     compareLoadVersionRef.current += 1;
     audioEngine.setBuffer(1, null);
     stopSourceAt(1);
     audioEngine.selectSourceImmediately(0);
-    setCompareSlot({ ...EMPTY_COMPARE_SLOT });
-    setComparePeaks([]);
     setActiveSource(0);
+    const removal = trackId
+      ? platform.audioFiles.remove(comparisonCacheKey(trackId)).catch(() => undefined)
+      : Promise.resolve();
     if (trackId) {
-      await platform.audioFiles.remove(comparisonCacheKey(trackId)).catch(() => undefined);
       patchTracks((current) => current.map((track) => track.id === trackId ? { ...track, comparison: null } : track));
     }
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await new Promise((resolve) => window.setTimeout(resolve, 520));
+    }
+    setCompareSlot({ ...EMPTY_COMPARE_SLOT });
+    setComparePeaks([]);
+    setComparisonMotion("idle");
+    await removal;
     await refreshStorageState();
     setMessage("Version B removed from this track.");
   }
@@ -1457,7 +1576,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           </div>
         </section>
       ) : (
-        <div className={`unified-shell ${workspace === "player" ? `is-player-shell ${comparisonVisible ? "has-version-b" : "is-solo-player"}` : "is-library-shell"}`} id="library-top">
+        <div className={`unified-shell ${workspace === "player" ? `is-player-shell ${comparisonExpanded ? "has-version-b" : "is-solo-player"} comparison-is-${comparisonMotion}` : "is-library-shell"}`} id="library-top">
           <aside className={`workspace-rail ${libraryOpen ? "is-open" : ""}`} aria-label="Primary navigation">
             <button className="sheet-close mobile-only" type="button" aria-label="Close navigation" onClick={() => setLibraryOpen(false)}><X size={20} /></button>
             <button className={workspace === "player" ? "is-active" : ""} type="button" title="Player" onClick={() => changeWorkspace("player")}><Headphones size={20} /><span>Player</span></button>
@@ -1474,26 +1593,33 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 <span className="engine-status"><i /> Local audio engine</span>
               </div>
               {unavailableCount > 0 && <div className="library-reconnect-banner"><FolderOpen size={17} /><span><strong>Some music needs to be reconnected.</strong><small>Your queue and order are still here.</small></span><button type="button" onClick={() => openFolder(true)}>Reconnect</button></div>}
-              <div className={`comparison-deck ${comparisonVisible ? "has-version-b" : "is-solo"}`}>
-                <article className={`waveform-card version-a ${activeSource === 0 ? "is-active" : ""}`}>
-                  <div className="waveform-card-heading"><button className="source-selector" type="button" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button><div><small>LIBRARY MASTER</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span>{formatTime(duration || currentTrack?.duration || 0)}</span></div>
-                  <PrecisionWaveform peaks={primaryPeaks} progress={currentTime / Math.max(duration || currentTrack?.duration || 1, 1)} label="Version A" source={0} />
-                  <div className="waveform-card-foot"><span>{primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : !isPlaying ? "READY" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
-                </article>
+              <div className={`comparison-deck ${comparisonExpanded ? "has-version-b" : "is-solo"} comparison-is-${comparisonMotion}`}>
+                <div className="version-a-zone">
+                  <article className={`waveform-card version-a ${activeSource === 0 ? "is-active" : ""}`}>
+                    <div className="waveform-card-heading"><button className="source-selector" type="button" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button><div><small>LIBRARY MASTER</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span>{formatTime(primaryDuration)}</span></div>
+                    <PrecisionWaveform peaks={primaryPeaks} currentTime={currentTime} duration={primaryDuration} label="Version A" source={0} onSeek={(time) => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} />
+                    <div className="waveform-card-foot"><span>{primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : !isPlaying ? "READY" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
+                  </article>
+                  {!comparisonVisible && <aside className="solo-track-context" aria-label="Solo track details"><span>SOLO MASTER</span><strong>{formatTime(Math.max(0, primaryDuration - currentTime))}</strong><small>remaining</small><i /><p>Drag the waveform<br />to seek</p></aside>}
+                </div>
                 <div className="center-stage-reserve" aria-hidden="true" />
                 {compareSlot.status === "empty" ? (
                   <div className="quiet-compare-entry" onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}><span>Compare another mix?</span><button type="button" aria-label="Add version B" onClick={() => compareInputRef.current?.click()}><Plus size={15} /> Add B</button><small>Choose or drop one file. A keeps playing.</small></div>
                 ) : (
-                  <article className={`waveform-card version-b ${activeSource === 1 ? "is-active" : ""} is-${compareSlot.status}`} onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}>
+                  <article className={`waveform-card version-b ${activeSource === 1 ? "is-active" : ""} is-${compareSlot.status}`} onAnimationEnd={() => { if (comparisonMotion === "entering") setComparisonMotion("idle"); }} onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}>
                     <div className="waveform-card-heading"><button className="source-selector" type="button" disabled={!comparisonReady} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button><div><small>COMPARISON · {compareSlot.status.toUpperCase()}</small><strong>{trackDisplayName(compareSlot.name)}</strong></div><span className="version-b-actions"><button type="button" onClick={() => compareInputRef.current?.click()} aria-label="Replace version B">Replace</button><button type="button" onClick={() => void removeComparison()} aria-label="Remove version B"><X size={14} /></button></span></div>
-                    <PrecisionWaveform peaks={comparePeaks} progress={currentTime / Math.max(compareSlot.duration || 1, 1)} label="Version B" source={1} />
+                    <PrecisionWaveform peaks={comparePeaks} currentTime={currentTime} duration={compareSlot.duration} label="Version B" source={1} onSeek={(time) => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} />
                     <div className="waveform-card-foot"><span>{compareSlot.loadStage === "reading" ? `READING · ${compareSlot.loadProgress}%` : compareSlot.loadStage === "decoding" ? "DECODING AUDIO" : compareSlot.loadStage === "caching" ? "KEEPING ON DEVICE" : compareSlot.status === "reconnect" ? "RECONNECT NEEDED" : !isPlaying ? "READY" : activeSource === 1 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{compareSlot.size ? `${formatBytes(compareSlot.size)} · ` : ""}{formatTime(compareSlot.duration)}</span></div>
                   </article>
                 )}
               </div>
-              {durationDelta > 0.05 && <div className="comparison-duration-alert" role="status"><strong>Different lengths</strong><span>The shared timeline follows the longer file. {duration > compareSlot.duration ? "A" : "B"} is {formatTime(durationDelta, true)} longer.</span></div>}
-              {activeSourceEnded && <div className="comparison-ended-alert" role="status">Version {activeSource === 0 ? "A" : "B"} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>}
-              <div className="console-lower"><LyricsPanel lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+              <div className="console-footer">
+                {(durationDelta > 0.05 || activeSourceEnded) && <div className="comparison-status-lane" aria-live="polite">
+                  {durationDelta > 0.05 && <div className="comparison-duration-alert"><strong>Different lengths</strong><span>The shared timeline follows the longer file. {primaryDuration > compareSlot.duration ? "A" : "B"} is {formatTime(durationDelta, true)} longer.</span></div>}
+                  {activeSourceEnded && <div className="comparison-ended-alert">Version {activeSource === 0 ? "A" : "B"} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>}
+                </div>}
+                <div className="console-lower"><LyricsPanel lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+              </div>
             </div>
           ) : (
           <div className="library-list-panel">

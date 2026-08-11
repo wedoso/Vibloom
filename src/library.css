@@ -1128,6 +1128,8 @@
 
 .comparison-deck { grid-column: 1 / 4; grid-row: 2; min-height: 0; display: grid; grid-template-columns: minmax(250px,1fr) minmax(390px,440px) minmax(250px,1fr); gap: 24px; align-items: center; transition: grid-template-columns .56s cubic-bezier(.16, 1, .3, 1); }
 .comparison-deck.is-solo { grid-template-columns: minmax(268px,1fr) minmax(390px,440px) 138px; }
+.version-a-zone { min-width: 0; grid-column: 1; display: grid; grid-template-columns: 1fr; align-items: stretch; }
+.comparison-deck.is-solo .version-a-zone { grid-template-columns: minmax(300px,520px) minmax(92px,1fr); gap: 14px; }
 .waveform-card { --waveform-rgb: 84 127 121; min-width: 0; padding: 15px; border: 1px solid rgb(var(--waveform-rgb) / .22); border-radius: 17px; background: rgba(255,252,247,.8); box-shadow: 0 10px 32px rgba(56,42,33,.045); }
 .waveform-card.version-a { --waveform-rgb: 84 127 121; grid-column: 1; }
 .waveform-card.version-b { --waveform-rgb: 200 95 109; grid-column: 3; }
@@ -1149,6 +1151,19 @@
 .precision-waveform.is-loading .waveform-bars { opacity: .38; }
 .waveform-played { position: absolute; z-index: 2; inset: 0 auto 0 0; overflow: hidden; background: rgb(var(--waveform-rgb) / .2); border-right: 1px solid rgb(var(--waveform-rgb)); pointer-events: none; }
 .precision-waveform > b { position: absolute; z-index: 3; top: 4px; bottom: 4px; width: 1px; background: rgb(var(--waveform-rgb)); transform: translateX(-.5px); pointer-events: none; }
+.precision-waveform > b::after { content: ""; width: 9px; height: 9px; position: absolute; top: 50%; left: 50%; border: 2px solid #fffaf3; border-radius: 50%; background: rgb(var(--waveform-rgb)); box-shadow: 0 2px 7px rgb(var(--waveform-rgb) / .34); transform: translate(-50%,-50%) scale(.72); opacity: .7; transition: transform .18s ease, opacity .18s ease; }
+.precision-waveform:hover > b::after,
+.precision-waveform.is-scrubbing > b::after { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+.waveform-seek { width: 100%; height: 100%; margin: 0; position: absolute; z-index: 5; inset: 0; opacity: 0; cursor: ew-resize; }
+.waveform-seek:disabled { cursor: default; }
+.precision-waveform:has(.waveform-seek:focus-visible) { outline: 2px solid rgb(var(--waveform-rgb) / .54); outline-offset: 2px; }
+.waveform-time-bubble { position: absolute; z-index: 6; top: 5px; padding: 4px 6px; border-radius: 999px; color: #fffaf3; background: rgb(var(--waveform-rgb)); box-shadow: 0 5px 16px rgb(var(--waveform-rgb) / .24); font-size: 8px; font-variant-numeric: tabular-nums; white-space: nowrap; transform: translateX(-50%); pointer-events: none; }
+.solo-track-context { min-width: 0; padding: 14px 4px 12px 12px; display: flex; flex-direction: column; justify-content: center; color: var(--library-muted); border-left: 1px solid var(--library-line); animation: solo-context-enter .4s .16s both cubic-bezier(.16,1,.3,1); }
+.solo-track-context > span { color: rgb(84 127 121); font-size: 8px; font-weight: 850; letter-spacing: .13em; }
+.solo-track-context > strong { margin-top: 8px; color: var(--library-ink); font: 24px/1 var(--library-serif); font-variant-numeric: tabular-nums; }
+.solo-track-context > small { margin-top: 3px; font-size: 9px; }
+.solo-track-context > i { width: 24px; height: 1px; margin: 11px 0 9px; background: var(--library-line); }
+.solo-track-context > p { margin: 0; font-size: 9px; line-height: 1.45; }
 .waveform-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--library-muted); font-size: 8px; letter-spacing: .1em; }
 .waveform-card-foot span:first-child { color: rgb(var(--waveform-rgb)); font-weight: 800; }
 .center-stage-reserve { grid-column: 2; min-height: 100%; pointer-events: none; }
@@ -1159,7 +1174,8 @@
 .quiet-compare-entry > small { display: none; }
 .quiet-compare-entry button { width: 100%; min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--library-line); border-radius: 999px; color: var(--library-ink); background: rgba(255,255,255,.56); font-size: 11px; white-space: nowrap; cursor: pointer; }
 
-.is-player-shell .console-lower { grid-column: 1 / 4; grid-row: 3; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.is-player-shell .console-footer { grid-column: 1 / 4; grid-row: 3; min-width: 0; display: grid; gap: 8px; }
+.is-player-shell .console-lower { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .is-player-shell .console-lower .library-lyrics { flex: 1; height: 42px; padding: 0; text-align: left; mask-image: none; }
 .is-player-shell .console-lower .library-lyrics p { display: none; }
 .is-player-shell .console-lower .library-lyrics p.is-current { display: block; margin: 4px 0; font-size: 12px; }
@@ -1186,6 +1202,8 @@
   .comparison-deck { grid-template-columns: minmax(220px,1fr) minmax(340px,390px) minmax(220px,1fr); gap-inline: 16px; }
   .is-player-shell.is-solo-player .player-console,
   .comparison-deck.is-solo { grid-template-columns: minmax(220px,1fr) minmax(340px,390px) 106px; }
+  .comparison-deck.is-solo .version-a-zone { grid-template-columns: 1fr; }
+  .solo-track-context { display: none; }
   .precision-waveform { height: 72px; }
 }
 
@@ -1204,6 +1222,7 @@
   .waveform-card.version-a,
   .waveform-card.version-b,
   .quiet-compare-entry { grid-column: 1; width: 100%; justify-self: stretch; }
+  .version-a-zone { grid-column: 1; }
   .center-stage-reserve { display: none; }
   .quiet-compare-entry { padding-inline: 0; }
   .is-player-shell .console-lower { margin-top: 14px; }
@@ -2089,8 +2108,12 @@ button.track-index,
 .version-b-actions button { min-width: 28px; height: 28px; padding: 0 8px; display: inline-grid; place-items: center; border: 1px solid rgb(var(--waveform-rgb) / .24); border-radius: 999px; color: rgb(var(--waveform-rgb)); background: rgba(255,255,255,.72); font-size: 9px; font-weight: 800; cursor: pointer; }
 .waveform-card.is-reconnect .precision-waveform { opacity: .48; }
 .waveform-card.is-reconnect .waveform-bars { filter: saturate(.35); }
+.comparison-deck.comparison-is-entering .waveform-card.version-b { animation: comparison-card-enter .56s both cubic-bezier(.16,1,.3,1); }
+.comparison-deck.comparison-is-leaving .waveform-card.version-b { opacity: 0; filter: blur(3px); transform: translateX(32px) scale(.965); pointer-events: none; transition: opacity .38s ease, filter .42s ease, transform .52s cubic-bezier(.4,0,.2,1); }
+.comparison-deck.is-solo .quiet-compare-entry { animation: compare-entry-enter .42s .12s both cubic-bezier(.16,1,.3,1); }
+.comparison-status-lane { min-width: 0; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; animation: comparison-status-enter .28s both ease-out; }
 .comparison-duration-alert,
-.comparison-ended-alert { grid-column: 1 / 4; align-self: end; justify-self: center; max-width: 520px; padding: 7px 11px; border-radius: 999px; font-size: 9px; line-height: 1.35; text-align: center; }
+.comparison-ended-alert { max-width: 520px; padding: 7px 11px; border-radius: 999px; font-size: 9px; line-height: 1.35; text-align: center; }
 .comparison-duration-alert { color: #746025; border: 1px solid rgba(181,146,51,.28); background: rgba(250,242,217,.86); }
 .comparison-duration-alert strong { margin-right: 7px; color: #493d19; }
 .comparison-ended-alert { color: #8e4239; border: 1px solid rgba(200,95,109,.26); background: rgba(200,95,109,.09); }
@@ -2118,8 +2141,29 @@ button.track-index,
   .transport-buttons button[aria-label="Back 5 seconds"],
   .transport-buttons button[aria-label="Forward 5 seconds"] { display: none; }
   .transport-ab-switch { display: none; }
+  .comparison-status-lane { align-items: stretch; flex-direction: column; }
   .comparison-duration-alert,
-  .comparison-ended-alert { grid-column: 1; border-radius: 10px; }
+  .comparison-ended-alert { max-width: none; border-radius: 10px; }
+}
+
+@keyframes comparison-card-enter {
+  from { opacity: 0; filter: blur(4px); transform: translateX(34px) scale(.965); }
+  to { opacity: 1; filter: blur(0); transform: translateX(0) scale(1); }
+}
+
+@keyframes compare-entry-enter {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes solo-context-enter {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes comparison-status-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Sheets stay mounted so both their entrance and exit can animate. */
