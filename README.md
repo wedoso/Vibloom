@@ -2,15 +2,15 @@
 
 Your music library, brought to life.
 
-Vibloom is a private, browser-based music player for local files. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hiyori as a rhythm-aware Live2D companion.
+Vibloom is a private, local-first music player for the web, Windows, and macOS. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hiyori as a rhythm-aware Live2D companion.
 
-[Open Vibloom](https://wedoso.github.io/Vibloom/)
+[Open Vibloom on the web](https://wedoso.github.io/Vibloom/) · [Download the desktop app](https://github.com/wedoso/Vibloom/releases/latest)
 
 ![Vibloom welcome screen](docs/assets/landing.png)
 
 ## Everything stays yours
 
-Vibloom has no account, server upload, analytics, or cloud music locker. Audio and lyrics are read and processed in your browser.
+Vibloom has no account, server upload, analytics, or cloud music locker. Audio and lyrics are read and processed locally in the browser or desktop app.
 
 New music is kept on this device by default so reopening the tab does not normally require reconnecting your files. You can pause automatic caching, remove individual cached copies, clear all cached audio while keeping the library, or reset Vibloom completely from **Storage**.
 
@@ -25,8 +25,8 @@ Browser storage can still be cleared by private-browsing rules, site-data cleanu
 - Reorder the queue and choose **Play next** without changing the library.
 - Search your collection and resume the last track and position after reopening.
 - Use `Space` to play or pause, arrow keys to seek five seconds, and `F` to enter or leave Focus mode.
-- Start in Portrait, switch to a larger full-body Wide shot, or use the mouse wheel for manual framing up to 235%.
-- Camera framing keeps Hiyori and the background circle aligned, preserves a near-full-body view around 162%, and protects the title area at close zoom.
+- Use Director for automatic phrase-level framing, Portrait for an upper-body shot, or Wide for a full-body view.
+- Use the mouse wheel for manual framing up to 400%. Every camera mode adapts to the available stage, protects the title area, and applies a soft edge fade when close framing reaches a boundary.
 
 ## Hear the difference
 
@@ -52,9 +52,11 @@ Press `F` for a distraction-free stage. Focus mode removes the waveform cards wh
 
 Attach, replace, or remove an `.lrc` file from the current song or its library menu. Lyrics scroll with playback and use the audible source color: green for Version A, rose for Version B. UTF-8 and BOM-marked UTF-16 files are supported, including offsets, repeated timestamps, and multilingual lines.
 
-## Supported browsers and files
+## Desktop and browser support
 
-Vibloom targets current Safari, Chrome, and Firefox on desktop. Folder drag-and-drop depends on browser support; the visible folder picker is always available as a fallback.
+The Windows and macOS apps use the same React renderer and product code as the web version; Electron adds only the native window, security boundary, and packaging layer. Each build displays its version in the header so users can compare it with the [latest release](https://github.com/wedoso/Vibloom/releases/latest).
+
+The web version targets current Safari, Chrome, and Firefox on desktop. Folder drag-and-drop depends on browser support; the visible folder picker is always available as a fallback.
 
 Common MP3, WAV, M4A/AAC, FLAC, OGG, Opus, WebM Audio, and AIFF files are accepted when the browser can decode them. Individual files larger than 300 MB are rejected to protect the tab.
 
@@ -69,7 +71,7 @@ Common MP3, WAV, M4A/AAC, FLAC, OGG, Opus, WebM Audio, and AIFF files are accept
 
 ## For contributors
 
-Vibloom is a static React/Vite app and can be hosted without a backend.
+Vibloom is a static React/Vite app and can be hosted without a backend. The Electron desktop shell loads that same production renderer rather than maintaining a separate UI implementation.
 
 ```bash
 git clone https://github.com/wedoso/Vibloom.git
@@ -87,7 +89,7 @@ npm run desktop:dev
 npm run desktop:smoke
 ```
 
-Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md).
+Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, and installer metadata. Release Please prepares future version updates on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow attaches Windows and macOS installers. The initial `v1.0.0` release can be downloaded from the [Releases page](https://github.com/wedoso/Vibloom/releases/tag/v1.0.0).
 
 Detailed implementation contracts live in [the player specification](docs/library-player.md) and [architecture notes](docs/architecture.md).
 
