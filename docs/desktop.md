@@ -41,13 +41,34 @@ Artifacts are written to `release/` and are intentionally excluded from Git.
 
 ## CI/CD releases
 
-`.github/workflows/desktop-release.yml` has three paths:
+`package.json` is the single source of truth for the Vibloom version. Vite injects
+that value into the shared renderer, and Electron Builder uses the same value for
+the desktop application and installer filenames. Do not duplicate the version in
+UI source files or workflow variables.
+
+Merges to `main` run `.github/workflows/release-please.yml`. Conventional Commit
+messages update one release pull request:
+
+- `fix:` proposes a patch release.
+- `feat:` proposes a minor release.
+- `feat!:` or a `BREAKING CHANGE` footer proposes a major release.
+
+Merging that release pull request updates `package.json`, `package-lock.json`, the
+release manifest, and `CHANGELOG.md`, then creates the matching `v*` tag and GitHub
+Release. The tag starts `.github/workflows/desktop-release.yml`, which has three
+paths:
 
 - Pull requests and pushes to `main` run lint, tests, the web build, a headless Electron smoke test, and a production dependency audit.
 - A manual **Desktop CI and Release** run packages unsigned macOS and Windows installers and exposes them as downloadable workflow artifacts for 30 days.
 - Pushing a version tag such as `v1.1.0` packages both platforms and uploads the installers to a GitHub Release.
 
 The workflow creates macOS x64 and ARM64 DMG/ZIP files and a Windows x64 NSIS installer.
+
+Configure `RELEASE_PLEASE_TOKEN` as a repository Actions secret before enabling
+automatic releases. It must be a fine-grained personal access token with
+repository Contents, Pull requests, and Issues write access.
+Using this token is important because tags created with the default
+`GITHUB_TOKEN` do not trigger the separate desktop packaging workflow.
 
 ## Optional code signing
 

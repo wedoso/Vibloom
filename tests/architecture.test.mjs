@@ -111,10 +111,13 @@ test("schedules A and B against one clock and preserves the pause position", asy
 });
 
 test("keeps the desktop renderer sandboxed and packages both operating systems", async () => {
-  const [main, packageJson, workflow] = await Promise.all([
+  const [main, packageJson, workflow, releaseWorkflow, releaseConfig, releaseManifest] = await Promise.all([
     readFile(new URL("desktop/main.mjs", root), "utf8"),
     readFile(new URL("package.json", root), "utf8"),
     readFile(new URL(".github/workflows/desktop-release.yml", root), "utf8"),
+    readFile(new URL(".github/workflows/release-please.yml", root), "utf8"),
+    readFile(new URL("release-please-config.json", root), "utf8"),
+    readFile(new URL(".release-please-manifest.json", root), "utf8"),
   ]);
 
   assert.match(main, /registerSchemesAsPrivileged/u);
@@ -137,4 +140,14 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(workflow, /xvfb-run --auto-servernum npm run desktop:smoke/u);
   assert.match(workflow, /actions\/upload-artifact@v4/u);
   assert.match(workflow, /gh release create/u);
+  assert.match(releaseWorkflow, /googleapis\/release-please-action@v4/u);
+  assert.match(releaseWorkflow, /secrets\.RELEASE_PLEASE_TOKEN/u);
+  assert.match(releaseWorkflow, /branches: \[main\]/u);
+  const release = JSON.parse(releaseConfig);
+  const versions = JSON.parse(releaseManifest);
+  assert.equal(release["release-type"], "node");
+  assert.equal(release["include-component-in-tag"], false);
+  assert.equal(release["include-v-in-tag"], true);
+  assert.equal(release.packages["."]["package-name"], "vibloom");
+  assert.equal(versions["."], manifest.version);
 });
