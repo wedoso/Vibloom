@@ -41,20 +41,24 @@ Private browsing or unavailable storage falls back to session-only playback with
 ### Loaded player
 
 - Compact left rail: Player, Library, Queue, and Storage. These change only the center work surface or open a sheet.
-- Center Player surface: Hiyori remains visually centered. The current library track is version A with a real decoded waveform; version B is only a quiet secondary action until selected, then appears as an equal decoded waveform.
+- Center Player surface: Hiyori remains visually centered. The current library track is version A with a real decoded waveform; before B exists, a fluid solo grid caps A's region, lets the character stage absorb wide-screen space, and scales the B entry modestly while A's remaining area reports time left plus the seek gesture. Selecting B animates back to equal A/B waveform columns; removing B reverses that transition before unmounting its card.
 - The waveform surface, bars, played range, and playhead inherit the same exact source color as the solid music field and timed lyrics: A uses `rgb(84 127 121)` and B uses `rgb(200 95 109)`.
 - Center Library surface: search, Play all, Shuffle, track list, source state, lyric state, and contextual actions.
-- Right: a protected 380–420 px Hiyori stage that remains mounted in Player and Library and defaults to full-body containment.
+- Right: a protected Hiyori stage that remains mounted in Player and Library, defaults to full-body containment, and grows fluidly in wide solo-player layouts.
 - Bottom: the only playback transport, with persistent previous/play/next, shuffle, repeat, millisecond seek while comparing, volume, and queue controls. No second timeline or playback strip is rendered in the Player surface.
+- Each waveform is also a keyboard-accessible range surface. Pointer dragging pauses scheduling, previews one timestamp bubble, and commits one seek on release; playback resumes automatically only when it was active before the drag.
 - Switching Player/Library, opening sheets, or adding B must not pause A or recreate its scheduled BufferSource.
+- Duration mismatch is attached directly below version B's waveform. The ended-source notice uses a separate wrapping status lane above the lyric footer, never the stage source indicator's position.
 - A/B are decoded once and scheduled against the same `AudioContext.currentTime`; source changes only use the existing short gain handoff to prevent clicks, with no media-element chasing or scene fade.
 - Keyboard shortcuts are global outside form controls: Space toggles playback, F toggles Focus, Escape exits Focus/sheets, 1 or A selects source A, 2 or B selects source B, and Left/Right seeks five seconds.
 - Focus always exposes a high-contrast Exit focus control. F enters and exits Focus; Escape remains an exit alternative.
+- The shared renderer shows the package version beside the Vibloom brand and in the Storage sheet so web and desktop users can compare their build with a published release.
 - Focus removes both waveform cards, preserves synchronized lyrics and the compact A/B selector, and places the stage source indicator directly above the single transport without an implicit empty grid row.
 - Homepage import, Player, Library, Focus enter, and Focus exit reuse the opaque scene curtain from the original listening room. The destination layout is committed only after the curtain covers the Live2D canvas, then held for four paint frames before reveal so camera repositioning and WebGL buffer clearing are never visible.
 - The Pixi rig receives an explicit layout key for Player, Library, and Focus. Model scale, rig position, portrait offset, and camera zoom snap synchronously during the covered commit and must remain numerically stable after reveal.
 - Focus hides the persistent canvas only while the curtain is fully covering and reveals the music disc at its final center; it must not run a separate post-commit disc translation.
 - When lower-stage information intersects the portrait, the last 58 px of canvas pixels dissolve through an alpha mask instead of cutting Hiyori's legs at a hard edge.
+- At close camera zooms, the solid music circle dissolves horizontally at the protected stage boundary instead of ending abruptly behind the A/B surfaces; Hiyori and the circle's center remain unaffected.
 - Queue and Storage stay mounted while closed and animate as edge sheets; reduced-motion users receive the same state change without decorative motion.
 - Director, Portrait, Wide, and wheel-controlled Manual framing remain available outside Focus and expose their selected state.
 
@@ -129,7 +133,7 @@ Persistence:
 - `cached`: audio is copied into OPFS and can resume without the original file. This is the default for newly imported tracks and their Version B files when space is available.
 - `indexed`: metadata and relationships are saved, but audio is not copied.
 
-Lyrics are stored as a separate matched/unmatched state. In addition to automatic basename matching during import, every track exposes Attach lyrics / Replace lyrics / Remove lyrics actions, and the current-track lyric panel exposes the same controls. The complete parsed LRC is rendered; the active line scrolls to the viewport center and receives timestamp-relative progress coloring in both Player and Focus. Progress uses the exact music-field source color: `rgb(84 127 121)` for A and `rgb(200 95 109)` for B. A successful replacement updates only that track's parsed lines and filename; removal clears only that association. UI copy must not expose IndexedDB, OPFS, or FileSystemHandle names.
+Lyrics are stored as a separate matched/unmatched state. In addition to automatic basename matching during import, every track exposes Attach lyrics / Replace lyrics / Remove lyrics actions, and the current-track lyric panel exposes the same controls. Attaching or replacing an LRC animates the panel and the first visible lyric lines into place. The complete parsed LRC is rendered; the active line scrolls to the viewport center and receives timestamp-relative progress coloring in both Player and Focus. Progress uses the exact music-field source color: `rgb(84 127 121)` for A and `rgb(200 95 109)` for B. A successful replacement updates only that track's parsed lines and filename; removal clears only that association. UI copy must not expose IndexedDB, OPFS, or FileSystemHandle names.
 
 ## Import and indexing
 
@@ -227,7 +231,7 @@ Autoplay is never attempted on page load. Resume restores context and waits for 
 - Verify Queue and Storage animate in and out, remain non-interactive while closed, and become immediate under reduced motion.
 - Verify the storage sheet has no text inside the capacity bar and every action remains a full-width, non-overflowing row.
 - Verify Hiyori's hair and shoes are both visible at default desktop framing.
-- Verify manual 162% framing keeps Hiyori's feet visible above the source indicator, and Player/Focus 235% framing stays below the now-listening title.
+- Verify manual 162% framing keeps Hiyori's feet visible above the source indicator. Across Player, Library, and Focus, every zoom through 235% computes the title height and pins Hiyori's rendered top to the resulting safe edge. The solid music disc retains its full model-relative diameter and shifts its center only when its maximum beat pulse would cross that same edge.
 - Verify the Focus source indicator finishes within 20 CSS pixels of the transport at the 1280×720 desktop viewport.
 - Verify Player renders exactly one playback transport while retaining two synchronized waveforms when B exists.
 - Run the common flow in Chromium, Firefox, and WebKit, plus a real Safari smoke test when available.

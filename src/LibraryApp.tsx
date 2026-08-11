@@ -46,28 +46,25 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import Live2DStage from "./Live2DStage";
+import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
+import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
+import { APP_VERSION } from "./appVersion";
 import {
-  cacheTrackFile,
-  clearCachedTracks,
   comparisonCacheKey,
   createShuffleBag,
-  deleteLibraryDatabase,
   EMPTY_SESSION,
-  getCachedTrackFile,
   LibrarySession,
   LibraryTrack,
-  loadLibrarySnapshot,
   makeTrackFingerprint,
+  migrateLibrarySnapshot,
   normalizeFileName,
-  readStorageState,
-  removeCachedTrack,
   RepeatMode,
-  requestPersistentStorage,
-  saveLibrarySnapshot,
   withoutExtension,
-} from "./libraryStore";
+} from "./domain/library";
 import { decodeLrc, LyricLine, parseLrc } from "./lrc";
+import { browserLibraryPlatform } from "./platform/browserLibraryPlatform";
+import type { LibraryPlatform, StorageState } from "./platform/libraryPlatform";
 import "./library.css";
 
 const SUPPORTED_AUDIO = /\.(mp3|wav|wave|m4a|aac|ogg|oga|flac|opus|webm|aiff|aif)$/iu;
@@ -81,12 +78,6 @@ type ImportSummary = {
   duplicates: number;
   ignored: number;
   errors: string[];
-};
-
-type StorageState = {
-  usage: number;
-  quota: number;
-  persistent: boolean;
 };
 
 type FileWithPath = File & { webkitRelativePath?: string };
@@ -189,46 +180,90 @@ function formatTime(seconds: number, precise = false) {
   return precise ? `${base}.${String(Math.floor((seconds % 1) * 1000)).padStart(3, "0")}` : base;
 }
 
-function makeWaveformPeaks(buffer: AudioBuffer, count = 144) {
-  const peaks = new Array(count).fill(0.08);
-  const channels = Math.min(buffer.numberOfChannels, 2);
-  const block = Math.max(1, Math.floor(buffer.length / count));
-  for (let index = 0; index < count; index += 1) {
-    let max = 0;
-    const start = index * block;
-    const end = Math.min(buffer.length, start + block);
-    const stride = Math.max(1, Math.floor((end - start) / 160));
-    for (let channel = 0; channel < channels; channel += 1) {
-      const data = buffer.getChannelData(channel);
-      for (let sample = start; sample < end; sample += stride) max = Math.max(max, Math.abs(data[sample]));
-    }
-    peaks[index] = Math.max(0.08, Math.min(1, Math.sqrt(max)));
-  }
-  return peaks;
-}
-
-function readAudioFile(file: File, onProgress: (progress: number) => void) {
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 52));
-    };
-    reader.onload = () => reader.result instanceof ArrayBuffer
-      ? resolve(reader.result)
-      : reject(new Error("The audio file could not be read."));
-    reader.onerror = () => reject(reader.error ?? new Error("The audio file could not be read."));
-    reader.onabort = () => reject(new DOMException("File reading was cancelled.", "AbortError"));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-function PrecisionWaveform({ peaks, progress, label, source }: { peaks: number[]; progress: number; label: string; source: 0 | 1 }) {
+function PrecisionWaveform({
+  peaks,
+  currentTime,
+  duration,
+  label,
+  source,
+  onSeek,
+  onScrubStart,
+  onScrub,
+  onScrubEnd,
+}: {
+  peaks: number[];
+  currentTime: number;
+  duration: number;
+  label: string;
+  source: 0 | 1;
+  onSeek: (time: number) => void;
+  onScrubStart: () => void;
+  onScrub: (time: number) => void;
+  onScrubEnd: (time: number) => void;
+}) {
+  const scrubbingRef = useRef(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubTime, setScrubTime] = useState(0);
   const bars = peaks.length ? peaks : new Array(144).fill(0.12);
+  const safeDuration = Math.max(0, duration);
+  const displayTime = Math.max(0, Math.min(safeDuration, isScrubbing ? scrubTime : currentTime));
+  const progress = safeDuration > 0 ? displayTime / safeDuration : 0;
+
+  const finishScrub = (time: number) => {
+    if (!scrubbingRef.current) return;
+    scrubbingRef.current = false;
+    setIsScrubbing(false);
+    setScrubTime(time);
+    onScrubEnd(time);
+  };
+
+  const pointerTime = (element: HTMLInputElement, clientX: number) => {
+    const bounds = element.getBoundingClientRect();
+    const progress = bounds.width > 0 ? (clientX - bounds.left) / bounds.width : 0;
+    return Math.max(0, Math.min(safeDuration, progress * safeDuration));
+  };
+
   return (
-    <div className={`precision-waveform waveform-source-${source === 0 ? "a" : "b"} ${peaks.length ? "is-ready" : "is-loading"}`} role="img" aria-label={`${label} waveform`}>
+    <div className={`precision-waveform waveform-source-${source === 0 ? "a" : "b"} ${peaks.length ? "is-ready" : "is-loading"} ${isScrubbing ? "is-scrubbing" : ""}`}>
       <div className="waveform-bars">{bars.map((peak, index) => <i key={`${label}-${index}`} style={{ height: `${Math.max(8, peak * 100)}%` }} />)}</div>
       <span className="waveform-played" style={{ width: `${Math.max(0, Math.min(100, progress * 100))}%` }} />
       <b style={{ left: `${Math.max(0, Math.min(100, progress * 100))}%` }} />
+      {isScrubbing && <output className="waveform-time-bubble" style={{ left: `${Math.max(0, Math.min(100, progress * 100))}%` }}>{formatTime(displayTime, true)}</output>}
+      <input
+        className="waveform-seek"
+        type="range"
+        min="0"
+        max={Math.max(safeDuration, 0.001)}
+        step="0.001"
+        value={displayTime}
+        disabled={safeDuration <= 0}
+        aria-label={`Seek ${label} waveform`}
+        aria-valuetext={formatTime(displayTime, true)}
+        onPointerDown={(event) => {
+          if (safeDuration <= 0) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const time = pointerTime(event.currentTarget, event.clientX);
+          scrubbingRef.current = true;
+          setIsScrubbing(true);
+          setScrubTime(time);
+          onScrubStart();
+          onScrub(time);
+        }}
+        onPointerMove={(event) => {
+          if (!scrubbingRef.current) return;
+          const time = pointerTime(event.currentTarget, event.clientX);
+          setScrubTime(time);
+          onScrub(time);
+        }}
+        onChange={(event) => {
+          const time = Number(event.currentTarget.value);
+          setScrubTime(time);
+          if (scrubbingRef.current) onScrub(time);
+          else onSeek(time);
+        }}
+        onPointerUp={(event) => finishScrub(pointerTime(event.currentTarget, event.clientX))}
+        onPointerCancel={(event) => finishScrub(pointerTime(event.currentTarget, event.clientX))}
+      />
     </div>
   );
 }
@@ -364,7 +399,7 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
   }
 
   return (
-    <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} aria-label={`Lyrics from ${fileName}`}>
+    <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} key={`${variant}:${fileName}`} aria-label={`Lyrics from ${fileName}`}>
       <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace .lrc</button><button type="button" onClick={onRemoveLyrics}>Remove</button></span>
       <div className="library-lyrics-viewport" ref={viewportRef}>
         <div className="library-lyrics-list">
@@ -374,7 +409,10 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
               key={`${line.time}-${index}`}
               ref={(node) => { lineRefs.current[index] = node; }}
               aria-current={index === activeIndex ? "true" : undefined}
-              style={index === activeIndex ? { "--lyric-progress": `${lineProgress}%` } as CSSProperties : undefined}
+              style={{
+                "--lyric-index": Math.min(index, 9),
+                ...(index === activeIndex ? { "--lyric-progress": `${lineProgress}%` } : {}),
+              } as CSSProperties}
             >
               {line.text.split("\n").map((part, partIndex) => <span key={partIndex}>{part}</span>)}
             </p>
@@ -385,7 +423,7 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
   );
 }
 
-export default function LibraryApp() {
+export default function LibraryApp({ platform = browserLibraryPlatform }: { platform?: LibraryPlatform }) {
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
   const tracksRef = useRef<LibraryTrack[]>([]);
   const [session, setSession] = useState<LibrarySession>({ ...EMPTY_SESSION });
@@ -408,6 +446,7 @@ export default function LibraryApp() {
   const [focusMode, setFocusMode] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace>("player");
   const [compareSlot, setCompareSlot] = useState<CompareSlot>({ ...EMPTY_COMPARE_SLOT });
+  const [comparisonMotion, setComparisonMotion] = useState<"idle" | "entering" | "leaving">("idle");
   const [primaryLoad, setPrimaryLoad] = useState<{ stage: LoadStage; progress: number }>({ stage: "idle", progress: 0 });
   const [activeSource, setActiveSource] = useState<0 | 1>(0);
   const [primaryPeaks, setPrimaryPeaks] = useState<number[]>([]);
@@ -424,25 +463,18 @@ export default function LibraryApp() {
   const workspaceRef = useRef<Workspace>("player");
   const runtimeFilesRef = useRef(new Map<string, File>());
   const reconnectModeRef = useRef(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const compareAnalyserRef = useRef<AnalyserNode | null>(null);
-  const primaryGainRef = useRef<GainNode | null>(null);
-  const compareGainRef = useRef<GainNode | null>(null);
-  const masterGainRef = useRef<GainNode | null>(null);
-  const primaryBufferRef = useRef<AudioBuffer | null>(null);
-  const compareBufferRef = useRef<AudioBuffer | null>(null);
-  const sourcesRef = useRef<[AudioBufferSourceNode | null, AudioBufferSourceNode | null]>([null, null]);
+  const [audioEngine] = useState(() => new SynchronizedAudioEngine());
   const frequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const timeDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const compareFrequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const compareTimeDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const loadedTrackIdRef = useRef("");
+  const preloadingTrackIdRef = useRef("");
   const primaryLoadVersionRef = useRef(0);
   const compareLoadVersionRef = useRef(0);
   const playingRef = useRef(false);
-  const playbackOffsetRef = useRef(0);
-  const playbackStartedAtRef = useRef(0);
+  const waveformScrubbingRef = useRef(false);
+  const waveformScrubWasPlayingRef = useRef(false);
   const shuffleBagRef = useRef<string[]>([]);
   const shuffleCycleStartedRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
@@ -461,10 +493,13 @@ export default function LibraryApp() {
   }, [search, tracks]);
   const unavailableCount = tracks.filter((track) => track.availability === "reconnect" || track.availability === "missing").length;
   const comparisonReady = compareSlot.status === "ready";
-  const timelineDuration = Math.max(duration, currentTrack?.duration ?? 0, compareSlot.duration, 0);
-  const activeDuration = activeSource === 0 ? (duration || currentTrack?.duration || 0) : compareSlot.duration;
+  const comparisonVisible = compareSlot.status !== "empty";
+  const comparisonExpanded = comparisonVisible && comparisonMotion !== "leaving";
+  const primaryDuration = duration || currentTrack?.duration || 0;
+  const timelineDuration = Math.max(primaryDuration, compareSlot.duration, 0);
+  const activeDuration = activeSource === 0 ? primaryDuration : compareSlot.duration;
   const activeSourceEnded = comparisonReady && activeDuration > 0 && currentTime >= activeDuration - 0.005 && currentTime < timelineDuration - 0.005;
-  const durationDelta = comparisonReady ? Math.abs((duration || currentTrack?.duration || 0) - compareSlot.duration) : 0;
+  const durationDelta = comparisonReady ? Math.abs(primaryDuration - compareSlot.duration) : 0;
 
   const patchTracks = useCallback((update: (current: LibraryTrack[]) => LibraryTrack[]) => {
     setTracks((current) => {
@@ -508,11 +543,11 @@ export default function LibraryApp() {
 
   const refreshStorageState = useCallback(async () => {
     try {
-      setStorageState(await readStorageState());
+      setStorageState(await platform.storage.readState());
     } catch {
       setStorageState({ usage: 0, quota: 0, persistent: false });
     }
-  }, []);
+  }, [platform]);
 
   useEffect(() => {
     const folderInput = folderInputRef.current as (HTMLInputElement & { webkitdirectory?: boolean }) | null;
@@ -523,20 +558,21 @@ export default function LibraryApp() {
     let cancelled = false;
     void (async () => {
       try {
-        const snapshot = await loadLibrarySnapshot();
-        if (!snapshot || cancelled) return;
+        const storedSnapshot = await platform.repository.load();
+        if (!storedSnapshot || cancelled) return;
+        const snapshot = migrateLibrarySnapshot(storedSnapshot);
         const restoredTracks = await Promise.all(snapshot.tracks.map(async (storedTrack) => {
           const track: LibraryTrack = { ...storedTrack, comparison: storedTrack.comparison ?? null };
           const comparison = track.comparison;
           const restoredComparison = comparison?.persistence === "cached"
-            ? await getCachedTrackFile(comparisonCacheKey(track.id)).then((file) => ({
+            ? await platform.audioFiles.get(comparisonCacheKey(track.id)).then((file) => ({
               ...comparison,
               availability: file ? "available" as const : "reconnect" as const,
               persistence: file ? "cached" as const : "indexed" as const,
             }))
             : comparison ? { ...comparison, availability: "reconnect" as const } : null;
           if (track.persistence !== "cached") return { ...track, comparison: restoredComparison, availability: "reconnect" as const };
-          const cached = await getCachedTrackFile(track.id);
+          const cached = await platform.audioFiles.get(track.id);
           return { ...track, comparison: restoredComparison, availability: cached ? "available" as const : "reconnect" as const, persistence: cached ? "cached" as const : "indexed" as const };
         }));
         if (cancelled) return;
@@ -545,7 +581,7 @@ export default function LibraryApp() {
         const nextSession = {
           ...EMPTY_SESSION,
           ...snapshot.session,
-          cacheEnabled: snapshot.version >= 2 ? snapshot.session.cacheEnabled : true,
+          cacheEnabled: snapshot.session.cacheEnabled,
         };
         sessionRef.current = nextSession;
         setSession(nextSession);
@@ -559,7 +595,7 @@ export default function LibraryApp() {
       await refreshStorageState();
     })();
     return () => { cancelled = true; };
-  }, [refreshStorageState]);
+  }, [platform, refreshStorageState]);
 
   useEffect(() => {
     tracksRef.current = tracks;
@@ -580,131 +616,102 @@ export default function LibraryApp() {
           availability: track.comparison.persistence === "cached" ? "available" as const : "reconnect" as const,
         } : null,
       }));
-      void saveLibrarySnapshot({ version: 2, tracks: serializableTracks, session }).catch(() => {
-        setMessage("Could not save changes in this browser mode.");
+      void platform.repository.save({ version: 2, tracks: serializableTracks, session }).catch(() => {
+        setMessage("Could not save changes in this mode.");
       });
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [restored, session, tracks]);
+  }, [platform, restored, session, tracks]);
 
   const ensureAudioGraph = useCallback(async (resume = true) => {
-    if (!audioContextRef.current) {
-      const context = new AudioContext();
-      const analyser = context.createAnalyser();
-      const compareAnalyser = context.createAnalyser();
-      const primaryGain = context.createGain();
-      const comparisonGain = context.createGain();
-      const masterGain = context.createGain();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.68;
-      compareAnalyser.fftSize = 1024;
-      compareAnalyser.smoothingTimeConstant = 0.68;
-      analyser.connect(primaryGain);
-      compareAnalyser.connect(comparisonGain);
-      primaryGain.connect(masterGain);
-      comparisonGain.connect(masterGain);
-      masterGain.connect(context.destination);
-      primaryGain.gain.value = 1;
-      comparisonGain.gain.value = 0;
-      masterGain.gain.value = sessionRef.current.volume;
-      audioContextRef.current = context;
-      analyserRef.current = analyser;
-      compareAnalyserRef.current = compareAnalyser;
-      primaryGainRef.current = primaryGain;
-      compareGainRef.current = comparisonGain;
-      masterGainRef.current = masterGain;
+    const context = await audioEngine.ensureGraph(resume, sessionRef.current.volume);
+    if (!frequencyDataRef.current) {
+      const analyser = audioEngine.getAnalyser(0);
+      const compareAnalyser = audioEngine.getAnalyser(1);
+      if (!analyser || !compareAnalyser) throw new Error("Audio graph could not be created.");
       frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
       timeDataRef.current = new Uint8Array(analyser.fftSize);
       compareFrequencyDataRef.current = new Uint8Array(compareAnalyser.frequencyBinCount);
       compareTimeDataRef.current = new Uint8Array(compareAnalyser.fftSize);
     }
-    const context = audioContextRef.current;
-    if (resume && context.state === "suspended") {
-      await context.resume();
-    }
     return context;
-  }, []);
+  }, [audioEngine]);
 
   const stopSourceAt = useCallback((index: 0 | 1) => {
-    const source = sourcesRef.current[index];
-    if (!source) return;
-    source.onended = null;
-    try { source.stop(); } catch { /* The shorter source may already have ended. */ }
-    source.disconnect();
-    sourcesRef.current[index] = null;
-  }, []);
-
-  const stopAllSources = useCallback(() => {
-    stopSourceAt(0);
-    stopSourceAt(1);
-  }, [stopSourceAt]);
+    audioEngine.stopSource(index);
+  }, [audioEngine]);
 
   const getTimelineTime = useCallback(() => {
-    const context = audioContextRef.current;
-    if (playingRef.current && context) {
-      return playbackOffsetRef.current + Math.max(0, context.currentTime - playbackStartedAtRef.current);
-    }
-    return playbackOffsetRef.current;
-  }, []);
+    return audioEngine.getTimelineTime();
+  }, [audioEngine]);
 
   const createSourceAt = useCallback((index: 0 | 1, when: number, offset: number) => {
-    const context = audioContextRef.current;
-    const buffer = index === 0 ? primaryBufferRef.current : compareBufferRef.current;
-    const analyser = index === 0 ? analyserRef.current : compareAnalyserRef.current;
-    if (!context || !buffer || !analyser || offset >= buffer.duration - 0.005) return false;
-    stopSourceAt(index);
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(analyser);
-    source.start(when, Math.max(0, offset));
-    sourcesRef.current[index] = source;
-    return true;
-  }, [stopSourceAt]);
+    return audioEngine.startSource(index, when, offset);
+  }, [audioEngine]);
 
   const startPlayback = useCallback(async (time: number) => {
-    const context = await ensureAudioGraph();
-    stopAllSources();
-    const when = context.currentTime + SOURCE_LEAD_SECONDS;
-    const started = ([0, 1] as const).map((index) => createSourceAt(index, when, time));
-    if (!started.some(Boolean)) return false;
-    playbackOffsetRef.current = time;
-    playbackStartedAtRef.current = when;
+    const started = await audioEngine.play(time, SOURCE_LEAD_SECONDS, sessionRef.current.volume);
+    if (!started) return false;
     playingRef.current = true;
     setCurrentTime(time);
     setIsPlaying(true);
     return true;
-  }, [createSourceAt, ensureAudioGraph, stopAllSources]);
+  }, [audioEngine]);
 
   const pausePlayback = useCallback(() => {
-    const pausedAt = getTimelineTime();
+    const pausedAt = audioEngine.pause();
     playingRef.current = false;
-    playbackOffsetRef.current = pausedAt;
-    stopAllSources();
     setCurrentTime(pausedAt);
     setIsPlaying(false);
     audioVisualRef.current = { ...audioVisualRef.current, isPlaying: false, transient: 0 };
     lastCheckpointRef.current = pausedAt;
     patchSession({ currentTime: pausedAt });
-  }, [getTimelineTime, patchSession, stopAllSources]);
+  }, [audioEngine, patchSession]);
 
   const seekTo = useCallback(async (rawTime: number) => {
-    const maxDuration = Math.max(primaryBufferRef.current?.duration ?? 0, compareBufferRef.current?.duration ?? 0);
+    const maxDuration = audioEngine.getMaxDuration();
     const nextTime = Math.max(0, Math.min(rawTime, maxDuration));
-    playbackOffsetRef.current = nextTime;
+    audioEngine.setOffset(nextTime);
     setCurrentTime(nextTime);
     patchSession({ currentTime: nextTime });
     if (playingRef.current) await startPlayback(nextTime);
-  }, [patchSession, startPlayback]);
+  }, [audioEngine, patchSession, startPlayback]);
+
+  const previewWaveformSeek = useCallback((rawTime: number) => {
+    const maxDuration = audioEngine.getMaxDuration();
+    const nextTime = Math.max(0, Math.min(rawTime, maxDuration));
+    audioEngine.setOffset(nextTime);
+    setCurrentTime(nextTime);
+    return nextTime;
+  }, [audioEngine]);
+
+  const beginWaveformScrub = useCallback(() => {
+    if (waveformScrubbingRef.current) return;
+    waveformScrubbingRef.current = true;
+    waveformScrubWasPlayingRef.current = playingRef.current;
+    if (playingRef.current) pausePlayback();
+  }, [pausePlayback]);
+
+  const finishWaveformScrub = useCallback(async (rawTime: number) => {
+    const nextTime = previewWaveformSeek(rawTime);
+    const shouldResume = waveformScrubWasPlayingRef.current;
+    waveformScrubbingRef.current = false;
+    waveformScrubWasPlayingRef.current = false;
+    lastCheckpointRef.current = nextTime;
+    patchSession({ currentTime: nextTime });
+    if (shouldResume) await startPlayback(nextTime);
+  }, [patchSession, previewWaveformSeek, startPlayback]);
 
   const resolveTrackFile = useCallback(async (track: LibraryTrack) => {
     const runtime = runtimeFilesRef.current.get(track.id);
     if (runtime) return runtime;
-    if (track.persistence === "cached") return getCachedTrackFile(track.id);
+    if (track.persistence === "cached") return platform.audioFiles.get(track.id);
     return null;
-  }, []);
+  }, [platform]);
 
   const decodeComparisonFile = useCallback(async (file: File, trackId: string, persistence: "indexed" | "cached", announce = true, displayName = file.name) => {
     const version = ++compareLoadVersionRef.current;
+    setComparisonMotion("entering");
     setCompareSlot({
       file,
       trackId,
@@ -726,7 +733,7 @@ export default function LibraryApp() {
       const context = await ensureAudioGraph(false);
       const buffer = await context.decodeAudioData(arrayBuffer);
       if (version !== compareLoadVersionRef.current) return null;
-      compareBufferRef.current = buffer;
+      audioEngine.setBuffer(1, buffer);
       setCompareSlot({
         file,
         trackId,
@@ -749,12 +756,12 @@ export default function LibraryApp() {
       return buffer;
     } catch {
       if (version !== compareLoadVersionRef.current) return null;
-      compareBufferRef.current = null;
+      audioEngine.setBuffer(1, null);
       setCompareSlot((slot) => ({ ...slot, status: "error", loadStage: "idle", loadProgress: 0, error: "Version B could not be decoded in this browser." }));
       setMessage("Version B could not be decoded in this browser.");
       return null;
     }
-  }, [createSourceAt, ensureAudioGraph, getTimelineTime]);
+  }, [audioEngine, createSourceAt, ensureAudioGraph, getTimelineTime]);
 
   const startTrack = useCallback(async (trackId: string, play = true, resumeAt = 0) => {
     const track = tracksRef.current.find((candidate) => candidate.id === trackId);
@@ -768,16 +775,15 @@ export default function LibraryApp() {
     const loadVersion = ++primaryLoadVersionRef.current;
     if (loadedTrackIdRef.current && loadedTrackIdRef.current !== trackId) {
       compareLoadVersionRef.current += 1;
-      compareBufferRef.current = null;
+      audioEngine.setBuffer(1, null);
       stopSourceAt(1);
       setCompareSlot({ ...EMPTY_COMPARE_SLOT });
       setComparePeaks([]);
       setActiveSource(0);
-      if (primaryGainRef.current) primaryGainRef.current.gain.value = 1;
-      if (compareGainRef.current) compareGainRef.current.gain.value = 0;
+      audioEngine.selectSourceImmediately(0);
     }
     playingRef.current = false;
-    stopAllSources();
+    audioEngine.stop();
     setIsPlaying(false);
     setMessage(`Preparing · ${trackDisplayName(track.name)}`);
     setPrimaryLoad({ stage: "reading", progress: 0 });
@@ -796,10 +802,10 @@ export default function LibraryApp() {
       return false;
     }
     if (loadVersion !== primaryLoadVersionRef.current) return false;
-    primaryBufferRef.current = buffer;
+    audioEngine.setBuffer(0, buffer);
     loadedTrackIdRef.current = trackId;
     const safeTime = Math.min(Math.max(0, resumeAt), Math.max(0, buffer.duration - 0.05));
-    playbackOffsetRef.current = safeTime;
+    audioEngine.setOffset(safeTime);
     const previous = sessionRef.current.currentTrackId;
     patchSession((current) => ({
       ...current,
@@ -821,11 +827,12 @@ export default function LibraryApp() {
     if (play) await startPlayback(safeTime);
     if (track.comparison) {
       const comparisonFile = track.comparison.persistence === "cached"
-        ? await getCachedTrackFile(comparisonCacheKey(track.id))
+        ? await platform.audioFiles.get(comparisonCacheKey(track.id))
         : null;
       if (comparisonFile) {
         await decodeComparisonFile(comparisonFile, track.id, "cached", false, track.comparison.name);
       } else {
+        setComparisonMotion("entering");
         setCompareSlot({
           ...EMPTY_COMPARE_SLOT,
           trackId: track.id,
@@ -839,11 +846,23 @@ export default function LibraryApp() {
       }
     }
     return true;
-  }, [decodeComparisonFile, ensureAudioGraph, patchSession, patchTracks, resolveTrackFile, startPlayback, stopAllSources, stopSourceAt]);
+  }, [audioEngine, decodeComparisonFile, ensureAudioGraph, patchSession, patchTracks, platform, resolveTrackFile, startPlayback, stopSourceAt]);
 
   useEffect(() => {
     startTrackRef.current = startTrack;
   }, [startTrack]);
+
+  useEffect(() => {
+    const trackId = session.currentTrackId;
+    if (!restored || !trackId || playingRef.current) return;
+    if (loadedTrackIdRef.current === trackId || preloadingTrackIdRef.current === trackId) return;
+    const track = tracks.find((candidate) => candidate.id === trackId);
+    if (!track || (track.availability !== "available" && track.availability !== "session")) return;
+    preloadingTrackIdRef.current = trackId;
+    void startTrack(trackId, false, session.currentTime).finally(() => {
+      if (preloadingTrackIdRef.current === trackId) preloadingTrackIdRef.current = "";
+    });
+  }, [restored, session.currentTime, session.currentTrackId, startTrack, tracks]);
 
   const nextTrack = useCallback(async (natural = false) => {
     const current = sessionRef.current;
@@ -901,7 +920,7 @@ export default function LibraryApp() {
     }
     const tick = () => {
       const reference = getTimelineTime();
-      const maxDuration = Math.max(primaryBufferRef.current?.duration ?? 0, compareBufferRef.current?.duration ?? 0);
+      const maxDuration = audioEngine.getMaxDuration();
       const nextTime = Math.min(reference, maxDuration);
       setCurrentTime(nextTime);
       sessionRef.current = { ...sessionRef.current, currentTime: nextTime };
@@ -910,7 +929,7 @@ export default function LibraryApp() {
         setSession(sessionRef.current);
       }
       const useComparison = activeSource === 1 && compareSlot.status === "ready";
-      const analyser = useComparison ? compareAnalyserRef.current : analyserRef.current;
+      const analyser = audioEngine.getAnalyser(useComparison ? 1 : 0);
       const frequency = useComparison ? compareFrequencyDataRef.current : frequencyDataRef.current;
       const time = useComparison ? compareTimeDataRef.current : timeDataRef.current;
       if (analyser && frequency && time) {
@@ -918,8 +937,7 @@ export default function LibraryApp() {
       }
       if (maxDuration > 0 && reference >= maxDuration - 0.025) {
         playingRef.current = false;
-        playbackOffsetRef.current = maxDuration;
-        stopAllSources();
+        audioEngine.markEnded(maxDuration);
         setCurrentTime(maxDuration);
         setIsPlaying(false);
         endedRef.current();
@@ -931,13 +949,11 @@ export default function LibraryApp() {
     return () => {
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [activeSource, compareSlot.status, getTimelineTime, isPlaying, stopAllSources]);
+  }, [activeSource, audioEngine, compareSlot.status, getTimelineTime, isPlaying]);
 
   useEffect(() => () => {
-    stopAllSources();
-    const context = audioContextRef.current;
-    if (context && context.state !== "closed") void context.close();
-  }, [stopAllSources]);
+    void audioEngine.close();
+  }, [audioEngine]);
 
   const handleImport = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList) as FileWithPath[];
@@ -956,10 +972,10 @@ export default function LibraryApp() {
     const imported: LibraryTrack[] = [];
     let cacheThisImport = sessionRef.current.cacheEnabled;
     if (cacheThisImport && audioFiles.length) {
-      await requestPersistentStorage().catch(() => false);
+      await platform.storage.requestPersistence().catch(() => false);
       try {
-        const estimate = await navigator.storage?.estimate?.();
-        const availableBytes = Math.max(0, (estimate?.quota ?? 0) - (estimate?.usage ?? 0));
+        const storage = await platform.storage.readState();
+        const availableBytes = Math.max(0, storage.quota - storage.usage);
         const requestedBytes = audioFiles.reduce((sum, file) => sum + file.size, 0);
         if (availableBytes > 0 && requestedBytes > availableBytes * 0.9) {
           cacheThisImport = false;
@@ -984,7 +1000,7 @@ export default function LibraryApp() {
         let reconnected = { ...existing, comparison: existing.comparison ?? null, availability: existing.persistence === "cached" ? "available" as const : "session" as const };
         if (cacheThisImport && existing.persistence !== "cached") {
           try {
-            await cacheTrackFile(existing.id, file);
+            await platform.audioFiles.put(existing.id, file);
             reconnected = { ...reconnected, persistence: "cached", availability: "available" };
           } catch {
             summary.errors.push(`${file.name} could not be kept for future visits.`);
@@ -1026,7 +1042,7 @@ export default function LibraryApp() {
       runtimeFilesRef.current.set(track.id, file);
       if (cacheThisImport) {
         try {
-          await cacheTrackFile(track.id, file);
+          await platform.audioFiles.put(track.id, file);
           track.persistence = "cached";
           track.availability = "available";
         } catch {
@@ -1073,7 +1089,7 @@ export default function LibraryApp() {
     await refreshStorageState();
     setImportSummary(summary);
     setImporting(false);
-  }, [patchSession, patchTracks, refreshStorageState]);
+  }, [patchSession, patchTracks, platform, refreshStorageState]);
 
   function handleFilesInput(event: ChangeEvent<HTMLInputElement>) {
     void handleImport(event.target.files ?? []);
@@ -1157,11 +1173,12 @@ export default function LibraryApp() {
   }, [filteredTracks, patchSession, startTrack]);
 
   async function togglePlay() {
-    if (primaryBufferRef.current && loadedTrackIdRef.current === sessionRef.current.currentTrackId) {
+    const primaryBuffer = audioEngine.getBuffer(0);
+    if (primaryBuffer && loadedTrackIdRef.current === sessionRef.current.currentTrackId) {
       if (playingRef.current) pausePlayback();
       else {
-        const maxDuration = Math.max(primaryBufferRef.current.duration, compareBufferRef.current?.duration ?? 0);
-        const startAt = playbackOffsetRef.current >= maxDuration - 0.01 ? 0 : playbackOffsetRef.current;
+        const maxDuration = audioEngine.getMaxDuration();
+        const startAt = audioEngine.currentOffset >= maxDuration - 0.01 ? 0 : audioEngine.currentOffset;
         await startPlayback(startAt);
       }
       return;
@@ -1230,10 +1247,10 @@ export default function LibraryApp() {
       setMessage("Automatic caching is on. New music and Version B files will be kept on this device.");
       return;
     }
-    await requestPersistentStorage().catch(() => false);
-    const estimate = await navigator.storage?.estimate?.();
+    await platform.storage.requestPersistence().catch(() => false);
+    const storage = await platform.storage.readState();
     const requiredBytes = available.reduce((total, track) => total + (runtimeFilesRef.current.get(track.id)?.size ?? 0), comparisonFile?.size ?? 0);
-    const availableBytes = Math.max(0, (estimate?.quota ?? 0) - (estimate?.usage ?? 0));
+    const availableBytes = Math.max(0, storage.quota - storage.usage);
     if (availableBytes > 0 && requiredBytes > availableBytes * 0.9) {
       setMessage("Automatic caching is on, but the currently connected files exceed available browser storage.");
       return;
@@ -1244,7 +1261,7 @@ export default function LibraryApp() {
       const file = runtimeFilesRef.current.get(track.id);
       if (!file) continue;
       try {
-        await cacheTrackFile(track.id, file);
+        await platform.audioFiles.put(track.id, file);
         patchTracks((current) => current.map((candidate) => candidate.id === track.id ? { ...candidate, persistence: "cached", availability: "available" } : candidate));
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "The browser could not cache this track.");
@@ -1255,7 +1272,7 @@ export default function LibraryApp() {
     }
     if (comparisonFile && compareSlot.trackId) {
       try {
-        await cacheTrackFile(comparisonCacheKey(compareSlot.trackId), comparisonFile);
+        await platform.audioFiles.put(comparisonCacheKey(compareSlot.trackId), comparisonFile);
         patchTracks((current) => current.map((track) => track.id === compareSlot.trackId && track.comparison ? {
           ...track,
           comparison: { ...track.comparison, persistence: "cached", availability: "available" },
@@ -1273,7 +1290,7 @@ export default function LibraryApp() {
   }
 
   async function clearAudioCache() {
-    await clearCachedTracks();
+    await platform.audioFiles.clear();
     patchTracks((current) => current.map((track) => ({
       ...track,
       persistence: "indexed",
@@ -1294,8 +1311,8 @@ export default function LibraryApp() {
 
   async function toggleTrackCache(track: LibraryTrack) {
     if (track.persistence === "cached") {
-      await removeCachedTrack(track.id);
-      await removeCachedTrack(comparisonCacheKey(track.id)).catch(() => undefined);
+      await platform.audioFiles.remove(track.id);
+      await platform.audioFiles.remove(comparisonCacheKey(track.id)).catch(() => undefined);
       patchTracks((current) => current.map((candidate) => candidate.id === track.id ? {
         ...candidate,
         persistence: "indexed",
@@ -1309,10 +1326,10 @@ export default function LibraryApp() {
       if (!file) {
         setMessage("Reconnect this track before keeping it on the device.");
       } else {
-        await cacheTrackFile(track.id, file);
+        await platform.audioFiles.put(track.id, file);
         let cachedComparison = false;
         if (track.comparison && compareSlot.trackId === track.id && compareSlot.file) {
-          await cacheTrackFile(comparisonCacheKey(track.id), compareSlot.file);
+          await platform.audioFiles.put(comparisonCacheKey(track.id), compareSlot.file);
           cachedComparison = true;
           setCompareSlot((slot) => ({ ...slot, persistence: "cached" }));
         }
@@ -1341,8 +1358,8 @@ export default function LibraryApp() {
 
   async function resetLibrary() {
     if (playingRef.current) pausePlayback();
-    await clearCachedTracks();
-    await deleteLibraryDatabase();
+    await platform.audioFiles.clear();
+    await platform.repository.reset();
     runtimeFilesRef.current.clear();
     tracksRef.current = [];
     setTracks([]);
@@ -1370,21 +1387,14 @@ export default function LibraryApp() {
       return;
     }
     if (!(file.type.startsWith("audio/") || SUPPORTED_AUDIO.test(file.name)) || file.size > MAX_FILE_BYTES) {
+      setComparisonMotion("entering");
       setCompareSlot({ ...EMPTY_COMPARE_SLOT, trackId: track.id, name: file.name, size: file.size, status: "error", error: "Choose a supported audio file smaller than 300 MB." });
       setMessage("Choose a supported audio file smaller than 300 MB.");
       return;
     }
     stopSourceAt(1);
-    const primary = primaryGainRef.current;
-    const comparison = compareGainRef.current;
-    const context = await ensureAudioGraph(false);
-    if (primary && comparison) {
-      const now = context.currentTime;
-      primary.gain.cancelScheduledValues(now);
-      comparison.gain.cancelScheduledValues(now);
-      primary.gain.setValueAtTime(1, now);
-      comparison.gain.setValueAtTime(0, now);
-    }
+    await ensureAudioGraph(false);
+    audioEngine.selectSourceImmediately(0);
     setActiveSource(0);
     const buffer = await decodeComparisonFile(file, track.id, "indexed", false);
     if (!buffer) return;
@@ -1392,11 +1402,11 @@ export default function LibraryApp() {
     if (sessionRef.current.cacheEnabled) {
       setCompareSlot((slot) => ({ ...slot, loadStage: "caching", loadProgress: 84 }));
       try {
-        const estimate = await navigator.storage?.estimate?.();
-        const availableBytes = Math.max(0, (estimate?.quota ?? 0) - (estimate?.usage ?? 0));
+        const storage = await platform.storage.readState();
+        const availableBytes = Math.max(0, storage.quota - storage.usage);
         if (availableBytes > 0 && file.size > availableBytes * 0.9) throw new Error("Not enough browser storage for Version B.");
-        await requestPersistentStorage().catch(() => false);
-        await cacheTrackFile(comparisonCacheKey(track.id), file);
+        await platform.storage.requestPersistence().catch(() => false);
+        await platform.audioFiles.put(comparisonCacheKey(track.id), file);
         persistence = "cached";
       } catch (error) {
         setMessage(error instanceof Error ? `${error.message} Version B remains available in this tab.` : "Version B remains available in this tab.");
@@ -1427,44 +1437,40 @@ export default function LibraryApp() {
 
   function switchSource(source: 0 | 1) {
     if (source === 1 && compareSlot.status !== "ready") return;
-    const context = audioContextRef.current;
-    const primary = primaryGainRef.current;
-    const comparison = compareGainRef.current;
-    if (!context || !primary || !comparison) return;
-    const now = context.currentTime;
-    primary.gain.cancelScheduledValues(now);
-    comparison.gain.cancelScheduledValues(now);
-    primary.gain.setValueAtTime(primary.gain.value, now);
-    comparison.gain.setValueAtTime(comparison.gain.value, now);
-    primary.gain.linearRampToValueAtTime(source === 0 ? 1 : 0, now + SOURCE_SWITCH_SECONDS);
-    comparison.gain.linearRampToValueAtTime(source === 1 ? 1 : 0, now + SOURCE_SWITCH_SECONDS);
+    if (!audioEngine.selectSource(source, SOURCE_SWITCH_SECONDS)) return;
     setActiveSource(source);
     audioVisualRef.current = { ...audioVisualRef.current, source };
   }
 
   async function removeComparison() {
+    if (comparisonMotion === "leaving") return;
     const trackId = compareSlot.trackId || sessionRef.current.currentTrackId;
+    setComparisonMotion("leaving");
     compareLoadVersionRef.current += 1;
-    compareBufferRef.current = null;
+    audioEngine.setBuffer(1, null);
     stopSourceAt(1);
-    if (primaryGainRef.current) primaryGainRef.current.gain.value = 1;
-    if (compareGainRef.current) compareGainRef.current.gain.value = 0;
-    setCompareSlot({ ...EMPTY_COMPARE_SLOT });
-    setComparePeaks([]);
+    audioEngine.selectSourceImmediately(0);
     setActiveSource(0);
+    const removal = trackId
+      ? platform.audioFiles.remove(comparisonCacheKey(trackId)).catch(() => undefined)
+      : Promise.resolve();
     if (trackId) {
-      await removeCachedTrack(comparisonCacheKey(trackId)).catch(() => undefined);
       patchTracks((current) => current.map((track) => track.id === trackId ? { ...track, comparison: null } : track));
     }
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await new Promise((resolve) => window.setTimeout(resolve, 520));
+    }
+    setCompareSlot({ ...EMPTY_COMPARE_SLOT });
+    setComparePeaks([]);
+    setComparisonMotion("idle");
+    await removal;
     await refreshStorageState();
     setMessage("Version B removed from this track.");
   }
 
   useEffect(() => {
-    const context = audioContextRef.current;
-    const master = masterGainRef.current;
-    if (context && master) master.gain.setTargetAtTime(session.volume, context.currentTime, 0.015);
-  }, [session.volume]);
+    audioEngine.setVolume(session.volume);
+  }, [audioEngine, session.volume]);
 
   useEffect(() => {
     document.title = currentTrack
@@ -1539,7 +1545,7 @@ export default function LibraryApp() {
         <button className="mobile-nav-button" type="button" aria-label="Open library navigation" onClick={() => setLibraryOpen(true)}><Menu size={20} /></button>
         <a className="brand" href="#library-top" aria-label="Vibloom home">
           <span className="brand-mark"><ArrowLeftRight size={18} strokeWidth={2} /></span>
-          <span className="brand-copy"><strong>Vibloom</strong><small>Local listening room</small></span>
+          <span className="brand-copy"><strong>Vibloom</strong><small>Local listening room <span className="brand-version" aria-label={`Vibloom version ${APP_VERSION}`}>v{APP_VERSION}</span></small></span>
         </a>
         {tracks.length > 0 && <div className="library-header-status"><span>{tracks.length} tracks</span><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Library ready"}</strong></div>}
         <div className="library-header-actions">
@@ -1574,7 +1580,7 @@ export default function LibraryApp() {
           </div>
         </section>
       ) : (
-        <div className={`unified-shell ${workspace === "player" ? "is-player-shell" : "is-library-shell"}`} id="library-top">
+        <div className={`unified-shell ${workspace === "player" ? `is-player-shell ${comparisonExpanded ? "has-version-b" : "is-solo-player"} comparison-is-${comparisonMotion}` : "is-library-shell"}`} id="library-top">
           <aside className={`workspace-rail ${libraryOpen ? "is-open" : ""}`} aria-label="Primary navigation">
             <button className="sheet-close mobile-only" type="button" aria-label="Close navigation" onClick={() => setLibraryOpen(false)}><X size={20} /></button>
             <button className={workspace === "player" ? "is-active" : ""} type="button" title="Player" onClick={() => changeWorkspace("player")}><Headphones size={20} /><span>Player</span></button>
@@ -1591,26 +1597,33 @@ export default function LibraryApp() {
                 <span className="engine-status"><i /> Local audio engine</span>
               </div>
               {unavailableCount > 0 && <div className="library-reconnect-banner"><FolderOpen size={17} /><span><strong>Some music needs to be reconnected.</strong><small>Your queue and order are still here.</small></span><button type="button" onClick={() => openFolder(true)}>Reconnect</button></div>}
-              <div className={`comparison-deck ${comparisonReady ? "has-version-b" : "is-solo"}`}>
-                <article className={`waveform-card version-a ${activeSource === 0 ? "is-active" : ""}`}>
-                  <div className="waveform-card-heading"><button className="source-selector" type="button" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button><div><small>LIBRARY MASTER</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span>{formatTime(duration || currentTrack?.duration || 0)}</span></div>
-                  <PrecisionWaveform peaks={primaryPeaks} progress={currentTime / Math.max(duration || currentTrack?.duration || 1, 1)} label="Version A" source={0} />
-                  <div className="waveform-card-foot"><span>{primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
-                </article>
+              <div className={`comparison-deck ${comparisonExpanded ? "has-version-b" : "is-solo"} comparison-is-${comparisonMotion}`}>
+                <div className="version-a-zone">
+                  <article className={`waveform-card version-a ${activeSource === 0 ? "is-active" : ""}`}>
+                    <div className="waveform-card-heading"><button className="source-selector" type="button" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button><div><small>LIBRARY MASTER</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span>{formatTime(primaryDuration)}</span></div>
+                    <PrecisionWaveform peaks={primaryPeaks} currentTime={currentTime} duration={primaryDuration} label="Version A" source={0} onSeek={(time) => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} />
+                    <div className="waveform-card-foot"><span>{primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : !isPlaying ? "READY" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
+                  </article>
+                  {!comparisonVisible && <aside className="solo-track-context" aria-label="Solo track details"><span>SOLO MASTER</span><strong>{formatTime(Math.max(0, primaryDuration - currentTime))}</strong><small>remaining</small><i /><p>Drag the waveform<br />to seek</p></aside>}
+                </div>
                 <div className="center-stage-reserve" aria-hidden="true" />
                 {compareSlot.status === "empty" ? (
-                  <div className="quiet-compare-entry" onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}><span>Need to compare a mix?</span><button type="button" onClick={() => compareInputRef.current?.click()}><Plus size={15} /> Add version B</button><small>Choose or drop one file. A keeps playing.</small></div>
+                  <div className="quiet-compare-entry" onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}><span>Compare another mix?</span><button type="button" aria-label="Add version B" onClick={() => compareInputRef.current?.click()}><Plus size={15} /> Add B</button><small>Choose or drop one file. A keeps playing.</small></div>
                 ) : (
-                  <article className={`waveform-card version-b ${activeSource === 1 ? "is-active" : ""} is-${compareSlot.status}`} onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}>
+                  <article className={`waveform-card version-b ${activeSource === 1 ? "is-active" : ""} is-${compareSlot.status}`} onAnimationEnd={() => { if (comparisonMotion === "entering") setComparisonMotion("idle"); }} onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}>
                     <div className="waveform-card-heading"><button className="source-selector" type="button" disabled={!comparisonReady} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button><div><small>COMPARISON · {compareSlot.status.toUpperCase()}</small><strong>{trackDisplayName(compareSlot.name)}</strong></div><span className="version-b-actions"><button type="button" onClick={() => compareInputRef.current?.click()} aria-label="Replace version B">Replace</button><button type="button" onClick={() => void removeComparison()} aria-label="Remove version B"><X size={14} /></button></span></div>
-                    <PrecisionWaveform peaks={comparePeaks} progress={currentTime / Math.max(compareSlot.duration || 1, 1)} label="Version B" source={1} />
-                    <div className="waveform-card-foot"><span>{compareSlot.loadStage === "reading" ? `READING · ${compareSlot.loadProgress}%` : compareSlot.loadStage === "decoding" ? "DECODING AUDIO" : compareSlot.loadStage === "caching" ? "KEEPING ON DEVICE" : compareSlot.status === "reconnect" ? "RECONNECT NEEDED" : activeSource === 1 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{compareSlot.size ? `${formatBytes(compareSlot.size)} · ` : ""}{formatTime(compareSlot.duration)}</span></div>
+                    <PrecisionWaveform peaks={comparePeaks} currentTime={currentTime} duration={compareSlot.duration} label="Version B" source={1} onSeek={(time) => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} />
+                    {durationDelta > 0.05 && <div className="comparison-duration-alert" role="status"><strong>Different lengths</strong><span>The shared timeline follows the longer file. {primaryDuration > compareSlot.duration ? "A" : "B"} is {formatTime(durationDelta, true)} longer.</span></div>}
+                    <div className="waveform-card-foot"><span>{compareSlot.loadStage === "reading" ? `READING · ${compareSlot.loadProgress}%` : compareSlot.loadStage === "decoding" ? "DECODING AUDIO" : compareSlot.loadStage === "caching" ? "KEEPING ON DEVICE" : compareSlot.status === "reconnect" ? "RECONNECT NEEDED" : !isPlaying ? "READY" : activeSource === 1 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{compareSlot.size ? `${formatBytes(compareSlot.size)} · ` : ""}{formatTime(compareSlot.duration)}</span></div>
                   </article>
                 )}
               </div>
-              {durationDelta > 0.05 && <div className="comparison-duration-alert" role="status"><strong>Different lengths</strong><span>The shared timeline follows the longer file. {duration > compareSlot.duration ? "A" : "B"} is {formatTime(durationDelta, true)} longer.</span></div>}
-              {activeSourceEnded && <div className="comparison-ended-alert" role="status">Version {activeSource === 0 ? "A" : "B"} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>}
-              <div className="console-lower"><LyricsPanel lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+              <div className="console-footer">
+                {activeSourceEnded && <div className="comparison-status-lane" aria-live="polite">
+                  <div className="comparison-ended-alert">Version {activeSource === 0 ? "A" : "B"} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>
+                </div>}
+                <div className="console-lower"><LyricsPanel lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+              </div>
             </div>
           ) : (
           <div className="library-list-panel">
@@ -1687,6 +1700,7 @@ export default function LibraryApp() {
           <label className="cache-toggle"><span><strong>Automatically keep new music</strong><small>On by default. New library tracks and Version B files remain playable after reopening Vibloom.</small></span><input type="checkbox" checked={session.cacheEnabled} onChange={(event) => { if (event.target.checked) void cacheAvailableTracks(); else { patchSession({ cacheEnabled: false }); setMessage("Automatic caching paused. Existing cached audio was kept."); } }} /></label>
           {cacheProgress > 0 && <div className="cache-progress"><i><b style={{ width: `${cacheProgress}%` }} /></i><span>Caching · {cacheProgress}%</span></div>}
           <div className="storage-actions"><button type="button" onClick={() => setConfirmAction("queue")}><span><strong>Clear queue only</strong><small>Keep library and audio</small></span><X size={16} /></button><button type="button" onClick={() => setConfirmAction("cache")}><span><strong>Clear cached audio</strong><small>Keep playlists and lyrics</small></span><Trash2 size={16} /></button><button className="is-destructive" type="button" onClick={() => setConfirmAction("reset")}><span><strong>Reset Vibloom</strong><small>Remove everything from this browser</small></span><Trash2 size={16} /></button></div>
+          <div className="storage-app-version"><span>Vibloom version</span><strong>{APP_VERSION}</strong><small>Use this number when checking for updates.</small></div>
         </aside>
       </div>
 

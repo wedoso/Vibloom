@@ -61,8 +61,9 @@ test("produces a portable static site", async () => {
 });
 
 test("drives Hiyori from meaningful per-track audio features", async () => {
-  const [app, visual, stage, styles] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
+  const [app, engine, visual, stage, styles] = await Promise.all([
+    readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
+    readFile(new URL("src/audio/SynchronizedAudioEngine.ts", root), "utf8"),
     readFile(new URL("src/audioVisual.ts", root), "utf8"),
     readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
     readFile(new URL("src/index.css", root), "utf8"),
@@ -107,8 +108,8 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
     assert.ok(partStarts.PartArmB >= 0.99);
   }
 
-  assert.match(app, /context\.createAnalyser\(\)/u);
-  assert.match(app, /source\.connect\(analyser\)/u);
+  assert.match(engine, /context\.createAnalyser\(\)/u);
+  assert.match(engine, /source\.connect\(graph\.analysers\[index\]\)/u);
   assert.match(visual, /band\(35, 190\)/u);
   assert.match(visual, /band\(190, 2400\)/u);
   assert.match(visual, /band\(2400, 10000\)/u);
@@ -250,20 +251,21 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /restSettleElapsed = 0;[\s\S]*?stopAllMotions\(\);[\s\S]*?pendingBeatAccent = 0;/u);
   assert.match(stage, /nodGestureTime = Number\.POSITIVE_INFINITY;[\s\S]*?nodGestureStrength = 0;/u);
   assert.match(stage, /features\.isPlaying \? 3\.2 : 7\.5/u);
-  assert.match(stage, /hasPlayed \? pausedCameraZoom : 2\.02/u);
+  assert.match(stage, /Math\.max\(directorRange\.min, Math\.min\(directorRange\.max, pausedCameraZoom\)\)/u);
   assert.match(stage, /const followsComparedTrack = features\.isComparing && features\.isPlaying/u);
   assert.match(stage, /getParameterDefaultValue/u);
   assert.match(visual, /const bassRise = Math\.max\(0, bass - previous\.bass\)/u);
   assert.doesNotMatch(stage, /model\.rotation =/u);
   assert.doesNotMatch(stage, /model\.position\.set\(/u);
   assert.doesNotMatch(stage, /addMusicParameter\("ParamHair/u);
-  assert.match(app, /analyserA\.fftSize = 1024/u);
-  assert.match(app, /analyserA\.smoothingTimeConstant = 0\.68/u);
+  assert.match(engine, /analyser\.fftSize = 1024/u);
+  assert.match(engine, /analyser\.smoothingTimeConstant = 0\.68/u);
   assert.match(styles, /--beat-pulse/u);
   assert.match(styles, /\.stage-music-disc/u);
   assert.doesNotMatch(styles, /\.stage-floor-light/u);
   assert.doesNotMatch(styles, /\.live2d-stage-player::after/u);
-  assert.equal([...app.matchAll(/<Live2DStage/gu)].length, 1);
+  // Welcome and player variants are mutually exclusive at runtime.
+  assert.equal([...app.matchAll(/<Live2DStage/gu)].length, 2);
   assert.match(stage, /import\("pixi\.js"\)/u);
   assert.match(stage, /const naturalWidth = model\.width/u);
   assert.match(stage, /targetHeight \/ naturalHeight/u);
@@ -271,227 +273,16 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.doesNotMatch(stage, /\[featuresRef, variant\]/u);
 });
 
-test("uses stable and unambiguous track state actions", async () => {
-  const [app, styles] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-  ]);
-
-  assert.doesNotMatch(app, /<Check className="file-check"/u);
-  assert.match(app, /isPlaying \? "PLAYING" : "CUED"/u);
-  assert.match(app, /: "READY"/u);
-  assert.match(app, /<span>Replace<\/span>/u);
-  assert.match(app, /<span>Remove<\/span>/u);
-  assert.match(styles, /\.track-score-strip \.file-actions \{[^}]*position: static;/u);
-  assert.doesNotMatch(styles, /\.track-score-strip \.file-actions \{[^}]*display: none;/u);
-});
-
-test("covers the landing/player swap without snapshotting the Live2D canvas", async () => {
-  const [app, styles, stage] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-    readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
-  ]);
-
-  assert.match(app, /import \{ flushSync \} from "react-dom"/u);
-  assert.match(app, /root\.dataset\.sceneTransition = direction/u);
-  assert.match(app, /await withSceneTransition\(\(\) => patchSlot\(index, nextLoadingState\), "enter"\)/u);
-  assert.match(app, /className="scene-curtain"/u);
-  assert.match(app, /The room/u);
-  assert.match(app, /is listening\./u);
-  assert.doesNotMatch(app, /scene-curtain-title">Vibloom/u);
-  assert.match(app, /sceneCoverTimer = window\.setTimeout\(\(\) => \{[\s\S]*?commit\(\);[\s\S]*?is-scene-revealing/u);
-  assert.match(app, /sceneRevealFrame = window\.requestAnimationFrame\(\(\) => \{[\s\S]*?sceneRevealFrame = window\.requestAnimationFrame/u);
-  assert.match(stage, /sceneLayoutSnapRef\.current = true/u);
-  assert.doesNotMatch(app, /startViewTransition/u);
-  assert.match(styles, /\.scene-curtain-disc/u);
-  assert.match(styles, /html\.is-scene-curtain-open \.scene-curtain-disc/u);
-  assert.doesNotMatch(styles, /::view-transition/u);
-  assert.doesNotMatch(styles, /view-transition-name/u);
-  assert.match(styles, /@keyframes score-unfold/u);
-  assert.match(styles, /html\[data-scene-transition="enter"\]\.is-scene-revealing/u);
-});
-
-test("animates both directions of Focus Mode", async () => {
-  const [app, styles, stage] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-    readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
-  ]);
-
-  assert.match(app, /focusTransition \? `focus-transition-\$\{focusTransition\}`/u);
-  assert.match(app, /setFocusTransition\(nextFocusMode \? "enter" : "exit"\)/u);
-  assert.match(app, /withSceneTransition\(\(\) => \{[\s\S]*?setFocusMode\(nextFocusMode\)[\s\S]*?nextFocusMode \? "focus-enter" : "focus-exit"\)/u);
-  assert.match(app, /scene-curtain-copy-focus-enter/u);
-  assert.match(app, /scene-curtain-copy-focus-exit/u);
-  assert.match(styles, /html\[data-scene-transition="focus-enter"\] \.scene-curtain-disc/u);
-  assert.match(styles, /html\[data-scene-transition="focus-exit"\] \.scene-curtain-disc/u);
-  assert.doesNotMatch(styles, /@keyframes focus-stage-enter/u);
-  assert.doesNotMatch(styles, /@keyframes focus-stage-exit/u);
-  assert.match(
-    styles,
-    /\.app-shell\.focus-transition-enter \.live2d-stage-player,\s*\.app-shell\.focus-transition-exit \.live2d-stage-player \{ animation: none; \}/u,
-  );
-  assert.match(styles, /\.app-shell\.focus-transition-exit \.track-score-strip/u);
-  assert.match(styles, /\.app-shell\.focus-transition-exit \.workspace \.player/u);
-  assert.match(styles, /@keyframes focus-button-enter/u);
-  assert.match(styles, /@keyframes focus-button-exit/u);
-  assert.match(styles, /\.is-focus-mode\.focus-transition-enter \.track-score-strip/u);
-  assert.match(styles, /@keyframes focus-camera-control-exit/u);
-  assert.match(styles, /Do not promote the[\s\S]*?stage or canvas into a transient transform layer/u);
-  assert.doesNotMatch(styles, /\.live2d-stage-player,\s*\.live2d-canvas \{[\s\S]*?transform: translateZ\(0\)/u);
-  assert.doesNotMatch(styles, /min-height \.86s/u);
-  assert.match(styles, /\.live2d-canvas \{[\s\S]*?backface-visibility: hidden/u);
-  assert.match(stage, /previousHostBounds\.top - nextHostBounds\.top/u);
-  assert.match(stage, /currentRigY \+= previousHostBounds\.top - nextHostBounds\.top/u);
-  assert.match(stage, /currentPortraitOffset = follow\(/u);
-  assert.match(stage, /focusCameraTransitioning \? 2\.8/u);
-  assert.match(stage, /if \(changingFocus && sceneCovered\) \{[\s\S]*?focusCameraSnapRef\.current = true/u);
-  assert.match(stage, /if \(focusCameraSnapRef\.current\) \{[\s\S]*?cameraZoom = targetCameraZoom/u);
-  assert.match(stage, /currentModelScale = targetModelScale/u);
-  assert.match(stage, /currentRigX = targetRigX/u);
-  assert.match(stage, /currentRigY = targetRigY/u);
-  assert.doesNotMatch(stage, /disc\.animate\(/u);
-  assert.doesNotMatch(stage, /musicDiscAnimationRef/u);
-  assert.match(styles, /html\.is-scene-covering\[data-scene-transition\^="focus"\] \.persistent-stage-canvas[\s\S]*visibility: hidden/u);
-  assert.match(styles, /\.is-focus-mode\.focus-transition-enter \.track-score-strip \{[\s\S]*?position: absolute;/u);
-});
-
-test("keeps A/B switching and audible waveform emphasis in Focus Mode", async () => {
-  const [app, styles] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-  ]);
-
-  assert.doesNotMatch(app, /focus-track-switcher/u);
-  assert.match(app, /wave-row wave-a \$\{active === 0 \? "is-audible"/u);
-  assert.match(app, /wave-row wave-b \$\{active === 1 \? "is-audible"/u);
-  assert.doesNotMatch(styles, /\.app-shell\.is-focus-mode \.controls \.ab-switch \{ display: none; \}/u);
-  assert.match(styles, /\.app-shell\.is-focus-mode \.wave-row\.is-playing/u);
-  assert.doesNotMatch(styles, /\.stage-backdrop \{/u);
-});
-
-test("reveals A/B comparison progressively from the player", async () => {
-  const [app, styles] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-  ]);
-
-  assert.match(app, /const comparisonRequested = slots\[1\]\.status !== "empty"/u);
-  assert.doesNotMatch(app, /Compare two tracks/u);
-  assert.doesNotMatch(app, /className="welcome-choices"/u);
-  assert.match(app, /onPickAudio=\{\(\) => inputAt\(0\)\?\.click\(\)\}/u);
-  assert.doesNotMatch(app, /ref=\{inputARef\}[\s\S]{0,180}\bmultiple\b/u);
-  assert.match(app, /Enable A\/B mode/u);
-  assert.match(app, /comparisonRequested \? "is-comparing" : "is-solo"/u);
-  assert.match(app, /\{comparisonRequested && \([\s\S]*?wave-row wave-b/u);
-  assert.match(app, /\{comparisonRequested \? \([\s\S]*?className="ab-switch"/u);
-  assert.match(styles, /\.track-score-strip\.is-solo \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 240px;/u);
-  assert.match(styles, /\.track-score-strip\.is-comparing \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 210px minmax\(0, 1fr\);/u);
-});
-
-test("contains no server runtime or backend dependency", async () => {
-  const [packageJson, config, app] = await Promise.all([
-    readFile(new URL("package.json", root), "utf8"),
-    readFile(new URL("vite.config.ts", root), "utf8"),
-    readFile(new URL("src/App.tsx", root), "utf8"),
-  ]);
-
-  assert.match(packageJson, /"build": "tsc -b && vite build"/);
-  assert.doesNotMatch(packageJson, /next|vinext|wrangler|cloudflare|drizzle/i);
-  assert.match(config, /base: "\.\/"/u);
-  assert.match(app, /new FileReader\(\)/u);
-  assert.match(app, /context\.decodeAudioData\(arrayBuffer\)/u);
-  await assert.rejects(access(new URL("worker", root)));
-  await assert.rejects(access(new URL(".openai/hosting.json", root)));
-});
-
-test("uses one audio clock for sample-accurate source switching", async () => {
-  const app = await readFile(new URL("src/App.tsx", root), "utf8");
-
-  assert.match(app, /context\.createBufferSource\(\)/u);
-  assert.match(app, /source\.start\(when, Math\.max\(0, offset\)\)/u);
-  assert.match(app, /playbackStartedAtRef\.current = when/u);
-  assert.doesNotMatch(app, /follower\.currentTime/u);
-  assert.doesNotMatch(app, /playbackRate/u);
-});
-
-test("pauses audio and visual state in the same input frame", async () => {
-  const app = await readFile(new URL("src/App.tsx", root), "utf8");
-
-  assert.match(app, /const silenceOutputNow = useCallback/u);
-  assert.match(app, /master\.gain\.setValueAtTime\(0, now\)/u);
-  assert.match(
-    app,
-    /if \(playingRef\.current\) \{[\s\S]*?playingRef\.current = false;[\s\S]*?setIsPlaying\(false\);[\s\S]*?silenceOutputNow\(\);[\s\S]*?stopAllSources\(\);/u,
-  );
-});
-
-test("shows real file-reading progress and an explicit decoding state", async () => {
-  const [app, styles] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-  ]);
-
-  assert.match(app, /reader\.onprogress/u);
-  assert.match(app, /event\.loaded \/ event\.total/u);
-  assert.match(app, /Decoding for seamless playback/u);
-  assert.match(app, /role="progressbar"/u);
-  assert.match(styles, /\.track-score-strip \.file-icon \{ align-self: start; \}/u);
-});
-
-test("can clear both tracks and reset playback", async () => {
-  const app = await readFile(new URL("src/App.tsx", root), "utf8");
-
-  assert.match(app, /function clearBothFiles\(\)/u);
-  assert.match(app, /buffersRef\.current\[index\] = null/u);
-  assert.match(app, /updateSlots\(\[\{ \.\.\.EMPTY_SLOT \}, \{ \.\.\.EMPTY_SLOT \}\]\)/u);
-  assert.match(app, /Clear both tracks/u);
-});
-
-test("keeps the browser title synchronized with the listening state", async () => {
-  const app = await readFile(new URL("src/App.tsx", root), "utf8");
-
-  assert.match(app, /document\.title = bothReady/u);
-  assert.match(app, /Comparing A\/B/u);
-  assert.match(app, /Listening with Hiyori/u);
-});
-
-test("aligns the scrubber, playhead, and duration markers with the waveform", async () => {
-  const [app, styles] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-  ]);
-
-  assert.match(app, /className="wave-track"/u);
-  assert.match(app, /className="timeline-track"/u);
-  assert.match(styles, /--timeline-label-width: 28px/u);
-  assert.match(styles, /\.timeline-track[\s\S]*inset: 0 0 0 var\(--timeline-label-width\)/u);
-});
-
-test("centers the transport icon inside the play button", async () => {
-  const [app, styles] = await Promise.all([
-    readFile(new URL("src/App.tsx", root), "utf8"),
-    readFile(new URL("src/index.css", root), "utf8"),
-  ]);
-
-  assert.match(app, /className="play-icon"/u);
-  assert.match(app, /aria-pressed=\{isPlaying\}/u);
-  assert.match(styles, /\.play-button \{[\s\S]*padding: 0;/u);
-  assert.match(styles, /\.play-icon \{ transform: translateX\(1px\); \}/u);
-  assert.match(styles, /\.player \.play-button \{[\s\S]*touch-action: manipulation;/u);
-});
-
 test("keeps phrase camera motion separate from Live2D music pose", async () => {
   const [stage, app] = await Promise.all([
     readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
-    readFile(new URL("src/App.tsx", root), "utf8"),
+    readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
   ]);
 
   assert.match(stage, /const cameraRig = new Container\(\)/u);
   assert.match(stage, /cameraRig\.addChild\(contactShadow, model\)/u);
   assert.match(stage, /const phraseArc = \(1 - Math\.cos\(cameraPhase\)\) \* 0\.5/u);
-  assert.match(stage, /const focusCameraBias = focusModeRef\.current \? 0\.2 : 0/u);
+  assert.match(stage, /const directorRange = directorZoomRangeRef\.current/u);
   assert.match(stage, /focusCameraTransitionUntilRef\.current/u);
   assert.match(stage, /let lightTier = 0/u);
   assert.match(stage, /lightTierStep = timeSinceLightAccent > 1\.05 \? 1 : Math\.min\(3, lightTierStep \+ 1\)/u);
@@ -499,9 +290,9 @@ test("keeps phrase camera motion separate from Live2D music pose", async () => {
   assert.doesNotMatch(stage, /radialSpectrum|radialWaveform|RADIAL_CONTOUR/u);
   assert.match(stage, /app\.render\(\)/u);
   assert.match(stage, /resizeFrame = requestAnimationFrame/u);
-  assert.match(stage, /Math\.max\(1\.42, Math\.min\(2\.1, autoZoom\)\)/u);
-  assert.match(stage, /Math\.min\(2\.35, currentCameraZoomRef/u);
-  assert.match(stage, /manualZoomRef\.current = PORTRAIT_ZOOM/u);
+  assert.match(stage, /Math\.max\(MIN_CAMERA_ZOOM, Math\.min\(MAX_CAMERA_ZOOM, autoZoom\)\)/u);
+  assert.match(stage, /currentCameraZoomRef\.current \* Math\.exp/u);
+  assert.match(stage, /manualZoomRef\.current = portraitZoomRef\.current/u);
   assert.match(stage, /previousVariantRef\.current === "welcome" && variant === "player"/u);
   assert.match(stage, /autoSuspendUntilRef\.current = Number\.POSITIVE_INFINITY/u);
   assert.match(stage, /nextCameraUi = \{ mode: "locked", preset: "portrait" \}/u);

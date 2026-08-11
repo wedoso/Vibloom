@@ -27,6 +27,7 @@ yarn-error.log*
 .env*
 
 /dist/
+/release/
 /.vinext/
 /.wrangler/
 *.tsbuildinfo

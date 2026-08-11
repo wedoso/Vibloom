@@ -5,9 +5,12 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("ships the local library as the primary application", async () => {
-  const [main, app, styles] = await Promise.all([
+  const [main, app, appVersion, viteConfig, engine, styles] = await Promise.all([
     readFile(new URL("src/main.tsx", root), "utf8"),
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
+    readFile(new URL("src/appVersion.ts", root), "utf8"),
+    readFile(new URL("vite.config.ts", root), "utf8"),
+    readFile(new URL("src/audio/SynchronizedAudioEngine.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
   ]);
 
@@ -20,12 +23,22 @@ test("ships the local library as the primary application", async () => {
   assert.match(app, /const \[workspace, setWorkspace\]/u);
   assert.match(app, /persistent-stage-panel/u);
   assert.match(app, /ensureAudioGraph/u);
-  assert.match(app, /createBufferSource/u);
-  assert.match(app, /source\.start\(when, Math\.max\(0, offset\)\)/u);
+  assert.match(engine, /createBufferSource/u);
+  assert.match(engine, /source\.start\(when, Math\.max\(0, offset\)\)/u);
   assert.doesNotMatch(app, /new Audio\(\)/u);
-  assert.match(app, /linearRampToValueAtTime/u);
+  assert.match(engine, /linearRampToValueAtTime/u);
   assert.match(app, /Add version B/u);
   assert.match(app, /PrecisionWaveform/u);
+  assert.match(app, /className="waveform-seek"/u);
+  assert.match(app, /beginWaveformScrub/u);
+  assert.match(app, /finishWaveformScrub/u);
+  assert.match(app, /comparison-status-lane/u);
+  assert.match(app, /brand-version[\s\S]*APP_VERSION/u);
+  assert.match(appVersion, /__APP_VERSION__/u);
+  assert.match(viteConfig, /__APP_VERSION__:[\s\S]*packageMetadata\.version/u);
+  assert.match(app, /PrecisionWaveform[\s\S]*comparison-duration-alert[\s\S]*waveform-card-foot/u);
+  assert.match(app, /preloadingTrackIdRef/u);
+  assert.match(app, /startTrack\(trackId, false, session\.currentTime\)/u);
   assert.match(app, /window\.addEventListener\("keydown"/u);
   assert.match(app, /Exit focus mode/u);
   assert.doesNotMatch(app, /className="shared-timeline"/u);
@@ -35,11 +48,12 @@ test("ships the local library as the primary application", async () => {
 });
 
 test("keeps playback and Hiyori inside one player-first shell", async () => {
-  const [app, stage, spec, libraryStyles] = await Promise.all([
+  const [app, stage, spec, libraryStyles, stageStyles] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
     readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
     readFile(new URL("docs/library-player.md", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
+    readFile(new URL("src/index.css", root), "utf8"),
   ]);
 
   assert.match(app, /changeWorkspace\("player"\)/u);
@@ -48,14 +62,17 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(app, /<Live2DStage containModel layoutKey=/u);
   assert.match(stage, /containModelRef/u);
   assert.match(stage, /cameraPreset/u);
-  assert.match(stage, /const PORTRAIT_ZOOM = 1\.92/u);
-  assert.match(stage, /const FULL_BODY_SAFE_ZOOM = 1\.62/u);
-  assert.match(stage, /const FULL_BODY_RENDER_ZOOM = 1\.4/u);
+  assert.match(stage, /const PORTRAIT_ZOOM = 2\.4/u);
   assert.match(stage, /const WIDE_ZOOM = 1\.18/u);
+  assert.match(stage, /const PORTRAIT_FRAME_HEIGHT_FACTOR = 1\.72/u);
+  assert.match(stage, /const DIRECTOR_FRAME_MIN_FACTOR = 1\.08/u);
+  assert.match(stage, /const DIRECTOR_FRAME_MAX_FACTOR = 1\.3/u);
   assert.match(stage, /HIGH_ZOOM_SAFE_OFFSET_FACTOR = 0\.5/u);
   assert.match(stage, /function portraitOffsetForZoom/u);
-  assert.match(stage, /function renderZoomForFraming/u);
-  assert.match(stage, /const portraitProgress = Math\.max\(0, Math\.min\(1,/u);
+  assert.match(stage, /function zoomForRenderedHeight/u);
+  assert.match(stage, /portraitZoomRef/u);
+  assert.match(stage, /wideZoomRef/u);
+  assert.match(stage, /directorZoomRangeRef/u);
   assert.match(stage, /startsInPortrait \? "portrait" : "director"/u);
   assert.match(stage, /FOCUS_MODEL_HEIGHT_FACTOR = 0\.84/u);
   assert.match(stage, /FOCUS_VIEWPORT_HEIGHT_FACTOR = 0\.72/u);
@@ -68,12 +85,30 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /containModelRef\.current[\s\S]*LIBRARY_PORTRAIT_OFFSET_FACTOR/u);
   assert.match(stage, /const isCompact = window\.innerWidth < 600/u);
   assert.match(stage, /--stage-model-width/u);
+  assert.match(stage, /STAGE_TITLE_SAFE_GAP/u);
+  assert.match(stage, /titleSafeRigY/u);
+  assert.match(stage, /titleSafeDiscCenterY/u);
+  assert.match(stage, /headingBottom - nextHostBounds\.top/u);
   assert.match(stage, /--stage-subject-y/u);
+  assert.match(stage, /--stage-model-top/u);
+  assert.match(stage, /stage-disc-viewport/u);
+  assert.match(stageStyles, /\.live2d-stage-player \.stage-disc-viewport \{[\s\S]*mask-image: linear-gradient\(to right/u);
+  assert.match(stageStyles, /width: calc\(var\(--stage-model-width, 320px\) \* \.812\)/u);
+  assert.match(libraryStyles, /\.comparison-deck\.is-solo/u);
+  assert.match(libraryStyles, /\.unified-shell\.is-player-shell\.is-solo-player/u);
+  assert.match(libraryStyles, /comparison-card-enter/u);
+  assert.match(libraryStyles, /\.solo-track-context/u);
+  assert.match(libraryStyles, /clamp\(420px, 40vw, 720px\)/u);
   assert.match(stage, /tallViewportProgress = Math\.max\(0, Math\.min\(1, \(window\.innerHeight - 720\) \/ 600\)\)/u);
   assert.match(stage, /roomRigYFactor = 0\.62 - tallViewportProgress \* \(containModelRef\.current \? 0\.18 : 0\.04\)/u);
   assert.match(stage, /targetRigX = host\.clientWidth \* \(isWelcome && !isCompact \? 0\.52 : 0\.5\)/u);
   assert.match(stage, /targetRigY = host\.clientHeight \* \(isWelcome \? 0\.52 : focused \? FOCUS_RIG_Y_FACTOR : roomRigYFactor\)/u);
-  assert.match(stage, /manualZoomRef\.current = WIDE_ZOOM/u);
+  assert.match(stage, /manualZoomRef\.current = wideZoomRef\.current/u);
+  assert.doesNotMatch(stage, /containedCameraZoom/u);
+  assert.match(libraryStyles, /\.is-player-shell \.persistent-stage-canvas \.camera-capsule \{[\s\S]*?right: 28px;/u);
+  assert.match(libraryStyles, /\.persistent-stage-canvas \.live2d-host \{[\s\S]*?calc\(100% - 92px\)/u);
+  assert.match(libraryStyles, /--library-track-title-font: var\(--library-sans\)/u);
+  assert.match(libraryStyles, /\.track-title strong,[\s\S]*?\.now-listening-heading h2 \{[\s\S]*?font-family: var\(--library-track-title-font\)/u);
   assert.match(libraryStyles, /\.library-app\.is-empty \.library-status \{ bottom: 28px; \}/u);
   assert.match(libraryStyles, /\.is-player-shell \.persistent-stage-panel \{[^}]*padding: 18px 18px 12px;/u);
   assert.match(libraryStyles, /\.library-app\.is-library-focus \.persistent-stage-panel \{ padding: 24px 24px 12px;/u);
@@ -120,6 +155,8 @@ test("covers camera-layout changes and animates persistent side sheets", async (
   assert.match(libraryStyles, /\.track-feature-icons > span[\s\S]*width: 24px[\s\S]*height: 24px/u);
   assert.match(libraryStyles, /\.library-list-toolbar > div button[\s\S]*width: 88px[\s\S]*height: 32px/u);
   assert.match(libraryStyles, /\.library-lyrics-label button[\s\S]*width: 72px[\s\S]*height: 24px/u);
+  assert.match(libraryStyles, /lyrics-panel-enter/u);
+  assert.match(libraryStyles, /lyric-line-enter/u);
   assert.match(libraryStyles, /--lyrics-accent: rgb\(84 127 121\)/u);
   assert.match(libraryStyles, /lyrics-source-b \{ --lyrics-accent: rgb\(200 95 109\)/u);
   assert.match(app, /waveform-source-\$\{source === 0 \? "a" : "b"\}/u);
@@ -132,20 +169,21 @@ test("covers camera-layout changes and animates persistent side sheets", async (
 });
 
 test("persists only intentional local state and supports recoverable clearing", async () => {
-  const [app, store, spec] = await Promise.all([
+  const [app, platform, domain, spec] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
-    readFile(new URL("src/libraryStore.ts", root), "utf8"),
+    readFile(new URL("src/platform/browserLibraryPlatform.ts", root), "utf8"),
+    readFile(new URL("src/domain/library.ts", root), "utf8"),
     readFile(new URL("docs/library-player.md", root), "utf8"),
   ]);
 
-  assert.match(store, /indexedDB\.open/u);
-  assert.match(store, /navigator\.storage\.getDirectory/u);
-  assert.match(store, /removeEntry\(OPFS_TRACKS_DIR, \{ recursive: true \}\)/u);
-  assert.match(store, /cacheEnabled: true/u);
-  assert.match(store, /comparisonCacheKey/u);
+  assert.match(platform, /indexedDB\.open/u);
+  assert.match(platform, /navigator\.storage\.getDirectory/u);
+  assert.match(platform, /removeEntry\(OPFS_TRACKS_DIR, \{ recursive: true \}\)/u);
+  assert.match(domain, /cacheEnabled: true/u);
+  assert.match(domain, /comparisonCacheKey/u);
   assert.match(app, /Automatically keep new music/u);
   assert.match(app, /Version B is synchronized and kept for your next visit/u);
-  assert.match(store, /normalizeFileName\(file\.name\)/u);
+  assert.match(domain, /normalizeFileName\(file\.name\)/u);
   assert.match(app, /Clear queue only/u);
   assert.match(app, /Clear cached audio/u);
   assert.match(app, /Reset Vibloom/u);
@@ -165,9 +203,9 @@ test("reconnect preserves queue identity and missing tracks are skippable", asyn
 });
 
 test("completes the progressive A/B comparison workflow", async () => {
-  const [app, store, styles] = await Promise.all([
+  const [app, domain, styles] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
-    readFile(new URL("src/libraryStore.ts", root), "utf8"),
+    readFile(new URL("src/domain/library.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
   ]);
 
@@ -185,8 +223,8 @@ test("completes the progressive A/B comparison workflow", async () => {
   assert.doesNotMatch(app, /Focus comparison waveforms/u);
   assert.match(app, /comparisonCacheKey\(track\.id\)/u);
   assert.match(app, /has-version-b/u);
-  assert.match(store, /comparison: TrackComparison \| null/u);
-  assert.match(store, /--version-b/u);
+  assert.match(domain, /comparison: TrackComparison \| null/u);
+  assert.match(domain, /--version-b/u);
   assert.doesNotMatch(styles, /\.focus-compare-waveforms/u);
   assert.match(styles, /\.transport-ab-switch[\s\S]*border-radius: 999px/u);
   assert.match(styles, /\.transport-ab-switch\.is-source-b::before[\s\S]*translateX\(34px\)/u);
