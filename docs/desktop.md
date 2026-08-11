@@ -64,14 +64,16 @@ paths:
 
 The workflow creates macOS x64 and ARM64 DMG/ZIP files and a Windows x64 NSIS installer.
 
-Automatic releases work with the repository's default `GITHUB_TOKEN`. Because
-tags created by that token do not emit another push workflow, Release Please
-explicitly dispatches the desktop packaging workflow after it creates a release.
+Configure `RELEASE_PLEASE_TOKEN` as a repository Actions secret to enable
+automatic version pull requests and tagged releases. It must be a fine-grained
+personal access token with repository Contents, Pull requests, and Issues write
+access. The workflow exits successfully with an explanatory summary when this
+secret is absent; quality checks, Pages deployment, and manual/tagged desktop
+packaging remain available.
 
-`RELEASE_PLEASE_TOKEN` remains optional. When configured, it must be a
-fine-grained personal access token with repository Contents, Pull requests, and
-Issues write access. A tag created with that token triggers the packaging
-workflow normally, so the explicit fallback dispatch is skipped.
+Using this token is important because the repository's default `GITHUB_TOKEN`
+cannot create pull requests under the current repository security settings, and
+tags created by that token do not trigger the separate packaging workflow.
 
 ## Optional code signing
 

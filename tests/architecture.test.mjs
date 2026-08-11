@@ -144,8 +144,8 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(workflow, /unset CSC_LINK CSC_KEY_PASSWORD/u);
   assert.match(workflow, /inputs\.release_tag/u);
   assert.match(releaseWorkflow, /googleapis\/release-please-action@v4/u);
-  assert.match(releaseWorkflow, /secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token/u);
-  assert.match(releaseWorkflow, /gh workflow run desktop-release\.yml/u);
+  assert.match(releaseWorkflow, /token: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/u);
+  assert.match(releaseWorkflow, /Explain required release token/u);
   assert.match(releaseWorkflow, /branches: \[main\]/u);
   const release = JSON.parse(releaseConfig);
   const versions = JSON.parse(releaseManifest);
