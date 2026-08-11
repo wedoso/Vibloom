@@ -1,0 +1,111 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import ts from "typescript";
+
+const root = new URL("../", import.meta.url);
+
+async function importTypeScriptModule(url) {
+  const source = await readFile(url, "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+}
+
+test("migrates legacy library snapshots at the domain boundary", async () => {
+  const { migrateLibrarySnapshot } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  const migrated = migrateLibrarySnapshot({
+    version: 1,
+    tracks: [{ id: "track-1", comparison: undefined }],
+    session: { queue: ["track-1"], volume: 0.5 },
+  });
+
+  assert.equal(migrated.version, 2);
+  assert.equal(migrated.session.cacheEnabled, true);
+  assert.equal(migrated.session.volume, 0.5);
+  assert.deepEqual(migrated.session.history, []);
+  assert.equal(migrated.tracks[0].comparison, null);
+});
+
+test("keeps browser APIs behind the replaceable platform boundary", async () => {
+  const [app, contract, browser] = await Promise.all([
+    readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
+    readFile(new URL("src/platform/libraryPlatform.ts", root), "utf8"),
+    readFile(new URL("src/platform/browserLibraryPlatform.ts", root), "utf8"),
+  ]);
+
+  assert.match(app, /platform = browserLibraryPlatform/u);
+  assert.match(app, /platform\.repository\.load\(\)/u);
+  assert.match(app, /platform\.audioFiles\.put/u);
+  assert.doesNotMatch(app, /indexedDB\.open|navigator\.storage/u);
+  assert.match(contract, /interface LibraryRepository/u);
+  assert.match(contract, /interface AudioFileStore/u);
+  assert.match(browser, /indexedDB\.open/u);
+  assert.match(browser, /navigator\.storage\.getDirectory/u);
+});
+
+test("schedules A and B against one clock and preserves the pause position", async () => {
+  const { SynchronizedAudioEngine } = await importTypeScriptModule(new URL("src/audio/SynchronizedAudioEngine.ts", root));
+  const starts = [];
+  const ramps = [];
+  const stopped = [];
+
+  class FakeParam {
+    value = 0;
+    cancelScheduledValues() {}
+    setValueAtTime(value) { this.value = value; }
+    linearRampToValueAtTime(value, time) { this.value = value; ramps.push({ value, time }); }
+    setTargetAtTime(value) { this.value = value; }
+  }
+  class FakeNode {
+    connect() { return this; }
+    disconnect() {}
+  }
+  class FakeAnalyser extends FakeNode {
+    fftSize = 0;
+    smoothingTimeConstant = 0;
+    frequencyBinCount = 512;
+  }
+  class FakeGain extends FakeNode { gain = new FakeParam(); }
+  class FakeSource extends FakeNode {
+    buffer = null;
+    onended = null;
+    start(when, offset) { starts.push({ when, offset, duration: this.buffer.duration }); }
+    stop() { stopped.push(this.buffer.duration); }
+  }
+  class FakeContext {
+    currentTime = 10;
+    state = "running";
+    destination = new FakeNode();
+    createAnalyser() { return new FakeAnalyser(); }
+    createGain() { return new FakeGain(); }
+    createBufferSource() { return new FakeSource(); }
+    async resume() { this.state = "running"; }
+    async close() { this.state = "closed"; }
+  }
+
+  const context = new FakeContext();
+  const engine = new SynchronizedAudioEngine(() => context);
+  engine.setBuffer(0, { duration: 120 });
+  engine.setBuffer(1, { duration: 90 });
+
+  assert.equal(await engine.play(5, 0.025, 0.9), true);
+  assert.deepEqual(starts, [
+    { when: 10.025, offset: 5, duration: 120 },
+    { when: 10.025, offset: 5, duration: 90 },
+  ]);
+
+  context.currentTime = 12.025;
+  assert.equal(engine.getTimelineTime(), 7);
+  assert.equal(engine.selectSource(1, 0.018), true);
+  assert.deepEqual(ramps.map(({ value, time }) => ({ value, time: Number(time.toFixed(3)) })), [
+    { value: 0, time: 12.043 },
+    { value: 1, time: 12.043 },
+  ]);
+
+  assert.equal(engine.pause(), 7);
+  context.currentTime = 20;
+  assert.equal(engine.getTimelineTime(), 7);
+  assert.deepEqual(stopped, [120, 90]);
+});

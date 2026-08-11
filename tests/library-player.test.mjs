@@ -5,9 +5,10 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("ships the local library as the primary application", async () => {
-  const [main, app, styles] = await Promise.all([
+  const [main, app, engine, styles] = await Promise.all([
     readFile(new URL("src/main.tsx", root), "utf8"),
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
+    readFile(new URL("src/audio/SynchronizedAudioEngine.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
   ]);
 
@@ -20,10 +21,10 @@ test("ships the local library as the primary application", async () => {
   assert.match(app, /const \[workspace, setWorkspace\]/u);
   assert.match(app, /persistent-stage-panel/u);
   assert.match(app, /ensureAudioGraph/u);
-  assert.match(app, /createBufferSource/u);
-  assert.match(app, /source\.start\(when, Math\.max\(0, offset\)\)/u);
+  assert.match(engine, /createBufferSource/u);
+  assert.match(engine, /source\.start\(when, Math\.max\(0, offset\)\)/u);
   assert.doesNotMatch(app, /new Audio\(\)/u);
-  assert.match(app, /linearRampToValueAtTime/u);
+  assert.match(engine, /linearRampToValueAtTime/u);
   assert.match(app, /Add version B/u);
   assert.match(app, /PrecisionWaveform/u);
   assert.match(app, /window\.addEventListener\("keydown"/u);
@@ -132,20 +133,21 @@ test("covers camera-layout changes and animates persistent side sheets", async (
 });
 
 test("persists only intentional local state and supports recoverable clearing", async () => {
-  const [app, store, spec] = await Promise.all([
+  const [app, platform, domain, spec] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
-    readFile(new URL("src/libraryStore.ts", root), "utf8"),
+    readFile(new URL("src/platform/browserLibraryPlatform.ts", root), "utf8"),
+    readFile(new URL("src/domain/library.ts", root), "utf8"),
     readFile(new URL("docs/library-player.md", root), "utf8"),
   ]);
 
-  assert.match(store, /indexedDB\.open/u);
-  assert.match(store, /navigator\.storage\.getDirectory/u);
-  assert.match(store, /removeEntry\(OPFS_TRACKS_DIR, \{ recursive: true \}\)/u);
-  assert.match(store, /cacheEnabled: true/u);
-  assert.match(store, /comparisonCacheKey/u);
+  assert.match(platform, /indexedDB\.open/u);
+  assert.match(platform, /navigator\.storage\.getDirectory/u);
+  assert.match(platform, /removeEntry\(OPFS_TRACKS_DIR, \{ recursive: true \}\)/u);
+  assert.match(domain, /cacheEnabled: true/u);
+  assert.match(domain, /comparisonCacheKey/u);
   assert.match(app, /Automatically keep new music/u);
   assert.match(app, /Version B is synchronized and kept for your next visit/u);
-  assert.match(store, /normalizeFileName\(file\.name\)/u);
+  assert.match(domain, /normalizeFileName\(file\.name\)/u);
   assert.match(app, /Clear queue only/u);
   assert.match(app, /Clear cached audio/u);
   assert.match(app, /Reset Vibloom/u);
@@ -165,9 +167,9 @@ test("reconnect preserves queue identity and missing tracks are skippable", asyn
 });
 
 test("completes the progressive A/B comparison workflow", async () => {
-  const [app, store, styles] = await Promise.all([
+  const [app, domain, styles] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
-    readFile(new URL("src/libraryStore.ts", root), "utf8"),
+    readFile(new URL("src/domain/library.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
   ]);
 
@@ -185,8 +187,8 @@ test("completes the progressive A/B comparison workflow", async () => {
   assert.doesNotMatch(app, /Focus comparison waveforms/u);
   assert.match(app, /comparisonCacheKey\(track\.id\)/u);
   assert.match(app, /has-version-b/u);
-  assert.match(store, /comparison: TrackComparison \| null/u);
-  assert.match(store, /--version-b/u);
+  assert.match(domain, /comparison: TrackComparison \| null/u);
+  assert.match(domain, /--version-b/u);
   assert.doesNotMatch(styles, /\.focus-compare-waveforms/u);
   assert.match(styles, /\.transport-ab-switch[\s\S]*border-radius: 999px/u);
   assert.match(styles, /\.transport-ab-switch\.is-source-b::before[\s\S]*translateX\(34px\)/u);

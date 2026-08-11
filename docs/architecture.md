@@ -24,7 +24,7 @@ Local File(s)
                     └─ phrase-scale automatic camera
 ```
 
-`src/LibraryApp.tsx` is the primary application and owns the persistent Player/Library shell, queue, demand-decoded AudioBuffers, synchronized A/B gains, seeking, persistence, and sheets. Its playback core extends the original `src/App.tsx` single-clock engine instead of running independent media elements. `src/lrc.ts` decodes and parses optional lyrics. `src/audioVisual.ts` samples the audible analyser. `src/Live2DStage.tsx` consumes the latest features through a ref so the render loop does not require React state updates at 60 fps.
+`src/LibraryApp.tsx` owns the persistent Player/Library shell and coordinates the library, queue, import flow, and sheets. `src/audio/SynchronizedAudioEngine.ts` owns the single Web Audio clock, decoded A/B buffers, source scheduling, gains, seeking, and lifecycle independently from React. Browser persistence lives behind `src/platform/libraryPlatform.ts`, with the IndexedDB/OPFS implementation in `src/platform/browserLibraryPlatform.ts`; desktop packaging can provide the same contract without changing player UI. `src/lrc.ts` decodes and parses optional lyrics. `src/audioVisual.ts` samples the audible analyser. `src/Live2DStage.tsx` consumes the latest features through a ref so the render loop does not require React state updates at 60 fps.
 
 ## Optional LRC timeline
 
