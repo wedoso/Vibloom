@@ -107,6 +107,8 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.doesNotMatch(stage, /containedCameraZoom/u);
   assert.match(libraryStyles, /\.is-player-shell \.persistent-stage-canvas \.camera-capsule \{[\s\S]*?right: 28px;/u);
   assert.match(libraryStyles, /\.persistent-stage-canvas \.live2d-host \{[\s\S]*?calc\(100% - 92px\)/u);
+  assert.match(libraryStyles, /--library-track-title-font: var\(--library-sans\)/u);
+  assert.match(libraryStyles, /\.track-title strong,[\s\S]*?\.now-listening-heading h2 \{[\s\S]*?font-family: var\(--library-track-title-font\)/u);
   assert.match(libraryStyles, /\.library-app\.is-empty \.library-status \{ bottom: 28px; \}/u);
   assert.match(libraryStyles, /\.is-player-shell \.persistent-stage-panel \{[^}]*padding: 18px 18px 12px;/u);
   assert.match(libraryStyles, /\.library-app\.is-library-focus \.persistent-stage-panel \{ padding: 24px 24px 12px;/u);

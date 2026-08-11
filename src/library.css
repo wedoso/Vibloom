@@ -1056,6 +1056,9 @@
 .library-app {
   --library-sans: var(--font-ui);
   --library-serif: var(--font-editorial);
+  --library-track-title-font: var(--library-sans);
+  --library-track-title-weight: 650;
+  --library-track-title-spacing: -.012em;
   font-family: var(--library-sans);
 }
 .library-app button,
@@ -1067,6 +1070,16 @@
 .library-app h2,
 .brand-copy strong { font-family: var(--library-serif); }
 .brand-copy small { font-family: var(--library-sans); }
+
+/* Song names use one shared typographic voice everywhere they identify the
+   current library item. Editorial serif remains reserved for page headings. */
+.track-title strong,
+.now-listening-heading h2 {
+  font-family: var(--library-track-title-font);
+  font-style: normal;
+  font-weight: var(--library-track-title-weight);
+  letter-spacing: var(--library-track-title-spacing);
+}
 
 .focus-exit-control {
   position: fixed;
