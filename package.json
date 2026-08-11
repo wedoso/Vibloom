@@ -1,9 +1,12 @@
 {
   "name": "vibloom",
   "version": "1.0.0",
+  "description": "A private local music player with synchronized A/B comparison and a Live2D companion.",
+  "author": "Vibloom contributors",
   "license": "MIT",
   "private": true,
   "type": "module",
+  "main": "desktop/main.mjs",
   "engines": {
     "node": ">=22.13.0"
   },
@@ -12,12 +15,20 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "start": "vite preview",
+    "desktop:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VIBLOOM_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "desktop:smoke": "npm run build && cross-env VIBLOOM_SMOKE_TEST=1 electron .",
+    "desktop:dir": "npm run build && electron-builder --dir",
+    "desktop:package": "npm run build && electron-builder",
+    "desktop:package:mac": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64",
+    "desktop:package:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint .",
-    "check": "npm run lint && npm test"
+    "check": "npm run lint && npm test",
+    "audit": "npm audit --omit=dev"
   },
   "dependencies": {
     "@pixi/sound": "^5.2.3",
+    "@pixi/unsafe-eval": "^7.4.3",
     "lucide-react": "^0.468.0",
     "pixi-live2d-display-advanced": "^1.1.0",
     "pixi.js": "^7.4.3",
@@ -30,11 +41,54 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
+    "concurrently": "^10.0.4",
+    "cross-env": "^10.1.0",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "eslint": "9.39.4",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "14.0.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.3",
-    "vite": "8.0.13"
+    "vite": "^8.2.1",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.vibloom.app",
+    "productName": "Vibloom",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.music",
+      "hardenedRuntime": true,
+      "icon": "build/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Vibloom"
+    }
   }
 }

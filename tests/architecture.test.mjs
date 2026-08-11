@@ -109,3 +109,31 @@ test("schedules A and B against one clock and preserves the pause position", asy
   assert.equal(engine.getTimelineTime(), 7);
   assert.deepEqual(stopped, [120, 90]);
 });
+
+test("keeps the desktop renderer sandboxed and packages both operating systems", async () => {
+  const [main, packageJson, workflow] = await Promise.all([
+    readFile(new URL("desktop/main.mjs", root), "utf8"),
+    readFile(new URL("package.json", root), "utf8"),
+    readFile(new URL(".github/workflows/desktop-release.yml", root), "utf8"),
+  ]);
+
+  assert.match(main, /registerSchemesAsPrivileged/u);
+  assert.match(main, /standard: true/u);
+  assert.match(main, /secure: true/u);
+  assert.match(main, /contextIsolation: true/u);
+  assert.match(main, /nodeIntegration: false/u);
+  assert.match(main, /sandbox: true/u);
+  assert.match(main, /setPermissionRequestHandler/u);
+  assert.match(main, /setWindowOpenHandler\(\(\) => \(\{ action: "deny" \}\)\)/u);
+  assert.doesNotMatch(main, /shell\.openExternal|contextBridge|ipcRenderer/u);
+
+  const manifest = JSON.parse(packageJson);
+  assert.equal(manifest.main, "desktop/main.mjs");
+  assert.deepEqual(manifest.build.mac.target, ["dmg", "zip"]);
+  assert.deepEqual(manifest.build.win.target, ["nsis"]);
+  assert.match(workflow, /macos-14/u);
+  assert.match(workflow, /windows-latest/u);
+  assert.match(workflow, /xvfb-run --auto-servernum npm run desktop:smoke/u);
+  assert.match(workflow, /actions\/upload-artifact@v4/u);
+  assert.match(workflow, /gh release create/u);
+});

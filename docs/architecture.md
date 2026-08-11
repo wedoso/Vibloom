@@ -165,6 +165,12 @@ The interstitial reads “The room is listening.” rather than repeating the pr
 
 The deployment workflow runs the checks and publishes `dist/`. No API keys, server functions, database, cookies, analytics, or upload endpoint are required.
 
+## Desktop deployment
+
+Electron loads the same `dist/` renderer through the standard, secure `vibloom://app` scheme. The renderer remains sandboxed with Node integration disabled and receives no privileged preload API. The protocol handler limits requests to packaged renderer files, and the main process denies navigation, child windows, webviews, and permission requests.
+
+The stable custom origin preserves the existing IndexedDB metadata and OPFS audio cache behavior. Desktop-specific persistence can later replace `LibraryPlatform` without changing the React shell or synchronized audio engine. Packaging and CI/CD details are documented in [desktop.md](desktop.md).
+
 ## Validation
 
 Run the complete suite with:

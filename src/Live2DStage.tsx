@@ -1,3 +1,4 @@
+import "@pixi/unsafe-eval";
 import type { Application as PixiApplication } from "pixi.js";
 import { Lock, Mouse, ScanFace, ScanLine, Sparkles } from "lucide-react";
 import { MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";

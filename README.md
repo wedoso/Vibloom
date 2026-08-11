@@ -80,6 +80,15 @@ npm run dev
 
 Run the complete validation suite with `npm run check`. A production build is emitted to `dist/` with `npm run build`. GitHub Pages deployment is configured in [deploy-pages.yml](.github/workflows/deploy-pages.yml).
 
+The same renderer can run as a Windows or macOS desktop application:
+
+```bash
+npm run desktop:dev
+npm run desktop:smoke
+```
+
+Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md).
+
 Detailed implementation contracts live in [the player specification](docs/library-player.md) and [architecture notes](docs/architecture.md).
 
 ## License
