@@ -41,10 +41,13 @@ Artifacts are written to `release/` and are intentionally excluded from Git.
 
 ## CI/CD releases
 
-`package.json` is the single source of truth for the Vibloom version. Vite injects
-that value into the shared renderer, and Electron Builder uses the same value for
-the desktop application and installer filenames. Do not duplicate the version in
-UI source files or workflow variables.
+`package.json` is the single source of truth for the Vibloom code and candidate
+build version. Vite injects that value into the shared renderer, and Electron
+Builder uses the same value for the desktop application and installer filenames.
+Do not duplicate the version in UI source files or workflow variables. The
+release manifest is different: it records the latest version already published,
+so it may trail `package.json` on a feature branch and is advanced by Release
+Please only when the matching release is created.
 
 Merges to `main` run `.github/workflows/release-please.yml`. Conventional Commit
 messages update one release pull request:

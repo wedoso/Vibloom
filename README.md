@@ -27,6 +27,7 @@ Browser storage can still be cleared by private-browsing rules, site-data cleanu
 - Use `Space` to play or pause, arrow keys to seek five seconds, and `F` to enter or leave Focus mode.
 - Use Director for automatic phrase-level framing, Portrait for an upper-body shot, or Wide for a full-body view.
 - Use the mouse wheel for manual framing up to 400%. Every camera mode adapts to the available stage, protects the title area, and applies a soft edge fade when close framing reaches a boundary.
+- Hiyori follows the pointer across the entire player window, including the library and control areas—not only when the pointer is close to the model.
 
 ## Hear the difference
 
@@ -93,7 +94,7 @@ npm run desktop:dev
 npm run desktop:smoke
 ```
 
-Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, installer metadata, and update channel. Release Please prepares future version updates on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow builds Windows plus Apple Silicon and Intel macOS installers. The two macOS architectures run in parallel before their signed and notarized artifacts and auto-update metadata are attached to the release. Download the current version from the [Releases page](https://github.com/wedoso/Vibloom/releases/latest).
+Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, installer metadata, and update channel; the release manifest records the most recently published version and can temporarily trail the candidate version on a feature branch. Release Please finalizes the version on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow builds Windows plus Apple Silicon and Intel macOS installers. The two macOS architectures run in parallel before their signed and notarized artifacts and auto-update metadata are attached to the release. Download the current version from the [Releases page](https://github.com/wedoso/Vibloom/releases/latest).
 
 Detailed implementation contracts live in [the player specification](docs/library-player.md) and [architecture notes](docs/architecture.md).
 

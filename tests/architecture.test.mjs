@@ -197,7 +197,7 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.equal(release["include-component-in-tag"], false);
   assert.equal(release["include-v-in-tag"], true);
   assert.equal(release.packages["."]["package-name"], "vibloom");
-  assert.equal(versions["."], manifest.version);
+  assert.notEqual(versions["."].localeCompare(manifest.version, undefined, { numeric: true }), 1);
   assert.match(updateControl, /api\.github\.com\/repos\/wedoso\/Vibloom\/releases\/latest/u);
   assert.match(updateControl, /desktopUpdates\.download\(\)/u);
   assert.match(updateControl, /desktopUpdates\.install\(\)/u);
@@ -222,20 +222,20 @@ test("consolidates parallel desktop artifacts into architecture-aware update met
   await mkdir(artifacts, { recursive: true });
   try {
     await Promise.all([
-      writeFile(path.join(artifacts, "Vibloom-1.0.1-mac-arm64.zip"), "arm64"),
-      writeFile(path.join(artifacts, "Vibloom-1.0.1-mac-x64.zip"), "x64"),
-      writeFile(path.join(artifacts, "Vibloom-1.0.1-win-x64.exe"), "windows"),
-      writeFile(path.join(artifacts, "Vibloom-1.0.1-win-x64.exe.blockmap"), "blockmap"),
+      writeFile(path.join(artifacts, "Vibloom-1.1.0-mac-arm64.zip"), "arm64"),
+      writeFile(path.join(artifacts, "Vibloom-1.1.0-mac-x64.zip"), "x64"),
+      writeFile(path.join(artifacts, "Vibloom-1.1.0-win-x64.exe"), "windows"),
+      writeFile(path.join(artifacts, "Vibloom-1.1.0-win-x64.exe.blockmap"), "blockmap"),
     ]);
-    const result = await prepareUpdateRelease(artifacts, output, "v1.0.1");
+    const result = await prepareUpdateRelease(artifacts, output, "v1.1.0");
     const [macMetadata, windowsMetadata] = await Promise.all([
       readFile(path.join(output, "latest-mac.yml"), "utf8"),
       readFile(path.join(output, "latest.yml"), "utf8"),
     ]);
-    assert.equal(result.version, "1.0.1");
-    assert.match(macMetadata, /Vibloom-1\.0\.1-mac-arm64\.zip/u);
-    assert.match(macMetadata, /Vibloom-1\.0\.1-mac-x64\.zip/u);
-    assert.match(windowsMetadata, /Vibloom-1\.0\.1-win-x64\.exe/u);
+    assert.equal(result.version, "1.1.0");
+    assert.match(macMetadata, /Vibloom-1\.1\.0-mac-arm64\.zip/u);
+    assert.match(macMetadata, /Vibloom-1\.1\.0-mac-x64\.zip/u);
+    assert.match(windowsMetadata, /Vibloom-1\.1\.0-win-x64\.exe/u);
     assert.equal(result.assets.some(({ asset }) => asset.endsWith(".blockmap")), true);
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });

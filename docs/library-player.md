@@ -231,6 +231,7 @@ Autoplay is never attempted on page load. Resume restores context and waits for 
 - Verify Queue and Storage animate in and out, remain non-interactive while closed, and become immediate under reduced motion.
 - Verify the storage sheet has no text inside the capacity bar and every action remains a full-width, non-overflowing row.
 - Verify Hiyori's hair and shoes are both visible at default desktop framing.
+- Move the pointer to all four viewport corners while Hiyori is visible and verify the eyes respond in each direction even when the pointer is outside the Live2D stage. In A/B comparison, verify pointer movement temporarily overrides the audible-source glance and that automatic gaze resumes after 2.5 seconds without pointer movement.
 - Verify manual 162% framing keeps Hiyori's feet visible above the source indicator. Across Player, Library, and Focus, every zoom through 235% computes the title height and pins Hiyori's rendered top to the resulting safe edge. The solid music disc retains its full model-relative diameter and shifts its center only when its maximum beat pulse would cross that same edge.
 - Verify the Focus source indicator finishes within 20 CSS pixels of the transport at the 1280×720 desktop viewport.
 - Verify Player renders exactly one playback transport while retaining two synchronized waveforms when B exists.
