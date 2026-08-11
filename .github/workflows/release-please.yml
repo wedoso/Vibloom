@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
@@ -18,13 +19,21 @@ jobs:
   release-please:
     name: Update release pull request or create release
     runs-on: ubuntu-latest
+    env:
+      HAS_RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN != '' }}
     steps:
       - name: Run Release Please
+        id: release
         uses: googleapis/release-please-action@v4
         with:
-          # Use a fine-grained PAT so the resulting v* tag can trigger
-          # desktop-release.yml. The default GITHUB_TOKEN suppresses that
-          # follow-on workflow by design.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Dispatch packaging when using the default token
+        if: steps.release.outputs.release_created == 'true' && env.HAS_RELEASE_PLEASE_TOKEN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh workflow run desktop-release.yml --ref "$RELEASE_TAG" -f release_tag="$RELEASE_TAG"
