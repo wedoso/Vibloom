@@ -1,6 +1,6 @@
 {
   "name": "vibloom",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A private local music player with synchronized A/B comparison and a Live2D companion.",
   "author": "Vibloom contributors",
   "license": "MIT",
@@ -19,7 +19,7 @@
     "desktop:smoke": "npm run build && cross-env VIBLOOM_SMOKE_TEST=1 electron .",
     "desktop:dir": "npm run build && electron-builder --dir",
     "desktop:package": "npm run build && electron-builder",
-    "desktop:package:mac": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64",
+    "desktop:package:mac": "npm run build && electron-builder --mac --arm64 --publish never -c.forceCodeSigning=true",
     "desktop:package:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint .",
@@ -71,6 +71,10 @@
     "mac": {
       "category": "public.app-category.music",
       "hardenedRuntime": true,
+      "notarize": true,
+      "strictVerify": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "icon": "build/icon.png",
       "target": [
         "dmg",

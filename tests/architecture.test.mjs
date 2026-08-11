@@ -134,6 +134,11 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   const manifest = JSON.parse(packageJson);
   assert.equal(manifest.main, "desktop/main.mjs");
   assert.deepEqual(manifest.build.mac.target, ["dmg", "zip"]);
+  assert.equal(manifest.build.mac.hardenedRuntime, true);
+  assert.equal(manifest.build.mac.notarize, true);
+  assert.equal(manifest.build.mac.strictVerify, true);
+  assert.equal(manifest.build.mac.entitlements, "build/entitlements.mac.plist");
+  assert.equal(manifest.build.mac.entitlementsInherit, "build/entitlements.mac.inherit.plist");
   assert.deepEqual(manifest.build.win.target, ["nsis"]);
   assert.match(workflow, /macos-14/u);
   assert.match(workflow, /windows-latest/u);
@@ -141,7 +146,11 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(workflow, /actions\/upload-artifact@v4/u);
   assert.match(workflow, /gh release create/u);
   assert.match(workflow, /--publish never/u);
-  assert.match(workflow, /unset CSC_LINK CSC_KEY_PASSWORD/u);
+  assert.match(workflow, /forceCodeSigning=true/u);
+  assert.match(workflow, /Require macOS signing and notarization credentials/u);
+  assert.match(workflow, /codesign --verify --deep --strict/u);
+  assert.match(workflow, /xcrun stapler validate/u);
+  assert.match(workflow, /spctl --assess --type execute/u);
   assert.match(workflow, /inputs\.release_tag/u);
   assert.match(releaseWorkflow, /googleapis\/release-please-action@v4/u);
   assert.match(releaseWorkflow, /token: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/u);

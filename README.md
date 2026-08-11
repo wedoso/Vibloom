@@ -89,7 +89,7 @@ npm run desktop:dev
 npm run desktop:smoke
 ```
 
-Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, and installer metadata. Release Please prepares future version updates on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow attaches Windows and macOS installers. The initial `v1.0.0` release can be downloaded from the [Releases page](https://github.com/wedoso/Vibloom/releases/tag/v1.0.0).
+Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, and installer metadata. Release Please prepares future version updates on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow attaches Windows and signed, notarized macOS installers. Download the current version from the [Releases page](https://github.com/wedoso/Vibloom/releases/latest).
 
 Detailed implementation contracts live in [the player specification](docs/library-player.md) and [architecture notes](docs/architecture.md).
 

@@ -77,7 +77,7 @@ tags created by that token do not trigger the separate packaging workflow.
 
 ## Optional code signing
 
-Unsigned workflow artifacts are useful for internal testing but operating systems can show trust warnings. Configure these GitHub Actions secrets before public distribution:
+Public macOS releases are required to use Developer ID signing and Apple notarization. The workflow fails before packaging when any required macOS credential is absent, and it refuses to upload a build unless strict code-signing, stapler, and Gatekeeper checks all pass.
 
 ### macOS
 
@@ -92,7 +92,7 @@ Unsigned workflow artifacts are useful for internal testing but operating system
 - `WIN_CSC_LINK`: base64 data or a private URL for the Windows code-signing certificate (`.pfx`/`.p12`).
 - `WIN_CSC_KEY_PASSWORD`: certificate password.
 
-When signing secrets are absent, packaging remains functional and produces unsigned installers.
+Windows packaging remains available without a certificate for development builds, although unsigned Windows installers can trigger SmartScreen. Public Windows releases should add a trusted signing certificate before broad distribution.
 
 ## Desktop security boundary
 
