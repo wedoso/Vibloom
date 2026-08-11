@@ -3,6 +3,7 @@ import type { Application as PixiApplication } from "pixi.js";
 import { Lock, Mouse, ScanFace, ScanLine, Sparkles } from "lucide-react";
 import { MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AudioVisualFeatures } from "./audioVisual";
+import { normalizeViewportGaze } from "./live2d/gaze";
 
 type StageVariant = "welcome" | "player";
 
@@ -544,12 +545,26 @@ export default function Live2DStage({
 
         let pointerX = 0;
         let pointerY = 0;
+        let pointerActiveUntil = 0;
+        let gazeOriginX = window.innerWidth * 0.5;
+        let gazeOriginY = window.innerHeight * 0.4;
         const handlePointer = (event: PointerEvent) => {
-          const bounds = host.getBoundingClientRect();
-          pointerX = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-          pointerY = -(((event.clientY - bounds.top) / bounds.height) * 2 - 1);
+          const gaze = normalizeViewportGaze(
+            event.clientX,
+            event.clientY,
+            gazeOriginX,
+            gazeOriginY,
+            document.documentElement.clientWidth,
+            document.documentElement.clientHeight,
+          );
+          pointerX = gaze.x;
+          pointerY = gaze.y;
+          pointerActiveUntil = performance.now() + 2500;
         };
-        const resetPointer = () => { pointerX = 0; pointerY = 0; };
+        const resetPointer = () => { pointerX = 0; pointerY = 0; pointerActiveUntil = 0; };
+        const handlePointerOut = (event: PointerEvent) => {
+          if (event.relatedTarget === null) resetPointer();
+        };
         const revealZoom = () => {
           setZoomReadout(Math.round(manualZoomRef.current * 100));
           setShowZoom(true);
@@ -567,12 +582,14 @@ export default function Live2DStage({
           setCameraPreset("manual");
           revealZoom();
         };
-        host.addEventListener("pointermove", handlePointer);
-        host.addEventListener("pointerleave", resetPointer);
+        window.addEventListener("pointermove", handlePointer, { passive: true });
+        window.addEventListener("pointerout", handlePointerOut, { passive: true });
+        window.addEventListener("blur", resetPointer);
         host.addEventListener("wheel", handleWheel, { passive: false });
         cleanupPointer = () => {
-          host.removeEventListener("pointermove", handlePointer);
-          host.removeEventListener("pointerleave", resetPointer);
+          window.removeEventListener("pointermove", handlePointer);
+          window.removeEventListener("pointerout", handlePointerOut);
+          window.removeEventListener("blur", resetPointer);
           host.removeEventListener("wheel", handleWheel);
         };
 
@@ -1345,6 +1362,9 @@ export default function Live2DStage({
           );
           cameraRig.position.set(currentRigX, safeCameraRigY);
           cameraRig.scale.set(renderCameraZoom);
+          const gazeHostBounds = previousHostBounds ?? host.getBoundingClientRect();
+          gazeOriginX = gazeHostBounds.left + currentRigX;
+          gazeOriginY = gazeHostBounds.top + safeCameraRigY - renderedModelHeight * 0.3;
 
           if (lastSource !== features.source) {
             lastSource = features.source;
@@ -1360,7 +1380,7 @@ export default function Live2DStage({
           }
           switchAccent *= Math.exp(-2.2 * dt);
 
-          const followsComparedTrack = features.isComparing && features.isPlaying;
+          const followsComparedTrack = features.isComparing && features.isPlaying && performance.now() >= pointerActiveUntil;
           const sourceGaze = followsComparedTrack ? (features.source === 0 ? -0.82 : 0.82) : pointerX * 0.32;
           const sourceGazeY = followsComparedTrack ? (isCompactLayout ? 0.24 : 0.18) : pointerY * 0.22;
           gazeX = follow(gazeX, sourceGaze, features.isComparing ? 2.6 : 4.2);

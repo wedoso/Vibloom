@@ -41,10 +41,13 @@ Artifacts are written to `release/` and are intentionally excluded from Git.
 
 ## CI/CD releases
 
-`package.json` is the single source of truth for the Vibloom version. Vite injects
-that value into the shared renderer, and Electron Builder uses the same value for
-the desktop application and installer filenames. Do not duplicate the version in
-UI source files or workflow variables.
+`package.json` is the single source of truth for the Vibloom code and candidate
+build version. Vite injects that value into the shared renderer, and Electron
+Builder uses the same value for the desktop application and installer filenames.
+Do not duplicate the version in UI source files or workflow variables. The
+release manifest is different: it records the latest version already published,
+so it may trail `package.json` on a feature branch and is advanced by Release
+Please only when the matching release is created.
 
 Merges to `main` run `.github/workflows/release-please.yml`. Conventional Commit
 messages update one release pull request:
@@ -62,7 +65,18 @@ paths:
 - A manual **Desktop CI and Release** run packages unsigned macOS and Windows installers and exposes them as downloadable workflow artifacts for 30 days. Supplying an existing `v*` tag in its `release_tag` input also publishes those artifacts to that GitHub Release, which makes failed packaging runs safely resumable.
 - Pushing a version tag such as `v1.1.0` packages both platforms and uploads the installers to a GitHub Release.
 
-The workflow creates macOS x64 and ARM64 DMG/ZIP files and a Windows x64 NSIS installer.
+The workflow creates macOS x64 and ARM64 DMG/ZIP files and a Windows x64 NSIS installer. Its final release job consolidates both macOS architectures into `latest-mac.yml`, creates Windows `latest.yml`, and uploads those files with the update payloads and blockmaps. Do not hand-edit or reuse update metadata from another build: its SHA-512 values must match the uploaded installers exactly.
+
+## Version checks and automatic updates
+
+The version beside the Vibloom logo is an update button in both runtimes. The web build checks the public GitHub Releases API and sends users to the latest download. Installed desktop builds use `electron-updater` through the narrow preload bridge in `desktop/preload.cjs`:
+
+1. The user explicitly checks for a newer release.
+2. Vibloom reads the update metadata from the public GitHub Release.
+3. If a newer version exists, the user chooses **Download update**.
+4. After checksum and signature validation, **Restart and install** applies it.
+
+macOS selects the matching Apple Silicon or Intel ZIP from the shared metadata. Windows uses the NSIS installer. macOS auto-update requires the same Developer ID signing already enforced by the release workflow; unsigned local development builds intentionally show that automatic updates must be tested from an installed release.
 
 Configure `RELEASE_PLEASE_TOKEN` as a repository Actions secret to enable
 automatic version pull requests and tagged releases. It must be a fine-grained

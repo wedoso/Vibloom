@@ -21,9 +21,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/*.mjs"],
+    files: ["**/*.{mjs,cjs}"],
     languageOptions: {
       globals: globals.node,
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 );

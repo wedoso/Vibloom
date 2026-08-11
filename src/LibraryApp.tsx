@@ -46,6 +46,8 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import Live2DStage from "./Live2DStage";
+import BrandMark from "./BrandMark";
+import UpdateControl from "./UpdateControl";
 import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
 import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
@@ -1543,10 +1545,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
       <header className="library-header">
         <button className="mobile-nav-button" type="button" aria-label="Open library navigation" onClick={() => setLibraryOpen(true)}><Menu size={20} /></button>
-        <a className="brand" href="#library-top" aria-label="Vibloom home">
-          <span className="brand-mark"><ArrowLeftRight size={18} strokeWidth={2} /></span>
-          <span className="brand-copy"><strong>Vibloom</strong><small>Local listening room <span className="brand-version" aria-label={`Vibloom version ${APP_VERSION}`}>v{APP_VERSION}</span></small></span>
-        </a>
+        <div className="brand">
+          <a className="brand-home" href="#library-top" aria-label="Vibloom home">
+            <span className="brand-mark"><BrandMark /></span>
+            <span className="brand-copy"><strong>Vibloom</strong><small>Local listening room</small></span>
+          </a>
+          <UpdateControl />
+        </div>
         {tracks.length > 0 && <div className="library-header-status"><span>{tracks.length} tracks</span><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Library ready"}</strong></div>}
         <div className="library-header-actions">
           {unavailableCount > 0 && <button className="reconnect-button" type="button" onClick={() => openFolder(true)}><FolderOpen size={15} /> Reconnect music <span>{unavailableCount}</span></button>}
@@ -1700,7 +1705,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           <label className="cache-toggle"><span><strong>Automatically keep new music</strong><small>On by default. New library tracks and Version B files remain playable after reopening Vibloom.</small></span><input type="checkbox" checked={session.cacheEnabled} onChange={(event) => { if (event.target.checked) void cacheAvailableTracks(); else { patchSession({ cacheEnabled: false }); setMessage("Automatic caching paused. Existing cached audio was kept."); } }} /></label>
           {cacheProgress > 0 && <div className="cache-progress"><i><b style={{ width: `${cacheProgress}%` }} /></i><span>Caching · {cacheProgress}%</span></div>}
           <div className="storage-actions"><button type="button" onClick={() => setConfirmAction("queue")}><span><strong>Clear queue only</strong><small>Keep library and audio</small></span><X size={16} /></button><button type="button" onClick={() => setConfirmAction("cache")}><span><strong>Clear cached audio</strong><small>Keep playlists and lyrics</small></span><Trash2 size={16} /></button><button className="is-destructive" type="button" onClick={() => setConfirmAction("reset")}><span><strong>Reset Vibloom</strong><small>Remove everything from this browser</small></span><Trash2 size={16} /></button></div>
-          <div className="storage-app-version"><span>Vibloom version</span><strong>{APP_VERSION}</strong><small>Use this number when checking for updates.</small></div>
+          <div className="storage-app-version"><span>Vibloom version</span><strong>{APP_VERSION}</strong><small>Click the version beside the Vibloom logo to check for updates.</small></div>
         </aside>
       </div>
 

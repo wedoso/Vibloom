@@ -116,6 +116,8 @@ When pause lands partway through an authored gesture or synthesized transition, 
 - Scheduled body beats add a restrained, visible nod accent without replacing the authored pose.
 - In comparison mode, gaze follows the currently audible A or B track.
 
+Pointer gaze is normalized from Hiyori's rendered head position to the full browser or desktop viewport. A pointer over navigation, waveform, library, or transport space therefore still produces a proportional eye response; the interaction is not bounded to the Live2D host. In comparison mode the audible-source glance remains the automatic baseline, but any pointer movement takes priority for 2.5 seconds before control eases back to A/B listening gaze.
+
 The paused state is intentionally quiet, not a frozen bitmap. Natural secondary motion must not be confused with a rhythmic head or torso gesture.
 
 ## Stage visuals and camera
