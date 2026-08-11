@@ -120,6 +120,10 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /addParameterValueByIndex/u);
   assert.match(stage, /features\.isComparing/u);
   assert.match(stage, /focusController\.focus\(gazeX, gazeY\)/u);
+  assert.match(stage, /window\.addEventListener\("pointermove", handlePointer/u);
+  assert.match(stage, /normalizeViewportGaze/u);
+  assert.match(stage, /performance\.now\(\) >= pointerActiveUntil/u);
+  assert.doesNotMatch(stage, /host\.addEventListener\("pointermove"/u);
   assert.match(stage, /motionPreload: MotionPreloadStrategy\.IDLE/u);
   assert.match(stage, /Object\.values\(OFFICIAL_MOTIONS\)[\s\S]*?motionManager\.loadMotion\(motion\.group, motion\.index\)/u);
   assert.match(stage, /m01: \{ id: "m01", group: "Idle", index: 0, duration: 4\.7, role: "base", mode: "player" \}/u);

@@ -30,6 +30,15 @@ test("migrates legacy library snapshots at the domain boundary", async () => {
   assert.equal(migrated.tracks[0].comparison, null);
 });
 
+test("maps the entire viewport to gaze coordinates around the model", async () => {
+  const { normalizeViewportGaze } = await importTypeScriptModule(new URL("src/live2d/gaze.ts", root));
+  const origin = normalizeViewportGaze(960, 250, 960, 250, 1280, 720);
+  assert.deepEqual(origin, { x: 0, y: 0 });
+  assert.deepEqual(normalizeViewportGaze(0, 0, 960, 250, 1280, 720), { x: -1, y: 1 });
+  assert.deepEqual(normalizeViewportGaze(1280, 720, 960, 250, 1280, 720), { x: 1, y: -1 });
+  assert.deepEqual(normalizeViewportGaze(480, 485, 960, 250, 1280, 720), { x: -0.5, y: -0.5 });
+});
+
 test("keeps browser APIs behind the replaceable platform boundary", async () => {
   const [app, contract, browser] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
