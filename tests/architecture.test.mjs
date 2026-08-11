@@ -141,6 +141,10 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.equal(manifest.build.mac.entitlementsInherit, "build/entitlements.mac.inherit.plist");
   assert.deepEqual(manifest.build.win.target, ["nsis"]);
   assert.match(workflow, /macos-14/u);
+  assert.match(workflow, /macOS Apple Silicon/u);
+  assert.match(workflow, /macOS Intel/u);
+  assert.match(workflow, /--mac --arm64/u);
+  assert.match(workflow, /--mac --x64/u);
   assert.match(workflow, /windows-latest/u);
   assert.match(workflow, /xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox \./u);
   assert.match(workflow, /actions\/upload-artifact@v4/u);
@@ -151,6 +155,7 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(workflow, /codesign --verify --deep --strict/u);
   assert.match(workflow, /xcrun stapler validate/u);
   assert.match(workflow, /spctl --assess --type execute/u);
+  assert.match(workflow, /Vibloom-\$\{\{ matrix\.platform \}\}-\$\{\{ matrix\.arch \}\}/u);
   assert.match(workflow, /inputs\.release_tag/u);
   assert.match(releaseWorkflow, /googleapis\/release-please-action@v4/u);
   assert.match(releaseWorkflow, /token: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/u);
@@ -163,4 +168,16 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.equal(release["include-v-in-tag"], true);
   assert.equal(release.packages["."]["package-name"], "vibloom");
   assert.equal(versions["."], manifest.version);
+});
+
+test("keeps macOS playback alive when the last window is closed", async () => {
+  const desktopMain = await readFile(new URL("desktop/main.mjs", root), "utf8");
+  assert.match(desktopMain, /window\.on\("close", \(event\) => \{/u);
+  assert.match(desktopMain, /process\.platform !== "darwin" \|\| isQuitting \|\| SMOKE_TEST/u);
+  assert.match(desktopMain, /event\.preventDefault\(\);\s*window\.hide\(\);/u);
+  assert.match(desktopMain, /app\.on\("before-quit"/u);
+  assert.match(desktopMain, /backgroundThrottling: false/u);
+  assert.match(desktopMain, /VIBLOOM_BACKGROUND_READY/u);
+  assert.match(desktopMain, /window\.isDestroyed\(\) \|\| window\.isVisible\(\) \|\| after <= before/u);
+  assert.match(desktopMain, /mainWindow\.show\(\);\s*mainWindow\.focus\(\);/u);
 });

@@ -79,6 +79,10 @@ tags created by that token do not trigger the separate packaging workflow.
 
 Public macOS releases are required to use Developer ID signing and Apple notarization. The workflow fails before packaging when any required macOS credential is absent, and it refuses to upload a build unless strict code-signing, stapler, and Gatekeeper checks all pass.
 
+Apple Silicon and Intel installers run as separate matrix jobs, so signing and notarization proceed in parallel. Apple controls the notarization queue, so its completion time can still vary.
+
+On macOS, closing the main window hides it without destroying the renderer, allowing playback to continue in the background. Reopen it from the Dock; use `Command-Q` when you want to stop playback and fully quit Vibloom.
+
 ### macOS
 
 - `MAC_CSC_LINK`: base64 data or a private URL for the Developer ID Application certificate (`.p12`).
