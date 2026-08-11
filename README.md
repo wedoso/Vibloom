@@ -56,6 +56,8 @@ Attach, replace, or remove an `.lrc` file from the current song or its library m
 
 The Windows and macOS apps use the same React renderer and product code as the web version; Electron adds only the native window, security boundary, and packaging layer. Each build displays its version in the header so users can compare it with the [latest release](https://github.com/wedoso/Vibloom/releases/latest).
 
+On macOS, closing the player window hides it while audio keeps playing. Click Vibloom in the Dock to bring the window back, or press `Command-Q` when you want to quit the app and stop playback completely.
+
 The web version targets current Safari, Chrome, and Firefox on desktop. Folder drag-and-drop depends on browser support; the visible folder picker is always available as a fallback.
 
 Common MP3, WAV, M4A/AAC, FLAC, OGG, Opus, WebM Audio, and AIFF files are accepted when the browser can decode them. Individual files larger than 300 MB are rejected to protect the tab.
@@ -89,7 +91,7 @@ npm run desktop:dev
 npm run desktop:smoke
 ```
 
-Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, and installer metadata. Release Please prepares future version updates on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow attaches Windows and signed, notarized macOS installers. Download the current version from the [Releases page](https://github.com/wedoso/Vibloom/releases/latest).
+Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, and installer metadata. Release Please prepares future version updates on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow builds Windows plus Apple Silicon and Intel macOS installers. The two macOS architectures run in parallel before their signed and notarized artifacts are attached to the release. Download the current version from the [Releases page](https://github.com/wedoso/Vibloom/releases/latest).
 
 Detailed implementation contracts live in [the player specification](docs/library-player.md) and [architecture notes](docs/architecture.md).
 
