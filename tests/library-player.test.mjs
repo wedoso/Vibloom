@@ -82,12 +82,15 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /containModelRef\.current[\s\S]*LIBRARY_PORTRAIT_OFFSET_FACTOR/u);
   assert.match(stage, /const isCompact = window\.innerWidth < 600/u);
   assert.match(stage, /--stage-model-width/u);
-  assert.match(stage, /PLAYER_DISC_SAFE_TOP/u);
-  assert.match(stage, /safeDiscWidth/u);
+  assert.match(stage, /STAGE_TITLE_SAFE_GAP/u);
+  assert.match(stage, /titleSafeRigY/u);
+  assert.match(stage, /titleSafeDiscCenterY/u);
+  assert.match(stage, /headingBottom - nextHostBounds\.top/u);
   assert.match(stage, /--stage-subject-y/u);
+  assert.match(stage, /--stage-model-top/u);
   assert.match(stage, /stage-disc-viewport/u);
   assert.match(stageStyles, /\.live2d-stage-player \.stage-disc-viewport \{[\s\S]*mask-image: linear-gradient\(to right/u);
-  assert.match(stageStyles, /--stage-disc-width/u);
+  assert.match(stageStyles, /width: calc\(var\(--stage-model-width, 320px\) \* \.812\)/u);
   assert.match(libraryStyles, /\.comparison-deck\.is-solo/u);
   assert.match(libraryStyles, /\.unified-shell\.is-player-shell\.is-solo-player/u);
   assert.match(libraryStyles, /comparison-card-enter/u);

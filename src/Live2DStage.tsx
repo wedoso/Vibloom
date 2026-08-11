@@ -64,13 +64,16 @@ const DISC_MODEL_CENTER_OFFSET_FACTOR = 0.1;
 const DISC_ZOOM_CENTER_OFFSET_FACTOR = 0.09;
 const DISC_MODEL_WIDTH_FACTOR = 0.812;
 const DISC_MAX_VISUAL_SCALE = 1.24;
-const PLAYER_DISC_SAFE_TOP = 18;
+const STAGE_TITLE_SAFE_GAP = 12;
 
-function safeDiscWidth(modelWidth: number, centerY: number, variant: StageVariant) {
-  const preferredWidth = modelWidth * DISC_MODEL_WIDTH_FACTOR;
-  if (variant !== "player") return preferredWidth;
-  const topSafeWidth = Math.max(0, centerY - PLAYER_DISC_SAFE_TOP) * 2 / DISC_MAX_VISUAL_SCALE;
-  return Math.min(preferredWidth, topSafeWidth);
+function titleSafeRigY(desiredY: number, renderedModelHeight: number, safeTop: number, variant: StageVariant) {
+  return variant === "player" ? safeTop + renderedModelHeight / 2 : desiredY;
+}
+
+function titleSafeDiscCenterY(desiredY: number, renderedModelWidth: number, safeTop: number, variant: StageVariant) {
+  if (variant !== "player") return desiredY;
+  const discRadiusAtMaximumPulse = renderedModelWidth * DISC_MODEL_WIDTH_FACTOR * DISC_MAX_VISUAL_SCALE / 2;
+  return Math.max(desiredY, safeTop + discRadiusAtMaximumPulse);
 }
 
 function portraitOffsetForZoom(zoom: number, stageHeight: number, baseFactor: number) {
@@ -289,7 +292,6 @@ export default function Live2DStage({
     previousFocusModeRef.current = focusMode;
     stageRef.current?.style.removeProperty("--stage-subject-x");
     stageRef.current?.style.removeProperty("--stage-subject-y");
-    stageRef.current?.style.removeProperty("--stage-disc-width");
     layoutRef.current?.();
     if (!nextCameraUi) return;
     const cameraUi = nextCameraUi;
@@ -422,6 +424,7 @@ export default function Live2DStage({
         let canvasRevealed = false;
         let isCompactLayout = window.innerWidth < 600;
         let previousHostBounds: DOMRect | null = null;
+        let stageTitleSafeTop = STAGE_TITLE_SAFE_GAP;
 
         let rendererWidth = 0;
         let rendererHeight = 0;
@@ -430,6 +433,10 @@ export default function Live2DStage({
           const nextWidth = Math.max(1, Math.round(host.clientWidth));
           const nextHeight = Math.max(1, Math.round(host.clientHeight));
           const nextHostBounds = host.getBoundingClientRect();
+          const heading = host.closest(".persistent-stage-panel")?.querySelector(".now-listening-heading");
+          const headingBottom = heading?.getBoundingClientRect().bottom ?? nextHostBounds.top;
+          stageTitleSafeTop = Math.max(STAGE_TITLE_SAFE_GAP, headingBottom - nextHostBounds.top + STAGE_TITLE_SAFE_GAP);
+          stageRef.current?.style.setProperty("--stage-title-safe-top", `${stageTitleSafeTop}px`);
           const sceneCovered = document.documentElement.classList.contains("is-scene-covering");
           if (layoutInitialized && previousHostBounds && canvasRevealed && !sceneCovered) {
             // Keep Hiyori at the same viewport pixel while the header/score strip
@@ -480,10 +487,17 @@ export default function Live2DStage({
                 ? LIBRARY_PORTRAIT_OFFSET_FACTOR
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(snapZoom, host.clientHeight, snapPortraitFactor);
+            const snapRenderZoom = renderZoomForFraming(snapZoom);
+            const safeSnapRigY = titleSafeRigY(
+              currentRigY + currentPortraitOffset,
+              naturalHeight * currentModelScale * snapRenderZoom,
+              stageTitleSafeTop,
+              variantRef.current,
+            );
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
-            cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
-            cameraRig.scale.set(renderZoomForFraming(snapZoom));
+            cameraRig.position.set(currentRigX, safeSnapRigY);
+            cameraRig.scale.set(snapRenderZoom);
           } else if (!canvasRevealed) {
             // Model loading and late font/layout resolution happen while the
             // canvas is hidden. Keep replacing the provisional geometry with
@@ -939,10 +953,17 @@ export default function Live2DStage({
                 ? LIBRARY_PORTRAIT_OFFSET_FACTOR
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, snapPortraitFactor);
+            const snapRenderZoom = renderZoomForFraming(cameraZoom);
+            const safeSnapRigY = titleSafeRigY(
+              currentRigY + currentPortraitOffset,
+              naturalHeight * currentModelScale * snapRenderZoom,
+              stageTitleSafeTop,
+              variantRef.current,
+            );
             model.scale.set(currentModelScale);
             contactShadow.scale.set(currentModelScale);
-            cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
-            cameraRig.scale.set(renderZoomForFraming(cameraZoom));
+            cameraRig.position.set(currentRigX, safeSnapRigY);
+            cameraRig.scale.set(snapRenderZoom);
             sceneLayoutSnapRef.current = false;
           }
 
@@ -1293,8 +1314,15 @@ export default function Live2DStage({
           }
           model.scale.set(currentModelScale);
           contactShadow.scale.set(currentModelScale);
-          cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
           const renderCameraZoom = renderZoomForFraming(cameraZoom);
+          const renderedModelHeight = naturalHeight * currentModelScale * renderCameraZoom;
+          const safeCameraRigY = titleSafeRigY(
+            currentRigY + currentPortraitOffset,
+            renderedModelHeight,
+            stageTitleSafeTop,
+            variantRef.current,
+          );
+          cameraRig.position.set(currentRigX, safeCameraRigY);
           cameraRig.scale.set(renderCameraZoom);
 
           if (lastSource !== features.source) {
@@ -1332,8 +1360,14 @@ export default function Live2DStage({
             const discCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
               + Math.max(0, renderCameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
             const renderedModelWidth = naturalWidth * currentModelScale * renderCameraZoom;
-            const discCenterY = currentRigY + currentPortraitOffset
+            const desiredDiscCenterY = safeCameraRigY
               - naturalHeight * currentModelScale * cameraZoom * discCenterOffsetFactor;
+            const discCenterY = titleSafeDiscCenterY(
+              desiredDiscCenterY,
+              renderedModelWidth,
+              stageTitleSafeTop,
+              variantRef.current,
+            );
             stage.style.setProperty("--music-energy", energy.toFixed(3));
             stage.style.setProperty("--music-energy-long", energyLong.toFixed(3));
             stage.style.setProperty("--music-bass", bass.toFixed(3));
@@ -1343,10 +1377,11 @@ export default function Live2DStage({
             stage.style.setProperty("--music-active", activity.toFixed(3));
             stage.style.setProperty("--camera-zoom", cameraZoom.toFixed(3));
             stage.style.setProperty("--camera-rig-x", currentRigX.toFixed(3));
-            stage.style.setProperty("--camera-rig-y", (currentRigY + currentPortraitOffset).toFixed(3));
+            stage.style.setProperty("--camera-rig-y", safeCameraRigY.toFixed(3));
             stage.style.setProperty("--model-scale", currentModelScale.toFixed(5));
+            stage.style.setProperty("--stage-model-height", `${renderedModelHeight}px`);
+            stage.style.setProperty("--stage-model-top", `${safeCameraRigY - renderedModelHeight / 2}px`);
             stage.style.setProperty("--stage-model-width", `${renderedModelWidth}px`);
-            stage.style.setProperty("--stage-disc-width", `${safeDiscWidth(renderedModelWidth, discCenterY, variantRef.current)}px`);
             stage.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
             stage.style.setProperty(
               "--stage-subject-y",
@@ -1381,16 +1416,30 @@ export default function Live2DStage({
         currentCameraZoomRef.current = cameraZoom;
         model.scale.set(currentModelScale);
         contactShadow.scale.set(currentModelScale);
-        cameraRig.position.set(currentRigX, currentRigY + currentPortraitOffset);
         const initialRenderZoom = renderZoomForFraming(cameraZoom);
+        const initialRenderedModelHeight = naturalHeight * currentModelScale * initialRenderZoom;
+        const initialSafeRigY = titleSafeRigY(
+          currentRigY + currentPortraitOffset,
+          initialRenderedModelHeight,
+          stageTitleSafeTop,
+          variantRef.current,
+        );
+        cameraRig.position.set(currentRigX, initialSafeRigY);
         cameraRig.scale.set(initialRenderZoom);
         const initialDiscCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
           + Math.max(0, initialRenderZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
         const initialRenderedModelWidth = naturalWidth * currentModelScale * initialRenderZoom;
-        const initialDiscCenterY = currentRigY + currentPortraitOffset
+        const initialDesiredDiscCenterY = initialSafeRigY
           - naturalHeight * currentModelScale * cameraZoom * initialDiscCenterOffsetFactor;
+        const initialDiscCenterY = titleSafeDiscCenterY(
+          initialDesiredDiscCenterY,
+          initialRenderedModelWidth,
+          stageTitleSafeTop,
+          variantRef.current,
+        );
+        stageRef.current?.style.setProperty("--stage-model-height", `${initialRenderedModelHeight}px`);
+        stageRef.current?.style.setProperty("--stage-model-top", `${initialSafeRigY - initialRenderedModelHeight / 2}px`);
         stageRef.current?.style.setProperty("--stage-model-width", `${initialRenderedModelWidth}px`);
-        stageRef.current?.style.setProperty("--stage-disc-width", `${safeDiscWidth(initialRenderedModelWidth, initialDiscCenterY, variantRef.current)}px`);
         stageRef.current?.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
         stageRef.current?.style.setProperty(
           "--stage-subject-y",

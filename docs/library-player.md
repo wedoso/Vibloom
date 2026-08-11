@@ -231,7 +231,7 @@ Autoplay is never attempted on page load. Resume restores context and waits for 
 - Verify Queue and Storage animate in and out, remain non-interactive while closed, and become immediate under reduced motion.
 - Verify the storage sheet has no text inside the capacity bar and every action remains a full-width, non-overflowing row.
 - Verify Hiyori's hair and shoes are both visible at default desktop framing.
-- Verify manual 162% framing keeps Hiyori's feet visible above the source indicator, Player/Focus 235% framing stays below the now-listening title, and the solid music disc scales down before its maximum beat pulse can cross the title-safe top edge.
+- Verify manual 162% framing keeps Hiyori's feet visible above the source indicator. Across Player, Library, and Focus, every zoom through 235% computes the title height and pins Hiyori's rendered top to the resulting safe edge. The solid music disc retains its full model-relative diameter and shifts its center only when its maximum beat pulse would cross that same edge.
 - Verify the Focus source indicator finishes within 20 CSS pixels of the transport at the 1280×720 desktop viewport.
 - Verify Player renders exactly one playback transport while retaining two synchronized waveforms when B exists.
 - Run the common flow in Chromium, Firefox, and WebKit, plus a real Safari smoke test when available.
