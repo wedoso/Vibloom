@@ -59,16 +59,19 @@ Release. The tag starts `.github/workflows/desktop-release.yml`, which has three
 paths:
 
 - Pull requests and pushes to `main` run lint, tests, the web build, a headless Electron smoke test, and a production dependency audit.
-- A manual **Desktop CI and Release** run packages unsigned macOS and Windows installers and exposes them as downloadable workflow artifacts for 30 days.
+- A manual **Desktop CI and Release** run packages unsigned macOS and Windows installers and exposes them as downloadable workflow artifacts for 30 days. Supplying an existing `v*` tag in its `release_tag` input also publishes those artifacts to that GitHub Release, which makes failed packaging runs safely resumable.
 - Pushing a version tag such as `v1.1.0` packages both platforms and uploads the installers to a GitHub Release.
 
 The workflow creates macOS x64 and ARM64 DMG/ZIP files and a Windows x64 NSIS installer.
 
-Configure `RELEASE_PLEASE_TOKEN` as a repository Actions secret before enabling
-automatic releases. It must be a fine-grained personal access token with
-repository Contents, Pull requests, and Issues write access.
-Using this token is important because tags created with the default
-`GITHUB_TOKEN` do not trigger the separate desktop packaging workflow.
+Automatic releases work with the repository's default `GITHUB_TOKEN`. Because
+tags created by that token do not emit another push workflow, Release Please
+explicitly dispatches the desktop packaging workflow after it creates a release.
+
+`RELEASE_PLEASE_TOKEN` remains optional. When configured, it must be a
+fine-grained personal access token with repository Contents, Pull requests, and
+Issues write access. A tag created with that token triggers the packaging
+workflow normally, so the explicit fallback dispatch is skipped.
 
 ## Optional code signing
 
