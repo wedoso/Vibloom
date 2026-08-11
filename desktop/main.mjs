@@ -7,6 +7,8 @@ const APP_HOST = "app";
 const APP_URL = `${APP_SCHEME}://${APP_HOST}/index.html`;
 const DEV_SERVER_URL = process.env.VIBLOOM_DEV_SERVER_URL;
 const SMOKE_TEST = process.env.VIBLOOM_SMOKE_TEST === "1";
+const BACKGROUND_SMOKE_TEST = process.env.VIBLOOM_BACKGROUND_SMOKE_TEST === "1";
+let isQuitting = false;
 
 protocol.registerSchemesAsPrivileged([{
   scheme: APP_SCHEME,
@@ -68,7 +70,7 @@ function installSessionGuards() {
 }
 
 function createMainWindow() {
-  const mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 640,
@@ -81,17 +83,24 @@ function createMainWindow() {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      backgroundThrottling: false,
     },
   });
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  mainWindow.webContents.on("will-navigate", (event, targetUrl) => {
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event, targetUrl) => {
     if (!isAllowedNavigation(targetUrl)) event.preventDefault();
   });
-  mainWindow.webContents.on("will-attach-webview", (event) => event.preventDefault());
+  window.webContents.on("will-attach-webview", (event) => event.preventDefault());
 
-  mainWindow.once("ready-to-show", () => {
-    if (!SMOKE_TEST) mainWindow.show();
+  window.on("close", (event) => {
+    if (process.platform !== "darwin" || isQuitting || SMOKE_TEST) return;
+    event.preventDefault();
+    window.hide();
+  });
+
+  window.once("ready-to-show", () => {
+    if (!SMOKE_TEST && !BACKGROUND_SMOKE_TEST) window.show();
   });
 
   if (SMOKE_TEST) {
@@ -105,13 +114,13 @@ function createMainWindow() {
       app.quit();
     };
     const timeout = setTimeout(() => fail("Timed out while loading the renderer."), 30_000);
-    mainWindow.webContents.once("did-fail-load", (_event, code, description) => fail(`${code}: ${description}`));
-    mainWindow.webContents.once("render-process-gone", (_event, details) => fail(`Renderer exited: ${details.reason}`));
-    mainWindow.webContents.once("did-finish-load", async () => {
+    window.webContents.once("did-fail-load", (_event, code, description) => fail(`${code}: ${description}`));
+    window.webContents.once("render-process-gone", (_event, details) => fail(`Renderer exited: ${details.reason}`));
+    window.webContents.once("did-finish-load", async () => {
       try {
         let state;
         for (let attempt = 0; attempt < 60; attempt += 1) {
-          state = await mainWindow.webContents.executeJavaScript(`({
+          state = await window.webContents.executeJavaScript(`({
             hasRoot: Boolean(document.querySelector('#root > *')),
             hasLive2dCanvas: Boolean(document.querySelector('canvas.live2d-canvas')),
             hasLive2dError: Boolean(document.querySelector('.model-error')),
@@ -137,9 +146,40 @@ function createMainWindow() {
     });
   }
 
+  if (BACKGROUND_SMOKE_TEST) {
+    const timeout = setTimeout(() => {
+      console.error("VIBLOOM_BACKGROUND_SMOKE_FAILED Timed out while checking the hidden renderer.");
+      process.exitCode = 1;
+      isQuitting = true;
+      app.quit();
+    }, 30_000);
+    window.webContents.once("did-finish-load", async () => {
+      try {
+        const before = await window.webContents.executeJavaScript("performance.now()");
+        window.show();
+        window.close();
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const after = await window.webContents.executeJavaScript("performance.now()");
+        if (window.isDestroyed() || window.isVisible() || after <= before) {
+          throw new Error(JSON.stringify({ destroyed: window.isDestroyed(), visible: window.isVisible(), before, after }));
+        }
+        clearTimeout(timeout);
+        console.log(`VIBLOOM_BACKGROUND_READY ${JSON.stringify({ rendererAlive: true, hidden: true, elapsed: after - before })}`);
+        isQuitting = true;
+        app.quit();
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error(`VIBLOOM_BACKGROUND_SMOKE_FAILED ${error instanceof Error ? error.message : String(error)}`);
+        process.exitCode = 1;
+        isQuitting = true;
+        app.quit();
+      }
+    });
+  }
+
   const targetUrl = !app.isPackaged && DEV_SERVER_URL ? DEV_SERVER_URL : APP_URL;
-  void mainWindow.loadURL(targetUrl);
-  return mainWindow;
+  void window.loadURL(targetUrl);
+  return window;
 }
 
 let mainWindow = null;
@@ -151,13 +191,22 @@ app.on("second-instance", () => {
   mainWindow.focus();
 });
 
+app.on("before-quit", () => {
+  isQuitting = true;
+});
+
 app.whenReady().then(async () => {
   await registerAppProtocol();
   installSessionGuards();
   mainWindow = createMainWindow();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createMainWindow();
+    else {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
 }).catch((error) => {
   console.error(error);

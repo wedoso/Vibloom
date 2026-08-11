@@ -17,6 +17,7 @@
     "start": "vite preview",
     "desktop:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VIBLOOM_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "desktop:smoke": "npm run build && cross-env VIBLOOM_SMOKE_TEST=1 electron .",
+    "desktop:smoke:background": "npm run build && cross-env VIBLOOM_BACKGROUND_SMOKE_TEST=1 electron .",
     "desktop:dir": "npm run build && electron-builder --dir",
     "desktop:package": "npm run build && electron-builder",
     "desktop:package:mac": "npm run build && electron-builder --mac --arm64 --publish never -c.forceCodeSigning=true",

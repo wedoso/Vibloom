@@ -55,16 +55,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: macOS
+          - label: macOS Apple Silicon
             platform: mac
             os: macos-14
-            command: npm run desktop:package -- --mac --x64 --arm64 --publish never -c.forceCodeSigning=true
+            arch: arm64
+            command: npm run desktop:package -- --mac --arm64 --publish never -c.forceCodeSigning=true
+            artifact: |
+              release/*.dmg
+              release/*.zip
+          - label: macOS Intel
+            platform: mac
+            os: macos-14
+            arch: x64
+            command: npm run desktop:package -- --mac --x64 --publish never -c.forceCodeSigning=true
             artifact: |
               release/*.dmg
               release/*.zip
           - label: Windows
             platform: win
             os: windows-latest
+            arch: x64
             command: npm run desktop:package -- --win --x64 --publish never
             artifact: release/*.exe
     runs-on: ${{ matrix.os }}
@@ -132,7 +142,7 @@ jobs:
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: Vibloom-${{ matrix.platform }}-${{ github.run_number }}
+          name: Vibloom-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
           path: ${{ matrix.artifact }}
           if-no-files-found: error
           retention-days: 30
