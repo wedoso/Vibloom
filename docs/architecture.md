@@ -41,7 +41,7 @@ Local File(s)
 - The landing page accepts one Track A file through a single invitation integrated into Hiyori's stage. The same surface contains the file-picker action and drag/drop hint; a compact player-side action requests Track B, so neither a duplicate homepage uploader nor an empty comparison panel competes with the primary listening path.
 - Before B is requested, React renders only Track A's score note and waveform. Requesting B immediately changes the score strip to equal A/B portions; the B waveform and source selector then share the same state boundary.
 - The library player decodes A and B into AudioBuffers, starts both BufferSource nodes at the same future `AudioContext.currentTime`, and keeps the muted source running on that exact clock. There is no periodic `currentTime` correction loop.
-- The decoded buffer also produces the 144-column waveform, avoiding a second decode and its associated CPU/memory spike during playback.
+- Selecting or restoring the current track decodes it against a suspended audio graph before playback, so the 144-column waveform is ready while paused. The same decoded buffer is handed to playback, avoiding a second decode and its associated CPU/memory spike.
 - The two waveforms are visual evidence only. The persistent bottom transport is the sole seek/play control and switches to millisecond readouts while B is present.
 - Queue playback and focused comparison use the same scheduled `AudioContext.currentTime` reference for decoded AudioBuffers.
 - Switching tracks changes gain only. It never seeks, changes playback rate, or restarts the clock.
@@ -121,7 +121,7 @@ The paused state is intentionally quiet, not a frozen bitmap. Natural secondary 
 ## Stage visuals and camera
 
 - One edge-clean solid circle sits behind Hiyori. Phrase energy controls its slow breathing range. Gated low-frequency accents climb through three accumulated size tiers: roughly 8%, 16%, and 24%, plus a small 4% exact-hit accent. After 580 ms without a qualifying hit, the accumulated tier releases slowly. Opacity stays nearly constant, so the response is legible without flashing.
-- The circle has no gradient, blur halo, duplicate floor light, or shadow relationship.
+- The circle fill has no gradient, blur halo, duplicate floor light, or shadow relationship. Player mode applies only a boundary-relative alpha mask so an oversized circle dissolves before neighboring controls clip it.
 - The single neutral contact shadow is a Pixi graphic inside Hiyori's camera rig. Its center is offset above the model texture's transparent lower padding so its soft core overlaps the visible soles. It shares the model's position and scale, so wide/close transitions cannot separate the two.
 - Automatic camera motion follows phrase-scale energy, never individual onsets.
 - Entering the player begins on an upper-body close-up. Mouse-wheel input locks manual framing; the Director control resumes automatic framing.

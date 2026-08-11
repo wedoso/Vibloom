@@ -27,6 +27,8 @@ test("ships the local library as the primary application", async () => {
   assert.match(engine, /linearRampToValueAtTime/u);
   assert.match(app, /Add version B/u);
   assert.match(app, /PrecisionWaveform/u);
+  assert.match(app, /preloadingTrackIdRef/u);
+  assert.match(app, /startTrack\(trackId, false, session\.currentTime\)/u);
   assert.match(app, /window\.addEventListener\("keydown"/u);
   assert.match(app, /Exit focus mode/u);
   assert.doesNotMatch(app, /className="shared-timeline"/u);
@@ -36,11 +38,12 @@ test("ships the local library as the primary application", async () => {
 });
 
 test("keeps playback and Hiyori inside one player-first shell", async () => {
-  const [app, stage, spec, libraryStyles] = await Promise.all([
+  const [app, stage, spec, libraryStyles, stageStyles] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
     readFile(new URL("src/Live2DStage.tsx", root), "utf8"),
     readFile(new URL("docs/library-player.md", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
+    readFile(new URL("src/index.css", root), "utf8"),
   ]);
 
   assert.match(app, /changeWorkspace\("player"\)/u);
@@ -70,6 +73,10 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(stage, /const isCompact = window\.innerWidth < 600/u);
   assert.match(stage, /--stage-model-width/u);
   assert.match(stage, /--stage-subject-y/u);
+  assert.match(stage, /stage-disc-viewport/u);
+  assert.match(stageStyles, /\.live2d-stage-player \.stage-disc-viewport \{[\s\S]*mask-image: linear-gradient\(to right/u);
+  assert.match(libraryStyles, /\.comparison-deck\.is-solo/u);
+  assert.match(libraryStyles, /\.unified-shell\.is-player-shell\.is-solo-player/u);
   assert.match(stage, /tallViewportProgress = Math\.max\(0, Math\.min\(1, \(window\.innerHeight - 720\) \/ 600\)\)/u);
   assert.match(stage, /roomRigYFactor = 0\.62 - tallViewportProgress \* \(containModelRef\.current \? 0\.18 : 0\.04\)/u);
   assert.match(stage, /targetRigX = host\.clientWidth \* \(isWelcome && !isCompact \? 0\.52 : 0\.5\)/u);

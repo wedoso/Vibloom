@@ -1137,9 +1137,21 @@ footer p { margin: 0; }
   --stage-subject-y: 54%;
 }
 
-.stage-music-disc {
+.stage-disc-viewport {
   position: absolute;
   z-index: 1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.live2d-stage-player .stage-disc-viewport {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 11%, #000 89%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 11%, #000 89%, transparent 100%);
+}
+
+.stage-music-disc {
+  position: absolute;
   pointer-events: none;
   width: calc(var(--stage-model-width, 320px) * .812);
   aspect-ratio: 1;

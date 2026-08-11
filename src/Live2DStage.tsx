@@ -1419,7 +1419,7 @@ export default function Live2DStage({
 
   return (
     <section ref={stageRef} className={`live2d-stage live2d-stage-${variant} light-${activeSource === 0 ? "a" : "b"} ${isPlaying ? "is-playing" : "is-paused"} ${focusMode ? "is-focused" : ""}`} aria-label="Interactive music companion">
-      <div className="stage-music-disc" />
+      <div className="stage-disc-viewport" aria-hidden="true"><div className="stage-music-disc" /></div>
       <div className="stage-particles" aria-hidden="true">
         {PARTICLES.map(([left, top, delay, duration], index) => (
           <span

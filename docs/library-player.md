@@ -41,7 +41,7 @@ Private browsing or unavailable storage falls back to session-only playback with
 ### Loaded player
 
 - Compact left rail: Player, Library, Queue, and Storage. These change only the center work surface or open a sheet.
-- Center Player surface: Hiyori remains visually centered. The current library track is version A with a real decoded waveform; version B is only a quiet secondary action until selected, then appears as an equal decoded waveform.
+- Center Player surface: Hiyori remains visually centered. The current library track is version A with a real decoded waveform; before B exists, its right-side entry collapses to a narrow rail and gives A the recovered space. Selecting B restores equal A/B waveform columns.
 - The waveform surface, bars, played range, and playhead inherit the same exact source color as the solid music field and timed lyrics: A uses `rgb(84 127 121)` and B uses `rgb(200 95 109)`.
 - Center Library surface: search, Play all, Shuffle, track list, source state, lyric state, and contextual actions.
 - Right: a protected 380–420 px Hiyori stage that remains mounted in Player and Library and defaults to full-body containment.
@@ -55,6 +55,7 @@ Private browsing or unavailable storage falls back to session-only playback with
 - The Pixi rig receives an explicit layout key for Player, Library, and Focus. Model scale, rig position, portrait offset, and camera zoom snap synchronously during the covered commit and must remain numerically stable after reveal.
 - Focus hides the persistent canvas only while the curtain is fully covering and reveals the music disc at its final center; it must not run a separate post-commit disc translation.
 - When lower-stage information intersects the portrait, the last 58 px of canvas pixels dissolve through an alpha mask instead of cutting Hiyori's legs at a hard edge.
+- At close camera zooms, the solid music circle dissolves horizontally at the protected stage boundary instead of ending abruptly behind the A/B surfaces; Hiyori and the circle's center remain unaffected.
 - Queue and Storage stay mounted while closed and animate as edge sheets; reduced-motion users receive the same state change without decorative motion.
 - Director, Portrait, Wide, and wheel-controlled Manual framing remain available outside Focus and expose their selected state.
 

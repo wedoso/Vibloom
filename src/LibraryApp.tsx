@@ -387,6 +387,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const compareFrequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const compareTimeDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const loadedTrackIdRef = useRef("");
+  const preloadingTrackIdRef = useRef("");
   const primaryLoadVersionRef = useRef(0);
   const compareLoadVersionRef = useRef(0);
   const playingRef = useRef(false);
@@ -408,6 +409,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [search, tracks]);
   const unavailableCount = tracks.filter((track) => track.availability === "reconnect" || track.availability === "missing").length;
   const comparisonReady = compareSlot.status === "ready";
+  const comparisonVisible = compareSlot.status !== "empty";
   const timelineDuration = Math.max(duration, currentTrack?.duration ?? 0, compareSlot.duration, 0);
   const activeDuration = activeSource === 0 ? (duration || currentTrack?.duration || 0) : compareSlot.duration;
   const activeSourceEnded = comparisonReady && activeDuration > 0 && currentTime >= activeDuration - 0.005 && currentTime < timelineDuration - 0.005;
@@ -736,6 +738,18 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   useEffect(() => {
     startTrackRef.current = startTrack;
   }, [startTrack]);
+
+  useEffect(() => {
+    const trackId = session.currentTrackId;
+    if (!restored || !trackId || playingRef.current) return;
+    if (loadedTrackIdRef.current === trackId || preloadingTrackIdRef.current === trackId) return;
+    const track = tracks.find((candidate) => candidate.id === trackId);
+    if (!track || (track.availability !== "available" && track.availability !== "session")) return;
+    preloadingTrackIdRef.current = trackId;
+    void startTrack(trackId, false, session.currentTime).finally(() => {
+      if (preloadingTrackIdRef.current === trackId) preloadingTrackIdRef.current = "";
+    });
+  }, [restored, session.currentTime, session.currentTrackId, startTrack, tracks]);
 
   const nextTrack = useCallback(async (natural = false) => {
     const current = sessionRef.current;
@@ -1443,7 +1457,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           </div>
         </section>
       ) : (
-        <div className={`unified-shell ${workspace === "player" ? "is-player-shell" : "is-library-shell"}`} id="library-top">
+        <div className={`unified-shell ${workspace === "player" ? `is-player-shell ${comparisonVisible ? "has-version-b" : "is-solo-player"}` : "is-library-shell"}`} id="library-top">
           <aside className={`workspace-rail ${libraryOpen ? "is-open" : ""}`} aria-label="Primary navigation">
             <button className="sheet-close mobile-only" type="button" aria-label="Close navigation" onClick={() => setLibraryOpen(false)}><X size={20} /></button>
             <button className={workspace === "player" ? "is-active" : ""} type="button" title="Player" onClick={() => changeWorkspace("player")}><Headphones size={20} /><span>Player</span></button>
@@ -1460,20 +1474,20 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 <span className="engine-status"><i /> Local audio engine</span>
               </div>
               {unavailableCount > 0 && <div className="library-reconnect-banner"><FolderOpen size={17} /><span><strong>Some music needs to be reconnected.</strong><small>Your queue and order are still here.</small></span><button type="button" onClick={() => openFolder(true)}>Reconnect</button></div>}
-              <div className={`comparison-deck ${comparisonReady ? "has-version-b" : "is-solo"}`}>
+              <div className={`comparison-deck ${comparisonVisible ? "has-version-b" : "is-solo"}`}>
                 <article className={`waveform-card version-a ${activeSource === 0 ? "is-active" : ""}`}>
                   <div className="waveform-card-heading"><button className="source-selector" type="button" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button><div><small>LIBRARY MASTER</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span>{formatTime(duration || currentTrack?.duration || 0)}</span></div>
                   <PrecisionWaveform peaks={primaryPeaks} progress={currentTime / Math.max(duration || currentTrack?.duration || 1, 1)} label="Version A" source={0} />
-                  <div className="waveform-card-foot"><span>{primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
+                  <div className="waveform-card-foot"><span>{primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : !isPlaying ? "READY" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
                 </article>
                 <div className="center-stage-reserve" aria-hidden="true" />
                 {compareSlot.status === "empty" ? (
-                  <div className="quiet-compare-entry" onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}><span>Need to compare a mix?</span><button type="button" onClick={() => compareInputRef.current?.click()}><Plus size={15} /> Add version B</button><small>Choose or drop one file. A keeps playing.</small></div>
+                  <div className="quiet-compare-entry" onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}><span>Compare another mix?</span><button type="button" aria-label="Add version B" onClick={() => compareInputRef.current?.click()}><Plus size={15} /> Add B</button><small>Choose or drop one file. A keeps playing.</small></div>
                 ) : (
                   <article className={`waveform-card version-b ${activeSource === 1 ? "is-active" : ""} is-${compareSlot.status}`} onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}>
                     <div className="waveform-card-heading"><button className="source-selector" type="button" disabled={!comparisonReady} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button><div><small>COMPARISON · {compareSlot.status.toUpperCase()}</small><strong>{trackDisplayName(compareSlot.name)}</strong></div><span className="version-b-actions"><button type="button" onClick={() => compareInputRef.current?.click()} aria-label="Replace version B">Replace</button><button type="button" onClick={() => void removeComparison()} aria-label="Remove version B"><X size={14} /></button></span></div>
                     <PrecisionWaveform peaks={comparePeaks} progress={currentTime / Math.max(compareSlot.duration || 1, 1)} label="Version B" source={1} />
-                    <div className="waveform-card-foot"><span>{compareSlot.loadStage === "reading" ? `READING · ${compareSlot.loadProgress}%` : compareSlot.loadStage === "decoding" ? "DECODING AUDIO" : compareSlot.loadStage === "caching" ? "KEEPING ON DEVICE" : compareSlot.status === "reconnect" ? "RECONNECT NEEDED" : activeSource === 1 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{compareSlot.size ? `${formatBytes(compareSlot.size)} · ` : ""}{formatTime(compareSlot.duration)}</span></div>
+                    <div className="waveform-card-foot"><span>{compareSlot.loadStage === "reading" ? `READING · ${compareSlot.loadProgress}%` : compareSlot.loadStage === "decoding" ? "DECODING AUDIO" : compareSlot.loadStage === "caching" ? "KEEPING ON DEVICE" : compareSlot.status === "reconnect" ? "RECONNECT NEEDED" : !isPlaying ? "READY" : activeSource === 1 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{compareSlot.size ? `${formatBytes(compareSlot.size)} · ` : ""}{formatTime(compareSlot.duration)}</span></div>
                   </article>
                 )}
               </div>
