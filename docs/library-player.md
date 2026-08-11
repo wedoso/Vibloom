@@ -41,14 +41,14 @@ Private browsing or unavailable storage falls back to session-only playback with
 ### Loaded player
 
 - Compact left rail: Player, Library, Queue, and Storage. These change only the center work surface or open a sheet.
-- Center Player surface: Hiyori remains visually centered. The current library track is version A with a real decoded waveform; before B exists, its right-side entry collapses to a narrow rail while A keeps a comfortable maximum waveform width and the remaining area reports time left plus the seek gesture. Selecting B animates back to equal A/B waveform columns; removing B reverses that transition before unmounting its card.
+- Center Player surface: Hiyori remains visually centered. The current library track is version A with a real decoded waveform; before B exists, a fluid solo grid caps A's region, lets the character stage absorb wide-screen space, and scales the B entry modestly while A's remaining area reports time left plus the seek gesture. Selecting B animates back to equal A/B waveform columns; removing B reverses that transition before unmounting its card.
 - The waveform surface, bars, played range, and playhead inherit the same exact source color as the solid music field and timed lyrics: A uses `rgb(84 127 121)` and B uses `rgb(200 95 109)`.
 - Center Library surface: search, Play all, Shuffle, track list, source state, lyric state, and contextual actions.
-- Right: a protected 380–420 px Hiyori stage that remains mounted in Player and Library and defaults to full-body containment.
+- Right: a protected Hiyori stage that remains mounted in Player and Library, defaults to full-body containment, and grows fluidly in wide solo-player layouts.
 - Bottom: the only playback transport, with persistent previous/play/next, shuffle, repeat, millisecond seek while comparing, volume, and queue controls. No second timeline or playback strip is rendered in the Player surface.
 - Each waveform is also a keyboard-accessible range surface. Pointer dragging pauses scheduling, previews one timestamp bubble, and commits one seek on release; playback resumes automatically only when it was active before the drag.
 - Switching Player/Library, opening sheets, or adding B must not pause A or recreate its scheduled BufferSource.
-- Duration mismatch and ended-source notices share one wrapping status lane above the lyric footer, never the stage source indicator's position.
+- Duration mismatch is attached directly below version B's waveform. The ended-source notice uses a separate wrapping status lane above the lyric footer, never the stage source indicator's position.
 - A/B are decoded once and scheduled against the same `AudioContext.currentTime`; source changes only use the existing short gain handoff to prevent clicks, with no media-element chasing or scene fade.
 - Keyboard shortcuts are global outside form controls: Space toggles playback, F toggles Focus, Escape exits Focus/sheets, 1 or A selects source A, 2 or B selects source B, and Left/Right seeks five seconds.
 - Focus always exposes a high-contrast Exit focus control. F enters and exits Focus; Escape remains an exit alternative.
