@@ -4,14 +4,29 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
+test("keeps the web, favicon, and desktop brand mark inside the shared SVG bounds", async () => {
+  const [component, favicon, desktopIcon] = await Promise.all([
+    readFile(new URL("src/BrandMark.tsx", root), "utf8"),
+    readFile(new URL("public/favicon.svg", root), "utf8"),
+    readFile(new URL("build/icon.svg", root), "utf8"),
+  ]);
+  const petalPath = /<path d="(M15\.35[^"]+)"/u;
+  const paths = [component, favicon, desktopIcon].map((source) => source.match(petalPath)?.[1]);
+  assert.ok(paths.every(Boolean));
+  assert.equal(new Set(paths).size, 1);
+  assert.match(paths[0], /M16\.65 16\.8[^Z]+-2-1\.1-2\.9-3\.7-2\.9-6\.4/u);
+  assert.doesNotMatch(paths[0], /M16\.65 16\.8[^Z]+-2 1\.1-2\.9 3\.7-2\.9 6\.4/u);
+});
+
 test("ships the local library as the primary application", async () => {
-  const [main, app, appVersion, viteConfig, engine, styles] = await Promise.all([
+  const [main, app, appVersion, viteConfig, engine, styles, updateControl] = await Promise.all([
     readFile(new URL("src/main.tsx", root), "utf8"),
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
     readFile(new URL("src/appVersion.ts", root), "utf8"),
     readFile(new URL("vite.config.ts", root), "utf8"),
     readFile(new URL("src/audio/SynchronizedAudioEngine.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
+    readFile(new URL("src/UpdateControl.tsx", root), "utf8"),
   ]);
 
   assert.match(main, /import LibraryApp from "\.\/LibraryApp"/u);
@@ -33,7 +48,8 @@ test("ships the local library as the primary application", async () => {
   assert.match(app, /beginWaveformScrub/u);
   assert.match(app, /finishWaveformScrub/u);
   assert.match(app, /comparison-status-lane/u);
-  assert.match(app, /brand-version[\s\S]*APP_VERSION/u);
+  assert.match(app, /<UpdateControl \/>/u);
+  assert.match(updateControl, /brand-version[\s\S]*APP_VERSION/u);
   assert.match(appVersion, /__APP_VERSION__/u);
   assert.match(viteConfig, /__APP_VERSION__:[\s\S]*packageMetadata\.version/u);
   assert.match(app, /PrecisionWaveform[\s\S]*comparison-duration-alert[\s\S]*waveform-card-foot/u);

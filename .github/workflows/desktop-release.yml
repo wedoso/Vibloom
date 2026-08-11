@@ -63,6 +63,7 @@ jobs:
             artifact: |
               release/*.dmg
               release/*.zip
+              release/*.blockmap
           - label: macOS Intel
             platform: mac
             os: macos-14
@@ -71,12 +72,15 @@ jobs:
             artifact: |
               release/*.dmg
               release/*.zip
+              release/*.blockmap
           - label: Windows
             platform: win
             os: windows-latest
             arch: x64
             command: npm run desktop:package -- --win --x64 --publish never
-            artifact: release/*.exe
+            artifact: |
+              release/*.exe
+              release/*.blockmap
     runs-on: ${{ matrix.os }}
     env:
       CSC_LINK: ${{ matrix.platform == 'mac' && secrets.MAC_CSC_LINK || secrets.WIN_CSC_LINK }}
@@ -155,11 +159,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Download packaged installers
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true
+
+      - name: Prepare installers and architecture-aware update metadata
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: node scripts/prepare-update-release.mjs artifacts release-assets
 
       - name: Create or update release
         env:
@@ -168,7 +179,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" artifacts/* --clobber
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
           else
-            gh release create "$RELEASE_TAG" artifacts/* --generate-notes --title "Vibloom $RELEASE_TAG"
+            gh release create "$RELEASE_TAG" release-assets/* --generate-notes --title "Vibloom $RELEASE_TAG"
           fi

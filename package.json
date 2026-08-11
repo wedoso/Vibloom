@@ -30,6 +30,7 @@
   "dependencies": {
     "@pixi/sound": "^5.2.3",
     "@pixi/unsafe-eval": "^7.4.3",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.468.0",
     "pixi-live2d-display-advanced": "^1.1.0",
     "pixi.js": "^7.4.3",
@@ -63,6 +64,11 @@
       "output": "release",
       "buildResources": "build"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "wedoso",
+      "repo": "Vibloom"
+    },
     "files": [
       "dist/**/*",
       "desktop/**/*",
@@ -70,6 +76,7 @@
     ],
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "mac": {
+      "electronUpdaterCompatibility": ">=2.16",
       "category": "public.app-category.music",
       "hardenedRuntime": true,
       "notarize": true,
@@ -83,6 +90,7 @@
       ]
     },
     "win": {
+      "electronUpdaterCompatibility": ">=2.16",
       "icon": "build/icon.png",
       "target": [
         "nsis"

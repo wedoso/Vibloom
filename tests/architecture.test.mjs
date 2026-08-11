@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import ts from "typescript";
 
@@ -111,13 +113,16 @@ test("schedules A and B against one clock and preserves the pause position", asy
 });
 
 test("keeps the desktop renderer sandboxed and packages both operating systems", async () => {
-  const [main, packageJson, workflow, releaseWorkflow, releaseConfig, releaseManifest] = await Promise.all([
+  const [main, preload, packageJson, workflow, releaseWorkflow, releaseConfig, releaseManifest, updateControl, releaseAssets] = await Promise.all([
     readFile(new URL("desktop/main.mjs", root), "utf8"),
+    readFile(new URL("desktop/preload.cjs", root), "utf8"),
     readFile(new URL("package.json", root), "utf8"),
     readFile(new URL(".github/workflows/desktop-release.yml", root), "utf8"),
     readFile(new URL(".github/workflows/release-please.yml", root), "utf8"),
     readFile(new URL("release-please-config.json", root), "utf8"),
     readFile(new URL(".release-please-manifest.json", root), "utf8"),
+    readFile(new URL("src/UpdateControl.tsx", root), "utf8"),
+    readFile(new URL("scripts/prepare-update-release.mjs", root), "utf8"),
   ]);
 
   assert.match(main, /registerSchemesAsPrivileged/u);
@@ -129,7 +134,17 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(main, /setPermissionRequestHandler/u);
   assert.match(main, /setWindowOpenHandler\(\(\) => \(\{ action: "deny" \}\)\)/u);
   assert.match(main, /state\.appVersion !== `v\$\{app\.getVersion\(\)\}`/u);
-  assert.doesNotMatch(main, /shell\.openExternal|contextBridge|ipcRenderer/u);
+  assert.match(main, /hasUpdateBridge/u);
+  assert.match(main, /updateProbeStatus/u);
+  assert.doesNotMatch(main, /contextBridge|ipcRenderer/u);
+  assert.match(main, /autoUpdater\.autoDownload = false/u);
+  assert.match(main, /autoUpdater\.checkForUpdates\(\)/u);
+  assert.match(main, /autoUpdater\.downloadUpdate\(\)/u);
+  assert.match(main, /autoUpdater\.quitAndInstall/u);
+  assert.match(main, /shell\.openExternal\(RELEASES_URL\)/u);
+  assert.match(preload, /contextBridge\.exposeInMainWorld\("vibloomUpdates"/u);
+  assert.match(preload, /ipcRenderer\.invoke\("updates:check"\)/u);
+  assert.doesNotMatch(preload, /require\("node:fs"\)|require\("node:child_process"\)/u);
 
   const manifest = JSON.parse(packageJson);
   assert.equal(manifest.main, "desktop/main.mjs");
@@ -140,6 +155,10 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.equal(manifest.build.mac.entitlements, "build/entitlements.mac.plist");
   assert.equal(manifest.build.mac.entitlementsInherit, "build/entitlements.mac.inherit.plist");
   assert.deepEqual(manifest.build.win.target, ["nsis"]);
+  assert.equal(manifest.build.publish.provider, "github");
+  assert.equal(manifest.build.publish.owner, "wedoso");
+  assert.equal(manifest.build.publish.repo, "Vibloom");
+  assert.equal(manifest.dependencies["electron-updater"].startsWith("^6."), true);
   assert.match(workflow, /macos-14/u);
   assert.match(workflow, /macOS Apple Silicon/u);
   assert.match(workflow, /macOS Intel/u);
@@ -156,6 +175,8 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(workflow, /xcrun stapler validate/u);
   assert.match(workflow, /spctl --assess --type execute/u);
   assert.match(workflow, /Vibloom-\$\{\{ matrix\.platform \}\}-\$\{\{ matrix\.arch \}\}/u);
+  assert.match(workflow, /prepare-update-release\.mjs artifacts release-assets/u);
+  assert.match(workflow, /release-assets\/\*/u);
   assert.match(workflow, /inputs\.release_tag/u);
   assert.match(releaseWorkflow, /googleapis\/release-please-action@v4/u);
   assert.match(releaseWorkflow, /token: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/u);
@@ -168,6 +189,48 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.equal(release["include-v-in-tag"], true);
   assert.equal(release.packages["."]["package-name"], "vibloom");
   assert.equal(versions["."], manifest.version);
+  assert.match(updateControl, /api\.github\.com\/repos\/wedoso\/Vibloom\/releases\/latest/u);
+  assert.match(updateControl, /desktopUpdates\.download\(\)/u);
+  assert.match(updateControl, /desktopUpdates\.install\(\)/u);
+  assert.match(releaseAssets, /latest-mac\.yml/u);
+  assert.match(releaseAssets, /latest\.yml/u);
+  assert.match(releaseAssets, /createHash\("sha512"\)/u);
+});
+
+test("compares published semantic versions before offering an update", async () => {
+  const { isNewerVersion } = await importTypeScriptModule(new URL("src/update/version.ts", root));
+  assert.equal(isNewerVersion("v1.1.0", "1.0.9"), true);
+  assert.equal(isNewerVersion("1.0.1", "1.0.1"), false);
+  assert.equal(isNewerVersion("v1.0.0", "1.0.1"), false);
+  assert.equal(isNewerVersion("2.0.0-beta.1", "1.9.9"), true);
+});
+
+test("consolidates parallel desktop artifacts into architecture-aware update metadata", async () => {
+  const { prepareUpdateRelease } = await import(new URL("scripts/prepare-update-release.mjs", root));
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), "vibloom-update-test-"));
+  const artifacts = path.join(temporaryRoot, "artifacts");
+  const output = path.join(temporaryRoot, "release-assets");
+  await mkdir(artifacts, { recursive: true });
+  try {
+    await Promise.all([
+      writeFile(path.join(artifacts, "Vibloom-1.0.1-mac-arm64.zip"), "arm64"),
+      writeFile(path.join(artifacts, "Vibloom-1.0.1-mac-x64.zip"), "x64"),
+      writeFile(path.join(artifacts, "Vibloom-1.0.1-win-x64.exe"), "windows"),
+      writeFile(path.join(artifacts, "Vibloom-1.0.1-win-x64.exe.blockmap"), "blockmap"),
+    ]);
+    const result = await prepareUpdateRelease(artifacts, output, "v1.0.1");
+    const [macMetadata, windowsMetadata] = await Promise.all([
+      readFile(path.join(output, "latest-mac.yml"), "utf8"),
+      readFile(path.join(output, "latest.yml"), "utf8"),
+    ]);
+    assert.equal(result.version, "1.0.1");
+    assert.match(macMetadata, /Vibloom-1\.0\.1-mac-arm64\.zip/u);
+    assert.match(macMetadata, /Vibloom-1\.0\.1-mac-x64\.zip/u);
+    assert.match(windowsMetadata, /Vibloom-1\.0\.1-win-x64\.exe/u);
+    assert.equal(result.assets.some(({ asset }) => asset.endsWith(".blockmap")), true);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test("keeps macOS playback alive when the last window is closed", async () => {

@@ -1,4 +1,5 @@
-import { app, BrowserWindow, net, protocol, session } from "electron";
+import { app, BrowserWindow, ipcMain, net, protocol, session, shell } from "electron";
+import electronUpdater from "electron-updater";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -8,7 +9,10 @@ const APP_URL = `${APP_SCHEME}://${APP_HOST}/index.html`;
 const DEV_SERVER_URL = process.env.VIBLOOM_DEV_SERVER_URL;
 const SMOKE_TEST = process.env.VIBLOOM_SMOKE_TEST === "1";
 const BACKGROUND_SMOKE_TEST = process.env.VIBLOOM_BACKGROUND_SMOKE_TEST === "1";
+const RELEASES_URL = "https://github.com/wedoso/Vibloom/releases/latest";
+const { autoUpdater } = electronUpdater;
 let isQuitting = false;
+let updateState = { status: "idle", currentVersion: app.getVersion() };
 
 protocol.registerSchemesAsPrivileged([{
   scheme: APP_SCHEME,
@@ -69,6 +73,59 @@ function installSessionGuards() {
   session.defaultSession.setPermissionCheckHandler(() => false);
 }
 
+function publishUpdateState(patch) {
+  updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("updates:status", updateState);
+}
+
+function installUpdateHandlers() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on("checking-for-update", () => publishUpdateState({ status: "checking", message: undefined }));
+  autoUpdater.on("update-available", (info) => publishUpdateState({ status: "available", availableVersion: info.version, progress: 0, message: undefined }));
+  autoUpdater.on("update-not-available", (info) => publishUpdateState({ status: "current", availableVersion: info.version, progress: 100, message: undefined }));
+  autoUpdater.on("download-progress", (progress) => publishUpdateState({ status: "downloading", progress: progress.percent, message: undefined }));
+  autoUpdater.on("update-downloaded", (info) => publishUpdateState({ status: "downloaded", availableVersion: info.version, progress: 100, message: undefined }));
+  autoUpdater.on("error", (error) => publishUpdateState({ status: "error", message: error?.message || "Update check failed." }));
+
+  const guard = (event) => {
+    if (!isAllowedNavigation(event.senderFrame.url)) throw new Error("Update request came from an untrusted renderer.");
+  };
+  ipcMain.handle("updates:check", async (event) => {
+    guard(event);
+    if (!app.isPackaged) {
+      publishUpdateState({ status: "error", message: "Automatic updates can be tested from an installed release build." });
+      return;
+    }
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (error) {
+      publishUpdateState({ status: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  });
+  ipcMain.handle("updates:download", async (event) => {
+    guard(event);
+    try {
+      publishUpdateState({ status: "downloading", progress: 0, message: undefined });
+      await autoUpdater.downloadUpdate();
+    } catch (error) {
+      publishUpdateState({ status: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  });
+  ipcMain.handle("updates:install", (event) => {
+    guard(event);
+    if (updateState.status !== "downloaded") return;
+    isQuitting = true;
+    autoUpdater.quitAndInstall(false, true);
+  });
+  ipcMain.handle("updates:open-releases", async (event) => {
+    guard(event);
+    await shell.openExternal(RELEASES_URL);
+  });
+}
+
 function createMainWindow() {
   const window = new BrowserWindow({
     width: 1440,
@@ -79,6 +136,7 @@ function createMainWindow() {
     show: false,
     title: "Vibloom",
     webPreferences: {
+      preload: path.join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -126,6 +184,7 @@ function createMainWindow() {
             hasLive2dError: Boolean(document.querySelector('.model-error')),
             hasIndexedDb: typeof indexedDB !== 'undefined',
             hasOpfs: typeof navigator.storage?.getDirectory === 'function',
+            hasUpdateBridge: typeof window.vibloomUpdates?.check === 'function' && typeof window.vibloomUpdates?.download === 'function',
             appVersion: document.querySelector('.brand-version')?.textContent,
             title: document.title,
             url: location.href
@@ -133,7 +192,17 @@ function createMainWindow() {
           if (state.hasLive2dCanvas || state.hasLive2dError) break;
           await new Promise((resolve) => setTimeout(resolve, 250));
         }
-        if (!state?.hasRoot || !state.hasLive2dCanvas || state.hasLive2dError || !state.hasIndexedDb || !state.hasOpfs || state.appVersion !== `v${app.getVersion()}`) {
+        state.updateProbeStatus = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Update bridge probe timed out.')), 3000);
+          const unsubscribe = window.vibloomUpdates.subscribe((nextState) => {
+            if (nextState.status !== 'error') return;
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve(nextState.status);
+          });
+          window.vibloomUpdates.check().catch(reject);
+        })`);
+        if (!state?.hasRoot || !state.hasLive2dCanvas || state.hasLive2dError || !state.hasIndexedDb || !state.hasOpfs || !state.hasUpdateBridge || state.updateProbeStatus !== "error" || state.appVersion !== `v${app.getVersion()}`) {
           throw new Error(JSON.stringify(state));
         }
         finished = true;
@@ -198,6 +267,7 @@ app.on("before-quit", () => {
 app.whenReady().then(async () => {
   await registerAppProtocol();
   installSessionGuards();
+  installUpdateHandlers();
   mainWindow = createMainWindow();
 
   app.on("activate", () => {
