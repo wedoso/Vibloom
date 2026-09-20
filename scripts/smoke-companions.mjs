@@ -52,10 +52,11 @@ async function smoke() {
       const createModel = Live2DCubismCore.Model.fromMoc;
       Live2DCubismCore.Model.fromMoc = function(...args) {
         const model = createModel.apply(this, args), update = model.update;
-        const probe = window.__poseProbe = { eyeMin: 1, eyeMax: 0, gazeMin: 1, gazeMax: -1 };
+        const probe = window.__poseProbe = { eyeMin: 1, eyeMax: 0, gazeMin: 1, gazeMax: -1, maxima: {}, current: {} };
         model.update = function(...args) {
           const values = model.parameters.values, ids = model.parameters.ids;
           const eye = values[ids.indexOf('ParamEyeLOpen')], gaze = values[ids.indexOf('ParamEyeBallX')];
+          for (const id of ['Param31', 'Param32', 'ParamEyeLSmile', 'Param_Angle_Rotation9', 'Param_Angle_Rotation13']) { const value = values[ids.indexOf(id)]; probe.maxima[id] = Math.max(probe.maxima[id] || 0, value); probe.current[id] = value; }
           probe.eyeMin = Math.min(probe.eyeMin, eye); probe.eyeMax = Math.max(probe.eyeMax, eye);
           probe.gazeMin = Math.min(probe.gazeMin, gaze); probe.gazeMax = Math.max(probe.gazeMax, gaze);
           return update.apply(this, args);
@@ -149,6 +150,19 @@ async function smoke() {
     assert.equal(await playing(), false);
     assert.ok(Math.abs(await position() - paused) < 0.05);
     console.log("PASS cameras, focus, library, queue and paused position");
+
+    const startsBeforeReactions = await run("window.__sourceStarts");
+    for (const name of ["hello", "shy", "sparkle", "bliss"]) {
+      await click('[aria-label="Interact with Hong Xi"]');
+      await delay(1300);
+      await capture(`hong-xi-reaction-${name}`);
+      await delay(3400);
+    }
+    assert.ok(await run(`window.__poseProbe.maxima.Param31 > 0.5 && window.__poseProbe.maxima.Param32 > 0.9 && window.__poseProbe.maxima.ParamEyeLSmile > 0.9`), "blush, star eyes and smiling expressions reach the rendered model");
+    assert.ok(await run(`Math.abs(window.__poseProbe.current.Param31) < 0.01 && Math.abs(window.__poseProbe.current.Param32) < 0.01 && Math.abs(window.__poseProbe.current.ParamEyeLSmile) < 0.01`), "expressions return to neutral");
+    assert.equal(await run("window.__sourceStarts"), startsBeforeReactions);
+    assert.equal(await playing(), false);
+    console.log("PASS personality reactions, expression reset and unchanged paused audio");
 
     for (let i = 0; i < 12; i++) { await select(i % 2 ? "hong-xi" : "hiyori"); await delay(35); }
     await ready("hong-xi");

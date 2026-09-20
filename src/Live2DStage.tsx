@@ -1,9 +1,10 @@
 import "@pixi/unsafe-eval";
 import type { Application as PixiApplication } from "pixi.js";
-import { Lock, Mouse, ScanFace, ScanLine, Sparkles } from "lucide-react";
+import { Lock, Mouse, ScanFace, ScanLine, Smile, Sparkles } from "lucide-react";
 import { MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AudioVisualFeatures } from "./audioVisual";
 import { COMPANIONS, hongXiPose, type CompanionId } from "./live2d/models";
+import { HONG_XI_PERSONALITY_PARAMS, HongXiPersonality } from "./live2d/hongXiPersonality";
 import { normalizeViewportGaze } from "./live2d/gaze";
 
 type StageVariant = "welcome" | "player";
@@ -240,6 +241,7 @@ export default function Live2DStage({
   onPickAudio,
 }: Live2DStageProps) {
   const companion = COMPANIONS[companionId];
+  const reactToCompanionRef = useRef<(() => void) | null>(null);
   const startsInPortrait = variant === "player";
   const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -679,7 +681,7 @@ export default function Live2DStage({
           return index >= 0 && index < core.getParameterCount() ? index : -1;
         };
         const parameterIndexes = new Map(
-          [...REST_SETTLE_PARAM_IDS, "ParamBustY"].map((id) => [id, realParameterIndex(id)]),
+          [...REST_SETTLE_PARAM_IDS, "ParamBustY", ...(!companion.authoredMotions ? HONG_XI_PERSONALITY_PARAMS : [])].map((id) => [id, realParameterIndex(id)]),
         );
         const addMusicParameter = (id: string, value: number, weight: number) => {
           const index = parameterIndexes.get(id);
@@ -869,9 +871,27 @@ export default function Live2DStage({
           setArmRigOwnership(false);
         };
 
+        const personality = new HongXiPersonality();
+        let personalityPose: ReturnType<HongXiPersonality["update"]> = {};
+        let personalityWeight = 0;
+        const reactToCompanion = () => personality.react();
+        if (!companion.authoredMotions) reactToCompanionRef.current = reactToCompanion;
+        const applyPersonalityEyes = () => {
+          if (companion.authoredMotions) return;
+          // Blend with the live blink after Physics; restoring open eyes directly
+          // here would fight the SDK's blink controller on every frame.
+          const openness = 1 - (personalityPose.eyesClosed ?? 0);
+          for (const index of restEyeOpenIndexes) {
+            core.setParameterValueByIndex(index, core.getParameterValueByIndex(index) * openness);
+          }
+        };
         const applyMusicPose = () => {
           if (!companion.authoredMotions) {
-            for (const [id, offset] of Object.entries(hongXiPose(variationPhase, poseSway, poseGroove, poseNod, bass, switchAccent))) {
+            const accompaniment = 1 - personalityWeight * 0.75;
+            const musicPose = hongXiPose(variationPhase, poseSway, poseGroove * accompaniment, poseNod * accompaniment, bass, switchAccent);
+            const offsets: Record<string, number> = { ...musicPose };
+            for (const id of HONG_XI_PERSONALITY_PARAMS) offsets[id] = (offsets[id] ?? 0) + (personalityPose[id] ?? 0);
+            for (const [id, offset] of Object.entries(offsets)) {
               const index = parameterIndexes.get(id);
               if (index !== undefined && index >= 0) core.setParameterValueByIndex(index, core.getParameterDefaultValue(index) + offset);
             }
@@ -983,12 +1003,15 @@ export default function Live2DStage({
         internalModel.on("afterMotionUpdate", applyRestPose);
         internalModel.on("afterMotionUpdate", capturePoseHistory);
         internalModel.on("beforeModelUpdate", applyRestEyeHandoff);
+        internalModel.on("beforeModelUpdate", applyPersonalityEyes);
         cleanupMotionPose = () => {
           internalModel.off("afterMotionUpdate", applyPoseTransition);
           internalModel.off("afterMotionUpdate", applyMusicPose);
           internalModel.off("afterMotionUpdate", applyRestPose);
           internalModel.off("afterMotionUpdate", capturePoseHistory);
           internalModel.off("beforeModelUpdate", applyRestEyeHandoff);
+          internalModel.off("beforeModelUpdate", applyPersonalityEyes);
+          if (reactToCompanionRef.current === reactToCompanion) reactToCompanionRef.current = null;
         };
 
         app.ticker.add(() => {
@@ -1429,6 +1452,10 @@ export default function Live2DStage({
             poseNod = follow(poseNod, targetPoseNod, features.isPlaying ? 18 : 6);
           }
 
+          if (!companion.authoredMotions) {
+            personalityPose = personality.update({ dt, playing: features.isPlaying, welcome: variantRef.current === "welcome", energy, beatCount });
+            personalityWeight = follow(personalityWeight, personality.gesture ? 1 : 0, 4);
+          }
           const stage = stageRef.current;
           if (stage) {
             const discCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
@@ -1654,10 +1681,15 @@ export default function Live2DStage({
             <ScanLine size={15} strokeWidth={1.7} />
             <span>Wide</span>
           </button>
+          {!companion.authoredMotions && <>
+            <i aria-hidden="true" />
+            <button type="button" disabled={status !== "ready"} aria-label="Interact with Hong Xi" title="Say hello — Hong Xi will react" onClick={() => reactToCompanionRef.current?.()}><Smile size={15} strokeWidth={1.7} /><span>React</span></button>
+          </>}
           <span className={`camera-zoom ${showZoom ? "is-visible" : ""}`}>{zoomReadout}%</span>
           <span className="camera-hint"><Mouse size={11} strokeWidth={1.7} /> scroll to frame</span>
         </div>
       )}
+      {variant === "welcome" && !companion.authoredMotions && <button className="companion-greeting" type="button" disabled={status !== "ready"} onClick={() => reactToCompanionRef.current?.()} aria-label="Interact with Hong Xi"><Smile size={15} /> Say hello</button>}
       {variant === "welcome" && onPickAudio && (
         <div className="stage-invitation">
           <span>YOUR MUSIC, HER MOVEMENT</span>

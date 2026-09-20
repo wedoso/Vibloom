@@ -2639,3 +2639,21 @@ button.track-index,
   background: transparent;
   cursor: pointer;
 }
+.companion-greeting {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border: 1px solid var(--library-line);
+  border-radius: 999px;
+  color: var(--library-muted);
+  background: var(--library-paper);
+  cursor: pointer;
+  font-size: 12px;
+}
+.companion-greeting:focus-visible { outline: 2px solid var(--library-accent); outline-offset: 3px; }
+.companion-greeting:disabled { opacity: .5; cursor: wait; }
