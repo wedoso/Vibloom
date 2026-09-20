@@ -253,3 +253,30 @@ test("keeps macOS playback alive when the last window is closed", async () => {
   assert.match(desktopMain, /window\.isDestroyed\(\) \|\| window\.isVisible\(\) \|\| after <= before/u);
   assert.match(desktopMain, /mainWindow\.show\(\);\s*mainWindow\.focus\(\);/u);
 });
+
+
+test("restores companion preferences without losing legacy playback state", async () => {
+  const { migrateLibrarySnapshot } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  for (const version of [1, 2]) {
+    for (const companionId of [undefined, "hiyori", "hong-xi", "unknown", null]) {
+      const session = { companionId, queue: ["a", "b"], currentTrackId: "b", currentTime: 42, volume: 0.4 };
+      const result = migrateLibrarySnapshot({ version, tracks: [], session });
+      assert.equal(result.session.companionId, companionId === "hong-xi" ? "hong-xi" : "hiyori");
+      assert.deepEqual(result.session.queue, session.queue);
+      assert.equal(result.session.currentTrackId, "b");
+      assert.equal(result.session.currentTime, 42);
+      assert.equal(result.session.volume, 0.4);
+    }
+  }
+});
+
+test("Hong Xi's procedural performance stays finite, bounded and returns to idle", async () => {
+  const { hongXiPose } = await importTypeScriptModule(new URL("src/live2d/models.ts", root));
+  for (let frame = 0; frame < 36000; frame += 1) {
+    const phase = frame / 60;
+    const pose = hongXiPose(phase, Math.sin(phase), 1, 1, 1, Math.sin(phase));
+    assert.ok(Object.values(pose).every((value) => Number.isFinite(value) && Math.abs(value) < 10));
+  }
+  const rest = hongXiPose(0, 1, 0, 0, 0, 0);
+  assert.ok(Object.values(rest).every((value) => value === 0));
+});

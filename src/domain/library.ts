@@ -1,3 +1,4 @@
+import type { CompanionId } from "../live2d/models";
 import type { LyricLine } from "../lrc";
 
 export type TrackAvailability = "available" | "reconnect" | "missing" | "session";
@@ -38,6 +39,7 @@ export type LibrarySession = {
   repeat: RepeatMode;
   volume: number;
   cacheEnabled: boolean;
+  companionId: CompanionId;
 };
 
 export type LibrarySnapshot = {
@@ -46,10 +48,10 @@ export type LibrarySnapshot = {
   session: LibrarySession;
 };
 
-export type StoredLibrarySnapshot = LibrarySnapshot | {
-  version: 1;
+export type StoredLibrarySnapshot = {
+  version: 1 | 2;
   tracks: LibraryTrack[];
-  session: Omit<LibrarySession, "cacheEnabled"> & { cacheEnabled?: boolean };
+  session: Omit<LibrarySession, "cacheEnabled" | "companionId"> & Partial<Pick<LibrarySession, "cacheEnabled" | "companionId">>;
 };
 
 export const EMPTY_SESSION: LibrarySession = {
@@ -61,6 +63,7 @@ export const EMPTY_SESSION: LibrarySession = {
   repeat: "off",
   volume: 0.9,
   cacheEnabled: true,
+  companionId: "hiyori",
 };
 
 export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): LibrarySnapshot {
@@ -70,6 +73,7 @@ export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): Library
     session: {
       ...EMPTY_SESSION,
       ...snapshot.session,
+      companionId: snapshot.session.companionId === "hong-xi" ? "hong-xi" : "hiyori",
       cacheEnabled: snapshot.version >= 2 ? (snapshot.session.cacheEnabled ?? true) : true,
     },
   };

@@ -25,7 +25,8 @@
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint .",
     "check": "npm run lint && npm test",
-    "audit": "npm audit --omit=dev"
+    "audit": "npm audit --omit=dev",
+    "desktop:smoke:companions": "npm run build && electron scripts/smoke-companions.mjs"
   },
   "dependencies": {
     "@pixi/sound": "^5.2.3",

@@ -316,7 +316,7 @@ test("separates the static contact shadow from ambient music lighting", async ()
   const musicDisc = styles.match(/\.stage-music-disc\s*\{([^}]*)\}/u)?.[1] ?? "";
 
   assert.match(stage, /const contactShadow = new Graphics\(\)/u);
-  assert.match(stage, /const contactShadowY = naturalHeight \* 0\.463/u);
+  assert.match(stage, /const contactShadowY = naturalHeight \* companion\.shadowY/u);
   assert.match(stage, /contactShadow\.drawEllipse\(0, contactShadowY, naturalWidth \* 0\.25, naturalHeight \* 0\.009\)/u);
   assert.match(stage, /or drop one audio file anywhere on the stage/u);
   assert.match(stage, /contactShadow\.drawEllipse/u);
@@ -374,4 +374,22 @@ test("interactive surfaces use one persistent boundary", async () => {
   assert.doesNotMatch(styles, /\.camera-capsule::after/u);
   assert.match(styles, /\.site-header \.brand-mark \{[^}]*box-shadow: none;/u);
   assert.match(styles, /\.camera-capsule button\.is-active \{[^}]*box-shadow: none;/u);
+});
+
+
+test("packages every companion dependency and configures Hong Xi blinking", async () => {
+  const { COMPANIONS } = await importTypeScriptModule(new URL("src/live2d/models.ts", root));
+  for (const companion of Object.values(COMPANIONS)) {
+    const modelUrl = new URL(companion.modelPath, dist);
+    const { FileReferences: refs, Groups: groups } = JSON.parse(await readFile(modelUrl, "utf8"));
+    const files = [refs.Moc, refs.Physics, refs.DisplayInfo, refs.Pose, ...refs.Textures,
+      ...(refs.Expressions ?? []).map(({ File }) => File),
+      ...Object.values(refs.Motions ?? {}).flat().map(({ File }) => File)].filter(Boolean);
+    await Promise.all(files.map((file) => access(new URL(file, modelUrl))));
+    if (companion.name === "Hong Xi") {
+      assert.deepEqual(groups.find(({ Name }) => Name === "EyeBlink").Ids, ["ParamEyeLOpen", "ParamEyeROpen"]);
+      const directory = await readdir(new URL("./", modelUrl));
+      assert.ok(directory.every((name) => !/\.(psd|cmo3|vtube\.json)$/u.test(name)));
+    }
+  }
 });

@@ -46,6 +46,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import Live2DStage from "./Live2DStage";
+import { COMPANIONS, type CompanionId } from "./live2d/models";
 import BrandMark from "./BrandMark";
 import UpdateControl from "./UpdateControl";
 import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
@@ -487,6 +488,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const shortcutSwitchSourceRef = useRef<(source: 0 | 1) => void>(() => undefined);
   const audioVisualRef = useRef({ ...EMPTY_AUDIO_VISUAL });
 
+  const companion = COMPANIONS[session.companionId];
   const currentTrack = tracks.find((track) => track.id === session.currentTrackId) ?? null;
   const filteredTracks = useMemo(() => {
     const query = normalizeFileName(search);
@@ -1526,13 +1528,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [compareSlot.status, getTimelineTime, seekTo, setFocusWithTransition, toggleFocusMode]);
 
   return (
-    <main className={`library-app ${tracks.length ? "has-library" : "is-empty"} ${focusMode ? "is-library-focus" : ""}`}>
+    <main data-companion={session.companionId} className={`library-app ${tracks.length ? "has-library" : "is-empty"} ${focusMode ? "is-library-focus" : ""}`}>
       <div className="scene-curtain" aria-hidden="true">
         <span className="scene-curtain-disc" />
         <span className="scene-curtain-line scene-curtain-line-one" />
         <span className="scene-curtain-line scene-curtain-line-two" />
-        <span className="scene-curtain-copy scene-curtain-copy-enter"><small>Listening room</small><strong><span>The room is</span><em>listening.</em></strong><i>Your library and Hiyori are ready</i></span>
-        <span className="scene-curtain-copy scene-curtain-copy-workspace-player"><small>Playback room</small><strong><span>Back to the</span><em>music.</em></strong><i>Controls and Hiyori ready</i></span>
+        <span className="scene-curtain-copy scene-curtain-copy-enter"><small>Listening room</small><strong><span>The room is</span><em>listening.</em></strong><i>Your library and {companion.name} are ready</i></span>
+        <span className="scene-curtain-copy scene-curtain-copy-workspace-player"><small>Playback room</small><strong><span>Back to the</span><em>music.</em></strong><i>Controls and {companion.name} ready</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-workspace-library"><small>Your collection</small><strong><span>Open the</span><em>library.</em></strong><i>Queue, lyrics and local tracks</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-focus-enter"><small>Focus mode</small><strong><span>The noise</span><em>falls away.</em></strong><i>One track · One room · One moment</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-focus-exit"><small>Full room</small><strong><span>The session</span><em>returns.</em></strong><i>Controls and comparison restored</i></span>
@@ -1554,6 +1556,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         </div>
         {tracks.length > 0 && <div className="library-header-status"><span>{tracks.length} tracks</span><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Library ready"}</strong></div>}
         <div className="library-header-actions">
+          <label className="companion-selector">
+            <span>Companion</span>
+            <select aria-label="Music companion" value={session.companionId} disabled={!restored} onChange={(event) => patchSession({ companionId: event.target.value as CompanionId })}>
+              {Object.entries(COMPANIONS).map(([id, model]) => <option key={id} value={id}>{model.name}</option>)}
+            </select>
+          </label>
           {unavailableCount > 0 && <button className="reconnect-button" type="button" onClick={() => openFolder(true)}><FolderOpen size={15} /> Reconnect music <span>{unavailableCount}</span></button>}
           {tracks.length > 0 && <button className="header-icon-button" type="button" aria-label="Focus mode (F)" onClick={toggleFocusMode}><Maximize2 size={17} /></button>}
           <button className="header-icon-button" type="button" aria-label="Local storage" onClick={() => { setStorageOpen(true); void refreshStorageState(); }}><HardDrive size={17} /></button>
@@ -1573,7 +1581,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           <div className="library-welcome-copy">
             <p className="eyebrow"><Headphones size={15} /> Your private local music library</p>
             <h1>Bring a folder.<br /><em>Let it bloom.</em></h1>
-            <p>Build a queue from your own music, keep lyrics in sync, and let Hiyori stay with every track. Nothing is uploaded.</p>
+            <p>Build a queue from your own music, keep lyrics in sync, and let {companion.name} stay with every track. Nothing is uploaded.</p>
             <div className="welcome-import-surface">
               <button className="welcome-import-primary" type="button" onClick={() => setImportOpen((value) => !value)}><Upload size={18} /><span><strong>Import your music</strong><small>Files, albums, lyrics, or a complete folder</small></span><ChevronDown size={16} /></button>
               {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>One or many audio and LRC files</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>Choose a folder</strong><small>Preserve album order and matching lyrics</small></span></button></div>}
@@ -1581,7 +1589,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
             </div>
           </div>
           <div className="library-welcome-stage">
-            <Live2DStage featuresRef={audioVisualRef} variant="welcome" trackLabel="Waiting for your library" activeSource={0} isComparing={false} isPlaying={false} focusMode={false} />
+            <Live2DStage companionId={session.companionId} featuresRef={audioVisualRef} variant="welcome" trackLabel="Waiting for your library" activeSource={0} isComparing={false} isPlaying={false} focusMode={false} />
           </div>
         </section>
       ) : (
@@ -1675,7 +1683,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           <aside className="persistent-stage-panel">
             <div className="now-listening-heading"><p>NOW LISTENING</p><h2>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</h2><span>{currentTrack?.sourceLabel ?? "Your local library"}</span></div>
             {focusMode && currentTrack?.lyrics.length ? <LyricsPanel lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
-            <div className="persistent-stage-canvas"><Live2DStage containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} featuresRef={audioVisualRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={compareSlot.status === "ready"} isPlaying={isPlaying} focusMode={focusMode} /></div>
+            <div className="persistent-stage-canvas"><Live2DStage companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} featuresRef={audioVisualRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={compareSlot.status === "ready"} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><button type="button" className={activeSource === 0 ? "is-active" : ""} onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button>{comparisonReady && <><i /><button type="button" className={activeSource === 1 ? "is-active" : ""} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button></>}<small>{comparisonReady ? `Listening to ${activeSource === 0 ? "library track" : "version B"}` : "Solo playback"}</small></div>
           </aside>
         </div>

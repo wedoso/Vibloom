@@ -2585,3 +2585,57 @@ button.track-index,
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule button span { display: none; }
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule > i { width: 15px; height: 1px; }
+
+/* Model selection lives outside the stage, so audio keeps its current clock. */
+.companion-selector {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--library-muted);
+  font-size: 11px;
+}
+.companion-selector select {
+  min-height: 38px;
+  max-width: 116px;
+  padding: 6px 8px;
+  border: 1px solid var(--library-line);
+  border-radius: 10px;
+  color: var(--library-ink);
+  background: var(--library-paper);
+  font: inherit;
+  cursor: pointer;
+}
+.companion-selector select:focus-visible {
+  outline: 2px solid var(--library-accent);
+  outline-offset: 3px;
+}
+.library-app[data-companion="hong-xi"] {
+  --library-ink: #302d42;
+  --library-muted: #746b81;
+  --library-line: rgba(80, 57, 100, .15);
+  --library-paper: rgba(255, 248, 253, .82);
+  --library-accent: #915578;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(211, 175, 215, .3), transparent 31rem),
+    linear-gradient(135deg, #faf3f8 0%, #f2edf6 46%, #e9e3f0 100%);
+}
+.library-app[data-companion="hong-xi"] .live2d-stage.light-a { --stage-light-rgb: 195 153 184; }
+.library-app[data-companion="hong-xi"] .live2d-stage.light-b { --stage-light-rgb: 145 170 198; }
+@media (max-width: 900px) {
+  .companion-selector > span { display: none; }
+}
+@media (max-width: 400px) {
+  .library-header { gap: 8px; padding-inline: 12px; }
+  .library-header-actions { gap: 5px; }
+  .companion-selector select { max-width: 94px; }
+}
+.library-app[data-companion="hong-xi"] .library-header { background: rgba(250, 246, 253, .85); }
+.model-error button {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
