@@ -62,7 +62,7 @@ Release. The tag starts `.github/workflows/desktop-release.yml`, which has three
 paths:
 
 - Pull requests and pushes to `main` run lint, tests, the web build, a headless Electron smoke test, and a production dependency audit.
-- A manual **Desktop CI and Release** run packages unsigned macOS and Windows installers and exposes them as downloadable workflow artifacts for 30 days. Supplying an existing `v*` tag in its `release_tag` input also publishes those artifacts to that GitHub Release, which makes failed packaging runs safely resumable.
+- A manual **Desktop CI and Release** run uses the same macOS signing/notarization checks and packages macOS and Windows installers and exposes them as downloadable workflow artifacts for 30 days. Supplying an existing `v*` tag in its `release_tag` input also publishes those artifacts to that GitHub Release, which makes failed packaging runs safely resumable.
 - Pushing a version tag such as `v1.1.0` packages both platforms and uploads the installers to a GitHub Release.
 
 The workflow creates macOS x64 and ARM64 DMG/ZIP files and a Windows x64 NSIS installer. Its final release job consolidates both macOS architectures into `latest-mac.yml`, creates Windows `latest.yml`, and uploads those files with the update payloads and blockmaps. Do not hand-edit or reuse update metadata from another build: its SHA-512 values must match the uploaded installers exactly.

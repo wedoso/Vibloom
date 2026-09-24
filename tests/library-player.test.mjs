@@ -75,7 +75,7 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
   assert.match(app, /changeWorkspace\("player"\)/u);
   assert.match(app, /changeWorkspace\("library"\)/u);
   assert.doesNotMatch(app, /audioRef\.current\?\.pause\(\);\s*setWorkspace/u);
-  assert.match(app, /<Live2DStage containModel layoutKey=/u);
+  assert.match(app, /<Live2DStage[^>]* containModel layoutKey=/u);
   assert.match(stage, /containModelRef/u);
   assert.match(stage, /cameraPreset/u);
   assert.match(stage, /const PORTRAIT_ZOOM = 2\.4/u);

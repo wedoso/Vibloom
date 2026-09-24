@@ -2,7 +2,7 @@
 
 Your music library, brought to life.
 
-Vibloom is a private, local-first music player for the web, Windows, and macOS. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hiyori as a rhythm-aware Live2D companion.
+Vibloom is a private, local-first music player for the web, Windows, and macOS. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hong Xi, the default rhythm-aware Live2D companion, or switch to Hiyori.
 
 [Open Vibloom on the web](https://wedoso.github.io/Vibloom/) · [Download the desktop app](https://github.com/wedoso/Vibloom/releases/latest)
 
@@ -27,7 +27,7 @@ Browser storage can still be cleared by private-browsing rules, site-data cleanu
 - Use `Space` to play or pause, arrow keys to seek five seconds, and `F` to enter or leave Focus mode.
 - Use Director for automatic phrase-level framing, Portrait for an upper-body shot, or Wide for a full-body view.
 - Use the mouse wheel for manual framing up to 400%. Every camera mode adapts to the available stage, protects the title area, and applies a soft edge fade when close framing reaches a boundary.
-- Hiyori follows the pointer across the entire player window, including the library and control areas—not only when the pointer is close to the model.
+- Both companions follow the pointer across the entire player window, including the library and control areas—not only when the pointer is close to the model.
 
 ## Hear the difference
 
@@ -45,7 +45,7 @@ The current library track is always Version A. Add or drop a Version B only when
 
 ![Vibloom Focus mode with synchronized lyrics and a compact transport](docs/assets/focus-mode.png)
 
-Press `F` for a distraction-free stage. Focus mode removes the waveform cards while keeping the same audio clock, playhead, camera, synchronized lyrics, compact A/B selector, and single bottom transport. The stage now reaches the transport instead of leaving a large empty band below Hiyori. Press `F` again or `Esc` to leave.
+Press `F` for a distraction-free stage. Focus mode removes the waveform cards while keeping the same audio clock, playhead, camera, synchronized lyrics, compact A/B selector, and single bottom transport. The stage now reaches the transport instead of leaving a large empty band below your companion. Press `F` again or `Esc` to leave.
 
 ## Synchronized lyrics
 
@@ -103,3 +103,14 @@ Detailed implementation contracts live in [the player specification](docs/librar
 Vibloom source code is available under the [MIT License](LICENSE).
 
 Hiyori Momose is a Live2D sample model. Its bundled notice is available at [LICENSE-HIYORI.txt](public/live2d/hiyori/LICENSE-HIYORI.txt); the model and Cubism runtime remain subject to Live2D's applicable licenses and terms.
+
+
+### Live2D companions
+
+**Hong Xi is the default companion.** Choose **Hong Xi** or **Hiyori** from the **Companion** selector in the header. The choice is saved on this device with the library. New libraries, resets, and older libraries without a saved model choice start with Hong Xi; an existing Hiyori selection is preserved. Switching companions preserves playback, the A/B source, queue, lyrics, volume, and camera mode. Hong Xi's complete theme pairs powder blue, navy and silver with subtle plaid, matching her sweater and headphones. It covers welcome, player, library, focus, menus, queue/storage, dialogs and transitions. Steel-blue A and muted-violet B remain consistent across waveforms, lyrics, source controls and stage light. Hiyori keeps the original warm theme. Both support pointer tracking, beat response, camera controls, and focus mode.
+
+Hong Xi's runtime assets are bundled in `public/live2d/hong-xi/`, copied from the supplied `~/Downloads/hx/yuql216` export. The bundle contains the model, 8192px texture, physics, display metadata, and five referenced expressions. PSD/Cubism editor projects and VTube Studio settings are not required. The original model manifest had empty blink IDs; the bundled manifest configures its existing left/right eye parameters. No authored motion clips were supplied, so Hong Xi combines a procedural beat response with six eased personality gestures: greeting, curious head tilt, double nod, eyes-closed enjoyment, shy blush, and star-eyed delight. A shuffle bag schedules gestures at musical phrase boundaries, with quiet gaps and softer choices for quiet passages. The original blush and star-eye parameters are used; angry/shadowed expressions and the headphone visibility toggle stay untouched. Pausing eases expressions back to neutral. Use **Say hello** on the welcome stage or the **React** smile button beside the camera controls for a response, including while paused. Hiyori retains its authored choreography.
+
+Hong Xi artwork is user-supplied and is not covered by this repository's MIT source-code license. No separate redistribution license was included in the supplied export.
+
+Run `npm run desktop:smoke:companions` to exercise both models in Electron with generated local audio, A/B switching, lyrics, focus/camera controls, preference restoration, loading failure recovery, and rapid model switching. It uses an isolated temporary profile and does not modify your music library. Screenshots are saved under `outputs/companion-smoke/`.

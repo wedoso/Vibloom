@@ -216,26 +216,27 @@ test("compares published semantic versions before offering an update", async () 
 
 test("consolidates parallel desktop artifacts into architecture-aware update metadata", async () => {
   const { prepareUpdateRelease } = await import(new URL("scripts/prepare-update-release.mjs", root));
+  const { version } = JSON.parse(await readFile(new URL("package.json", root), "utf8"));
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), "vibloom-update-test-"));
   const artifacts = path.join(temporaryRoot, "artifacts");
   const output = path.join(temporaryRoot, "release-assets");
   await mkdir(artifacts, { recursive: true });
   try {
     await Promise.all([
-      writeFile(path.join(artifacts, "Vibloom-1.1.0-mac-arm64.zip"), "arm64"),
-      writeFile(path.join(artifacts, "Vibloom-1.1.0-mac-x64.zip"), "x64"),
-      writeFile(path.join(artifacts, "Vibloom-1.1.0-win-x64.exe"), "windows"),
-      writeFile(path.join(artifacts, "Vibloom-1.1.0-win-x64.exe.blockmap"), "blockmap"),
+      writeFile(path.join(artifacts, `Vibloom-${version}-mac-arm64.zip`), "arm64"),
+      writeFile(path.join(artifacts, `Vibloom-${version}-mac-x64.zip`), "x64"),
+      writeFile(path.join(artifacts, `Vibloom-${version}-win-x64.exe`), "windows"),
+      writeFile(path.join(artifacts, `Vibloom-${version}-win-x64.exe.blockmap`), "blockmap"),
     ]);
-    const result = await prepareUpdateRelease(artifacts, output, "v1.1.0");
+    const result = await prepareUpdateRelease(artifacts, output, `v${version}`);
     const [macMetadata, windowsMetadata] = await Promise.all([
       readFile(path.join(output, "latest-mac.yml"), "utf8"),
       readFile(path.join(output, "latest.yml"), "utf8"),
     ]);
-    assert.equal(result.version, "1.1.0");
-    assert.match(macMetadata, /Vibloom-1\.1\.0-mac-arm64\.zip/u);
-    assert.match(macMetadata, /Vibloom-1\.1\.0-mac-x64\.zip/u);
-    assert.match(windowsMetadata, /Vibloom-1\.1\.0-win-x64\.exe/u);
+    assert.equal(result.version, version);
+    assert.ok(macMetadata.includes(`Vibloom-${version}-mac-arm64.zip`));
+    assert.ok(macMetadata.includes(`Vibloom-${version}-mac-x64.zip`));
+    assert.ok(windowsMetadata.includes(`Vibloom-${version}-win-x64.exe`));
     assert.equal(result.assets.some(({ asset }) => asset.endsWith(".blockmap")), true);
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
@@ -252,4 +253,32 @@ test("keeps macOS playback alive when the last window is closed", async () => {
   assert.match(desktopMain, /VIBLOOM_BACKGROUND_READY/u);
   assert.match(desktopMain, /window\.isDestroyed\(\) \|\| window\.isVisible\(\) \|\| after <= before/u);
   assert.match(desktopMain, /mainWindow\.show\(\);\s*mainWindow\.focus\(\);/u);
+});
+
+
+test("restores companion preferences without losing legacy playback state", async () => {
+  const { EMPTY_SESSION, migrateLibrarySnapshot } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  assert.equal(EMPTY_SESSION.companionId, "hong-xi");
+  for (const version of [1, 2]) {
+    for (const companionId of [undefined, "hiyori", "hong-xi", "unknown", null]) {
+      const session = { companionId, queue: ["a", "b"], currentTrackId: "b", currentTime: 42, volume: 0.4 };
+      const result = migrateLibrarySnapshot({ version, tracks: [], session });
+      assert.equal(result.session.companionId, companionId === "hiyori" ? "hiyori" : "hong-xi");
+      assert.deepEqual(result.session.queue, session.queue);
+      assert.equal(result.session.currentTrackId, "b");
+      assert.equal(result.session.currentTime, 42);
+      assert.equal(result.session.volume, 0.4);
+    }
+  }
+});
+
+test("Hong Xi's procedural performance stays finite, bounded and returns to idle", async () => {
+  const { hongXiPose } = await importTypeScriptModule(new URL("src/live2d/models.ts", root));
+  for (let frame = 0; frame < 36000; frame += 1) {
+    const phase = frame / 60;
+    const pose = hongXiPose(phase, Math.sin(phase), 1, 1, 1, Math.sin(phase));
+    assert.ok(Object.values(pose).every((value) => Number.isFinite(value) && Math.abs(value) < 10));
+  }
+  const rest = hongXiPose(0, 1, 0, 0, 0, 0);
+  assert.ok(Object.values(rest).every((value) => value === 0));
 });

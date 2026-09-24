@@ -36,6 +36,7 @@
   border-radius: 24px;
   color: var(--library-ink);
   background: rgba(255, 252, 247, .98);
+  font: 400 14px/1.5 var(--library-sans);
   box-shadow: 0 28px 70px rgba(55, 42, 31, .22);
   animation: update-dialog-in .28s cubic-bezier(.2, .82, .2, 1) both;
 }
@@ -142,7 +143,7 @@
   gap: 8px;
 }
 
-.update-actions button {
+.update-dialog .update-actions button {
   min-height: 40px;
   padding: 0 16px;
   display: inline-flex;
@@ -192,6 +193,13 @@
   backdrop-filter: blur(18px);
   position: relative;
   z-index: 20;
+}
+
+/* A backdrop-filter makes the header a containing block for fixed descendants.
+   Release it while the update dialog is open so its backdrop fills the window. */
+.library-header:has(.update-backdrop) {
+  backdrop-filter: none;
+  z-index: 180;
 }
 
 .library-header .wordmark {
@@ -2585,3 +2593,62 @@ button.track-index,
 
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule button span { display: none; }
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule > i { width: 15px; height: 1px; }
+
+/* Model selection lives outside the stage, so audio keeps its current clock. */
+.companion-selector {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--library-muted);
+  font-size: 11px;
+}
+.companion-selector select {
+  min-height: 38px;
+  max-width: 116px;
+  padding: 6px 8px;
+  border: 1px solid var(--library-line);
+  border-radius: 10px;
+  color: var(--library-ink);
+  background: var(--library-paper);
+  font: inherit;
+  cursor: pointer;
+}
+.companion-selector select:focus-visible {
+  outline: 2px solid var(--library-accent);
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  .companion-selector > span { display: none; }
+}
+@media (max-width: 400px) {
+  .library-header { gap: 8px; padding-inline: 12px; }
+  .library-header-actions { gap: 5px; }
+  .companion-selector select { max-width: 94px; }
+}
+.model-error button {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.companion-greeting {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border: 1px solid var(--library-line);
+  border-radius: 999px;
+  color: var(--library-muted);
+  background: var(--library-paper);
+  cursor: pointer;
+  font-size: 12px;
+}
+.companion-greeting:focus-visible { outline: 2px solid var(--library-accent); outline-offset: 3px; }
+.companion-greeting:disabled { opacity: .5; cursor: wait; }

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "hong-xi-theme": {
+      "targetKind": "existing-ui",
+      "projectId": "7bafb056-03bc-46e2-8c30-8ebdb5da7666",
+      "baselineDraftId": "c3569797-c354-49a4-90fc-5843878b8863",
+      "activeDraftId": "c3569797-c354-49a4-90fc-5843878b8863",
+      "designSystemPath": ".superdesign/design-system.md",
+      "referenceIds": [
+        "ef136e91-6bb4-45ec-9efa-8af33b07495f",
+        "public-favicon.svg"
+      ],
+      "brandAssets": {
+        "logo": {
+          "assetKey": "public-favicon.svg",
+          "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/7bafb056-03bc-46e2-8c30-8ebdb5da7666/brand-assets/public-favicon.svg/favicon.svg",
+          "sourcePath": "public/favicon.svg"
+        }
+      },
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "src/LibraryApp.tsx:1530:1735",
+        "src/Live2DStage.tsx:1593:1715",
+        "src/BrandMark.tsx",
+        "src/index.css:1:45",
+        "src/library.css:1220:1450"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "a00afea4b75dae604cce0950ef43522c8be1c7149924333b0946869d65a1ea78",
+        "src/LibraryApp.tsx": "c7370c974bd6bc72e1e46fe94a8006e730b81fa7dea981a9e1c5d96b5d45a034",
+        "src/Live2DStage.tsx": "dad1b5ab2dab890e4b213938baa6bb7071bb8d802ba97310126bbe4886d7055d",
+        "src/BrandMark.tsx": "bd0b6d9587446618e0d171d5b2b322724b65d1f94f9d23eeee56f03490b08b30",
+        "src/index.css": "f2fbf6921d30fccaea3cf215615c2aac92cdadd565c6bc0aff3addc4ac374e3e",
+        "src/library.css": "573b1337afa55e3879b1ba0e2dcbbae34ab9355c27a000aff5120f4871512c47"
+      },
+      "components": [],
+      "componentNotes": "The current LibraryApp shell is inline rather than an extractable standalone layout; BrandMark is provided as source and brand asset.",
+      "drafts": {
+        "c3569797-c354-49a4-90fc-5843878b8863": {
+          "title": "Vibloom Hong Xi Theme",
+          "visualDirection": "Powder blue knit, navy plaid, silver surfaces; companion-scoped styling",
+          "currentVersion": 2
+        }
+      },
+      "updatedAt": "2026-09-24T21:47:54.415937+00:00",
+      "implementationFiles": [
+        "src/hong-xi-theme.css"
+      ]
+    }
+  }
+}

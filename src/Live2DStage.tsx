@@ -1,13 +1,16 @@
 import "@pixi/unsafe-eval";
 import type { Application as PixiApplication } from "pixi.js";
-import { Lock, Mouse, ScanFace, ScanLine, Sparkles } from "lucide-react";
+import { Lock, Mouse, ScanFace, ScanLine, Smile, Sparkles } from "lucide-react";
 import { MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AudioVisualFeatures } from "./audioVisual";
+import { COMPANIONS, hongXiPose, type CompanionId } from "./live2d/models";
+import { HONG_XI_PERSONALITY_PARAMS, HongXiPersonality } from "./live2d/hongXiPersonality";
 import { normalizeViewportGaze } from "./live2d/gaze";
 
 type StageVariant = "welcome" | "player";
 
 type Live2DStageProps = {
+  companionId?: CompanionId;
   featuresRef: MutableRefObject<AudioVisualFeatures>;
   variant: StageVariant;
   trackLabel: string;
@@ -173,6 +176,7 @@ const MOTION_LOOP_CORRECTIONS: Record<OfficialMotionId, readonly (readonly [stri
 
 type CoreModel = {
   getParameterIndex: (id: string) => number;
+  getParameterCount: () => number;
   getParameterDefaultValue: (index: number) => number;
   getParameterValueByIndex: (index: number) => number;
   setPartOpacityById: (id: string, opacity: number) => void;
@@ -224,6 +228,7 @@ type InternalModelControls = {
 };
 
 export default function Live2DStage({
+  companionId = "hong-xi",
   featuresRef,
   variant,
   trackLabel,
@@ -235,6 +240,8 @@ export default function Live2DStage({
   layoutKey,
   onPickAudio,
 }: Live2DStageProps) {
+  const companion = COMPANIONS[companionId];
+  const reactToCompanionRef = useRef<(() => void) | null>(null);
   const startsInPortrait = variant === "player";
   const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -256,6 +263,7 @@ export default function Live2DStage({
   const cameraPresetRef = useRef<"director" | "portrait" | "wide" | "manual">(startsInPortrait ? "portrait" : "director");
   const autoSuspendUntilRef = useRef(0);
   const zoomTimerRef = useRef<number | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [cameraMode, setCameraMode] = useState<"auto" | "locked">(startsInPortrait ? "locked" : "auto");
   const [cameraPreset, setCameraPreset] = useState<"director" | "portrait" | "wide" | "manual">(startsInPortrait ? "portrait" : "director");
@@ -326,6 +334,7 @@ export default function Live2DStage({
     let cleanupMotionPose: (() => void) | null = null;
     let cleanupModel: (() => void) | null = null;
     let appDestroyed = false;
+    let modelLoading = false;
     const destroyApp = () => {
       if (!app || appDestroyed) return;
       appDestroyed = true;
@@ -343,6 +352,7 @@ export default function Live2DStage({
           import("pixi-live2d-display-advanced/cubism4"),
         ]);
         if (disposed) return;
+        setStatus("loading");
         configureCubism4({ memorySizeMB: 64 });
         app = new Application({
           backgroundAlpha: 0,
@@ -355,18 +365,20 @@ export default function Live2DStage({
         if (!host || disposed) return;
         const canvas = app.view as HTMLCanvasElement;
         canvas.className = "live2d-canvas";
-        canvas.setAttribute("aria-label", "Hiyori, an interactive Live2D music companion");
+        canvas.setAttribute("aria-label", `${companion.name}, an interactive Live2D music companion`);
         canvas.style.visibility = "hidden";
         host.appendChild(canvas);
 
         const base = import.meta.env.BASE_URL;
-        const model = await Live2DModel.from(`${base}live2d/hiyori-pro/hiyori_pro_t11.model3.json`, {
+        modelLoading = true;
+        const model = await Live2DModel.from(`${base}${companion.modelPath}`, {
           autoHitTest: false,
           autoFocus: false,
           autoUpdate: false,
           motionPreload: MotionPreloadStrategy.IDLE,
           ticker: app.ticker,
         });
+        modelLoading = false;
         if (disposed || !app) {
           model.automator.autoUpdate = false;
           model.destroy();
@@ -379,8 +391,12 @@ export default function Live2DStage({
         app.ticker.maxFPS = 60;
         app.ticker.minFPS = 30;
         const internalModel = model.internalModel as unknown as InternalModelControls;
+        cleanupModel = () => {
+          model.automator.autoUpdate = false;
+          model.destroy();
+        };
         await Promise.all(
-          Object.values(OFFICIAL_MOTIONS).map(async (motion) => {
+          (companion.authoredMotions ? Object.values(OFFICIAL_MOTIONS) : []).map(async (motion) => {
             const asset = await internalModel.motionManager.loadMotion(motion.group, motion.index);
             if (!asset) return;
             // The PRO files omit fade metadata, so Cubism otherwise injects a
@@ -392,12 +408,7 @@ export default function Live2DStage({
             asset.setIsLoopFadeIn(false);
           }),
         );
-        if (disposed) {
-          model.automator.autoUpdate = false;
-          model.destroy();
-          destroyApp();
-          return;
-        }
+        if (disposed) return;
         // Rest is intentionally not an authored looping motion. The official m01
         // clip becomes the listening performance only while audio is playing;
         // paused Hiyori keeps the SDK's quiet blink, breath, focus, and Physics.
@@ -409,7 +420,7 @@ export default function Live2DStage({
         // The model canvas includes transparent space below the visible soles.
         // Pull the shadow into the rendered foot line instead of using the
         // texture's geometric bottom, which makes Hiyori appear to float.
-        const contactShadowY = naturalHeight * 0.463;
+        const contactShadowY = naturalHeight * companion.shadowY;
         contactShadow.beginFill(0x202b46, 0.19);
         contactShadow.drawEllipse(0, contactShadowY, naturalWidth * 0.25, naturalHeight * 0.009);
         contactShadow.endFill();
@@ -663,20 +674,27 @@ export default function Live2DStage({
         let poseHistoryAt = performance.now() / 1000;
         const core = internalModel.coreModel;
         const focusController = internalModel.focusController;
+        // Cubism creates virtual indexes for missing IDs instead of returning -1.
+        // Never treat those virtual channels as real joints on another model.
+        const realParameterIndex = (id: string) => {
+          const index = core.getParameterIndex(id);
+          return index >= 0 && index < core.getParameterCount() ? index : -1;
+        };
         const parameterIndexes = new Map(
-          [...REST_SETTLE_PARAM_IDS, "ParamBustY"].map((id) => [id, core.getParameterIndex(id)]),
+          [...REST_SETTLE_PARAM_IDS, "ParamBustY", ...(!companion.authoredMotions ? HONG_XI_PERSONALITY_PARAMS : [])].map((id) => [id, realParameterIndex(id)]),
         );
         const addMusicParameter = (id: string, value: number, weight: number) => {
           const index = parameterIndexes.get(id);
           if (index !== undefined && index >= 0) core.addParameterValueByIndex(index, value, weight);
         };
         const restSettleParameters = REST_SETTLE_PARAM_IDS
-          .map((id) => ({ id, index: core.getParameterIndex(id) }))
+          .map((id) => ({ id, index: realParameterIndex(id) }))
           .filter(({ index }) => index >= 0);
         const restEyeOpenIndexes = restSettleParameters
           .filter(({ id }) => REST_EYE_OPEN_PARAM_IDS.has(id))
           .map(({ index }) => index);
         const setArmRigOwnership = (welcomeArms: boolean) => {
+          if (!companion.authoredMotions) return;
           const armAParameter = core.getParameterIndex("PartArmA");
           const armBParameter = core.getParameterIndex("PartArmB");
           // Prime CubismPose's model cache before assigning the visible rig.
@@ -693,9 +711,9 @@ export default function Live2DStage({
           internalModel.pose?.updateParameters(core, 0);
         };
         const motionCanRun = (motion: OfficialMotion) => (
-          motion.mode === "welcome"
+          companion.authoredMotions && !disposed && (motion.mode === "welcome"
             ? variantRef.current === "welcome"
-            : variantRef.current === "player" && featuresRef.current.isPlaying
+            : variantRef.current === "player" && featuresRef.current.isPlaying)
         );
         const snapToMotionBoundary = (motion: OfficialMotion) => {
           const authoredStart = MOTION_START_POSES[motion.id];
@@ -728,6 +746,7 @@ export default function Live2DStage({
           return null;
         };
         const startOfficialMotion = async (motion: OfficialMotion, requestVersion: number) => {
+          if (!motionCanRun(motion)) return;
           if (motionStartInFlightVersion !== null || requestVersion !== motionRequestVersion) return;
           motionStartInFlightVersion = requestVersion;
           let started = false;
@@ -741,6 +760,7 @@ export default function Live2DStage({
           } catch (error) {
             console.warn(`Hiyori ${motion.id} motion will retry`, error);
           }
+          if (disposed) return;
           if (motionStartInFlightVersion === requestVersion) motionStartInFlightVersion = null;
           if (requestVersion !== motionRequestVersion) {
             // A pause/resume may supersede a request while its file is loading.
@@ -821,6 +841,7 @@ export default function Live2DStage({
           internalModel.motionManager.stopAllMotions();
         };
         const startWelcomeMotion = (motion: OfficialMotion) => {
+          if (!companion.authoredMotions) return;
           cancelMotionControllers();
           activeMotion = motion;
           activeMotionRuntime = 0;
@@ -850,7 +871,32 @@ export default function Live2DStage({
           setArmRigOwnership(false);
         };
 
+        const personality = new HongXiPersonality();
+        let personalityPose: ReturnType<HongXiPersonality["update"]> = {};
+        let personalityWeight = 0;
+        const reactToCompanion = () => personality.react();
+        if (!companion.authoredMotions) reactToCompanionRef.current = reactToCompanion;
+        const applyPersonalityEyes = () => {
+          if (companion.authoredMotions) return;
+          // Blend with the live blink after Physics; restoring open eyes directly
+          // here would fight the SDK's blink controller on every frame.
+          const openness = 1 - (personalityPose.eyesClosed ?? 0);
+          for (const index of restEyeOpenIndexes) {
+            core.setParameterValueByIndex(index, core.getParameterValueByIndex(index) * openness);
+          }
+        };
         const applyMusicPose = () => {
+          if (!companion.authoredMotions) {
+            const accompaniment = 1 - personalityWeight * 0.75;
+            const musicPose = hongXiPose(variationPhase, poseSway, poseGroove * accompaniment, poseNod * accompaniment, bass, switchAccent);
+            const offsets: Record<string, number> = { ...musicPose };
+            for (const id of HONG_XI_PERSONALITY_PARAMS) offsets[id] = (offsets[id] ?? 0) + (personalityPose[id] ?? 0);
+            for (const [id, offset] of Object.entries(offsets)) {
+              const index = parameterIndexes.get(id);
+              if (index !== undefined && index >= 0) core.setParameterValueByIndex(index, core.getParameterDefaultValue(index) + offset);
+            }
+            return;
+          }
           // The active official curves remain the performance. Music adds only a
           // small downbeat accent before Physics, preserving authored easing,
           // facial timing, arm movement, and secondary follow-through.
@@ -908,6 +954,7 @@ export default function Live2DStage({
           if (progress >= 1) poseTransitionEndpointRendered = true;
         };
         const applyRestPose = () => {
+          if (!companion.authoredMotions) return;
           if (restSettleElapsed >= REST_SETTLE_SECONDS || featuresRef.current.isPlaying) return;
           const poseEase = restEase(REST_SETTLE_SECONDS);
           const eyeEase = restEase(REST_EYE_HANDOFF_SECONDS);
@@ -922,6 +969,7 @@ export default function Live2DStage({
           }
         };
         const applyRestEyeHandoff = () => {
+          if (!companion.authoredMotions) return;
           if (restSettleElapsed >= REST_EYE_HANDOFF_SECONDS || featuresRef.current.isPlaying) return;
           const eased = restEase(REST_EYE_HANDOFF_SECONDS);
           // Auto blink runs after afterMotionUpdate. Blend toward its live value
@@ -955,12 +1003,15 @@ export default function Live2DStage({
         internalModel.on("afterMotionUpdate", applyRestPose);
         internalModel.on("afterMotionUpdate", capturePoseHistory);
         internalModel.on("beforeModelUpdate", applyRestEyeHandoff);
+        internalModel.on("beforeModelUpdate", applyPersonalityEyes);
         cleanupMotionPose = () => {
           internalModel.off("afterMotionUpdate", applyPoseTransition);
           internalModel.off("afterMotionUpdate", applyMusicPose);
           internalModel.off("afterMotionUpdate", applyRestPose);
           internalModel.off("afterMotionUpdate", capturePoseHistory);
           internalModel.off("beforeModelUpdate", applyRestEyeHandoff);
+          internalModel.off("beforeModelUpdate", applyPersonalityEyes);
+          if (reactToCompanionRef.current === reactToCompanion) reactToCompanionRef.current = null;
         };
 
         app.ticker.add(() => {
@@ -1223,7 +1274,7 @@ export default function Live2DStage({
             // larger arm, face, and torso phrasing over several beats.
             const motionElapsed = getOfficialMotionElapsed();
             const phraseBoundary = beatCount % 8 === 0;
-            if (poseTransitionTarget !== null) {
+            if (!companion.authoredMotions || poseTransitionTarget !== null) {
               // The joint transition already owns the pose; do not queue another clip
               // until its target has taken over at the identical boundary.
             } else if (activeMotion.role === "gesture") {
@@ -1394,8 +1445,17 @@ export default function Live2DStage({
           const amplitudeDrift = 0.86 + Math.sin(variationPhase) * 0.1 + Math.sin(variationPhase * 0.43 + 0.8) * 0.04;
           poseSway = Math.sin(rhythmPhase + phaseDrift);
           poseGroove = activity * Math.min(1, 0.28 + energy * 0.9 + bass * 1.35) * amplitudeDrift;
-          poseNod = nodEnvelope * nodGestureStrength * activity;
+          if (companion.authoredMotions) {
+            poseNod = nodEnvelope * nodGestureStrength * activity;
+          } else {
+            const targetPoseNod = nodEnvelope * nodGestureStrength * activity;
+            poseNod = follow(poseNod, targetPoseNod, features.isPlaying ? 18 : 6);
+          }
 
+          if (!companion.authoredMotions) {
+            personalityPose = personality.update({ dt, playing: features.isPlaying, welcome: variantRef.current === "welcome", energy, beatCount });
+            personalityWeight = follow(personalityWeight, personality.gesture ? 1 : 0, 4);
+          }
           const stage = stageRef.current;
           if (stage) {
             const discCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
@@ -1436,9 +1496,12 @@ export default function Live2DStage({
           await startWelcomeMotion(OFFICIAL_MOTIONS.m06);
         }
         if ("fonts" in document) await document.fonts.ready;
+        if (disposed) return;
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        if (disposed) return;
         layout();
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        if (disposed) return;
         layout();
         currentModelScale = targetModelScale;
         currentRigX = targetRigX;
@@ -1493,6 +1556,14 @@ export default function Live2DStage({
         canvas.style.visibility = "";
         if (!disposed) setStatus("ready");
       } catch (error) {
+        modelLoading = false;
+        resizeObserver?.disconnect();
+        cleanupPointer?.();
+        cleanupMotionPose?.();
+        cleanupModel?.();
+        cleanupModel = null;
+        destroyApp();
+        if (disposed) return;
         console.error("Live2D model failed to load", error);
         if (!disposed) setStatus("error");
       }
@@ -1510,13 +1581,14 @@ export default function Live2DStage({
       try {
         if (cleanupModel) {
           cleanupModel();
-          destroyApp();
+          cleanupModel = null;
         }
+        if (!modelLoading) destroyApp();
       } catch (error) {
         console.warn("Live2D cleanup completed with a renderer warning", error);
       }
     };
-  }, [featuresRef]);
+  }, [companion, featuresRef, loadAttempt]);
 
   const listeningLabel = variant === "welcome"
     ? "Waiting for a track"
@@ -1527,7 +1599,7 @@ export default function Live2DStage({
         : "Listening with you";
 
   return (
-    <section ref={stageRef} className={`live2d-stage live2d-stage-${variant} light-${activeSource === 0 ? "a" : "b"} ${isPlaying ? "is-playing" : "is-paused"} ${focusMode ? "is-focused" : ""}`} aria-label="Interactive music companion">
+    <section ref={stageRef} data-companion={companionId} data-status={status} className={`live2d-stage live2d-stage-${variant} light-${activeSource === 0 ? "a" : "b"} ${isPlaying ? "is-playing" : "is-paused"} ${focusMode ? "is-focused" : ""}`} aria-label="Interactive music companion">
       <div className="stage-disc-viewport" aria-hidden="true"><div className="stage-music-disc" /></div>
       <div className="stage-particles" aria-hidden="true">
         {PARTICLES.map(([left, top, delay, duration], index) => (
@@ -1539,11 +1611,11 @@ export default function Live2DStage({
       </div>
       <div className="live2d-host" ref={hostRef} />
       <div className="stage-topline">
-        <span><i className={status === "ready" ? "is-ready" : ""} /> {status === "ready" ? listeningLabel : `Hiyori / ${status}`}</span>
+        <span><i className={status === "ready" ? "is-ready" : ""} /> {status === "ready" ? listeningLabel : `${companion.name} / ${status}`}</span>
         <span>{trackLabel}</span>
       </div>
       {status === "error" && (
-        <div className="model-error">Live2D could not start. Audio playback remains available.</div>
+        <div className="model-error" role="alert">{companion.name} could not start. Audio playback remains available. <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Retry model</button></div>
       )}
       {variant === "player" && (
         <div className="camera-capsule" aria-label="Camera controls">
@@ -1570,7 +1642,7 @@ export default function Live2DStage({
           <i aria-hidden="true" />
           <button
             type="button"
-            title="Portrait framing — Hiyori from the waist up"
+            title={`Portrait framing — ${companion.name} from the waist up`}
             aria-label="Portrait upper-body framing"
             className={cameraPreset === "portrait" ? "is-active" : ""}
             onClick={() => {
@@ -1609,14 +1681,19 @@ export default function Live2DStage({
             <ScanLine size={15} strokeWidth={1.7} />
             <span>Wide</span>
           </button>
+          {!companion.authoredMotions && <>
+            <i aria-hidden="true" />
+            <button type="button" disabled={status !== "ready"} aria-label="Interact with Hong Xi" title="Say hello — Hong Xi will react" onClick={() => reactToCompanionRef.current?.()}><Smile size={15} strokeWidth={1.7} /><span>React</span></button>
+          </>}
           <span className={`camera-zoom ${showZoom ? "is-visible" : ""}`}>{zoomReadout}%</span>
           <span className="camera-hint"><Mouse size={11} strokeWidth={1.7} /> scroll to frame</span>
         </div>
       )}
+      {variant === "welcome" && !companion.authoredMotions && <button className="companion-greeting" type="button" disabled={status !== "ready"} onClick={() => reactToCompanionRef.current?.()} aria-label="Interact with Hong Xi"><Smile size={15} /> Say hello</button>}
       {variant === "welcome" && onPickAudio && (
         <div className="stage-invitation">
           <span>YOUR MUSIC, HER MOVEMENT</span>
-          <strong>Hiyori is ready to listen.</strong>
+          <strong>{companion.name} is ready to listen.</strong>
           <button type="button" onClick={onPickAudio}>Choose audio</button>
           <small>or drop one audio file anywhere on the stage</small>
         </div>

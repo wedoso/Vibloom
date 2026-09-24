@@ -1,0 +1,49 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "yuql216.moc3",
+    "Textures": [
+      "yuql216.8192/texture_00.png"
+    ],
+    "Physics": "yuql216.physics3.json",
+    "DisplayInfo": "yuql216.cdi3.json",
+    "Expressions": [
+      {
+        "Name": "expression1",
+        "File": "expression1.exp3.json"
+      },
+      {
+        "Name": "HL",
+        "File": "HL.exp3.json"
+      },
+      {
+        "Name": "HX",
+        "File": "HX.exp3.json"
+      },
+      {
+        "Name": "XXY",
+        "File": "XXY.exp3.json"
+      },
+      {
+        "Name": "SQ",
+        "File": "SQ.exp3.json"
+      }
+    ]
+  },
+  "Groups": [
+    {
+      "Target": "Parameter",
+      "Name": "LipSync",
+      "Ids": []
+    },
+    {
+      "Target": "Parameter",
+      "Name": "EyeBlink",
+      "Ids": [
+        "ParamEyeLOpen",
+        "ParamEyeROpen"
+      ]
+    }
+  ],
+  "HitAreas": []
+}

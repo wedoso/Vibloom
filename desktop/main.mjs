@@ -181,6 +181,7 @@ function createMainWindow() {
           state = await window.webContents.executeJavaScript(`({
             hasRoot: Boolean(document.querySelector('#root > *')),
             hasLive2dCanvas: Boolean(document.querySelector('canvas.live2d-canvas')),
+            hasLive2dReady: Boolean(document.querySelector('.live2d-stage[data-status="ready"] canvas.live2d-canvas')),
             hasLive2dError: Boolean(document.querySelector('.model-error')),
             hasIndexedDb: typeof indexedDB !== 'undefined',
             hasOpfs: typeof navigator.storage?.getDirectory === 'function',
@@ -189,7 +190,7 @@ function createMainWindow() {
             title: document.title,
             url: location.href
           })`);
-          if (state.hasLive2dCanvas || state.hasLive2dError) break;
+          if (state.hasLive2dReady || state.hasLive2dError) break;
           await new Promise((resolve) => setTimeout(resolve, 250));
         }
         state.updateProbeStatus = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
@@ -202,7 +203,7 @@ function createMainWindow() {
           });
           window.vibloomUpdates.check().catch(reject);
         })`);
-        if (!state?.hasRoot || !state.hasLive2dCanvas || state.hasLive2dError || !state.hasIndexedDb || !state.hasOpfs || !state.hasUpdateBridge || state.updateProbeStatus !== "error" || state.appVersion !== `v${app.getVersion()}`) {
+        if (!state?.hasRoot || !state.hasLive2dCanvas || !state.hasLive2dReady || state.hasLive2dError || !state.hasIndexedDb || !state.hasOpfs || !state.hasUpdateBridge || state.updateProbeStatus !== "error" || state.appVersion !== `v${app.getVersion()}`) {
           throw new Error(JSON.stringify(state));
         }
         finished = true;
