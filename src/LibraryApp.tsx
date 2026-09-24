@@ -69,6 +69,7 @@ import { decodeLrc, LyricLine, parseLrc } from "./lrc";
 import { browserLibraryPlatform } from "./platform/browserLibraryPlatform";
 import type { LibraryPlatform, StorageState } from "./platform/libraryPlatform";
 import "./library.css";
+import "./hong-xi-theme.css";
 
 const SUPPORTED_AUDIO = /\.(mp3|wav|wave|m4a|aac|ogg|oga|flac|opus|webm|aiff|aif)$/iu;
 const MAX_FILE_BYTES = 300 * 1024 * 1024;

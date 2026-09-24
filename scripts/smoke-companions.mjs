@@ -46,8 +46,15 @@ async function smoke() {
     const capture = async (name) => writeFile(path.join(output, `${name}.png`), (await window.webContents.capturePage()).toPNG());
     const position = () => run(`Number(document.querySelector('[aria-label="Playback position"]').value)`);
     const playing = () => run(`Boolean(document.querySelector('button[aria-label="Pause"]'))`);
+    const theme = () => run(`(() => {
+      const style = getComputedStyle(document.querySelector('.library-app'));
+      return { background: style.backgroundImage, ink: style.color,
+        accent: style.getPropertyValue('--library-accent').trim(),
+        heading: getComputedStyle(document.querySelector('h1')).fontFamily };
+    })()`);
     await window.loadURL("vibloom://app/index.html");
     await ready("hiyori");
+    const hiyoriTheme = await theme();
     await run(`(() => {
       const createModel = Live2DCubismCore.Model.fromMoc;
       Live2DCubismCore.Model.fromMoc = function(...args) {
@@ -66,6 +73,12 @@ async function smoke() {
     })()`);
     await select("hong-xi");
     await ready("hong-xi");
+    const hongXiTheme = await theme();
+    assert.notEqual(hongXiTheme.background, hiyoriTheme.background);
+    assert.notEqual(hongXiTheme.heading, hiyoriTheme.heading);
+    await select("hiyori"); await ready("hiyori");
+    assert.deepEqual(await theme(), hiyoriTheme, "returning to Hiyori restores the original theme");
+    await select("hong-xi"); await ready("hong-xi");
     await run(`window.dispatchEvent(new PointerEvent('pointermove', { clientX: 0, clientY: 0 }));`);
     await delay(500);
     await run(`window.dispatchEvent(new PointerEvent('pointermove', { clientX: innerWidth, clientY: innerHeight }));`);
@@ -98,6 +111,7 @@ async function smoke() {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
     await waitFor(`document.querySelector('#import-title')?.textContent === 'Import complete'`, "audio imported");
+    await capture("hong-xi-import");
     await click('[aria-label="Close import summary"]');
     await ready("hong-xi");
     await waitFor(`document.querySelector('.transport-play') && !document.querySelector('.transport-play').disabled`, "transport ready");
@@ -105,7 +119,16 @@ async function smoke() {
     await waitFor(`document.querySelector('button[aria-label="Pause"]') && Number(document.querySelector('[aria-label="Playback position"]').value) > 0.5`, "playback starts");
     await run(`(() => { const transfer = new DataTransfer(); transfer.items.add(window.__testWav('Mix B.wav', 440)); const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])'); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
-    await click('.transport-ab-switch .source-b');
+    for (const source of ["a", "b"]) {
+      await click(`.transport-ab-switch .source-${source}`);
+      await delay(280);
+      assert.ok(await run(`(() => {
+        const color = getComputedStyle(document.querySelector('.waveform-source-${source} .waveform-bars i')).backgroundColor;
+        return color === getComputedStyle(document.querySelector('.waveform-card.is-active .source-selector')).backgroundColor
+          && color === getComputedStyle(document.querySelector('.stage-source-indicator > button.is-active')).backgroundColor
+          && color === getComputedStyle(document.querySelector('.transport-ab-switch'), '::before').backgroundColor;
+      })()`), "audible source has one consistent color across waveform, stage and transport");
+    }
     const before = await position();
     const starts = await run("window.__sourceStarts");
     for (const id of ["hiyori", "hong-xi", "hiyori", "hong-xi"]) {
@@ -141,6 +164,42 @@ async function smoke() {
     assert.equal(await run(`document.querySelectorAll('.track-table .track-index').length`), 2);
     assert.equal(await run(`document.querySelectorAll('.queue-list > div').length`), 2);
     await capture("hong-xi-library");
+    await click('button[title="Queue"]');
+    await delay(650);
+    await capture("hong-xi-queue");
+    await click('[aria-label="Close queue"]');
+    await click('button[title="Storage"]');
+    await delay(650);
+    await capture("hong-xi-storage");
+    await click('.storage-actions .is-destructive');
+    await waitFor(`document.querySelector('.confirm-dialog')`, "reset confirmation visible");
+    await delay(100);
+    await capture("hong-xi-confirm");
+    await click('.confirm-dialog button:not(.confirm-destructive)');
+    await click('[aria-label="Close storage"]');
+
+    // Exercise the real update UI without relying on a network request/release.
+    await run(`(() => {
+      const originalFetch = window.fetch;
+      window.fetch = (input, ...args) => String(input).includes('api.github.com/repos/wedoso/Vibloom/releases/latest')
+        ? Promise.resolve(new Response(JSON.stringify({ tag_name: document.querySelector('.brand-version').textContent.trim() }), { status: 200 }))
+        : originalFetch(input, ...args);
+    })()`);
+    for (const id of ["hong-xi", "hiyori"]) {
+      await select(id); await ready(id);
+      await click('.brand-version');
+      await waitFor(`document.querySelector('.update-orb.is-current')`, "update dialog ready");
+      await delay(350);
+      assert.ok(await run(`(() => {
+        const rect = document.querySelector('.update-backdrop').getBoundingClientRect();
+        const dialog = document.querySelector('.update-dialog').getBoundingClientRect();
+        return Math.abs(rect.height - innerHeight) < 1 && Math.abs(rect.width - innerWidth) < 1
+          && dialog.top >= 0 && dialog.bottom <= innerHeight;
+      })()`), "update dialog covers the viewport instead of being confined to the header");
+      await capture(`${id}-update`);
+      await click('[aria-label="Close update window"]');
+    }
+    await select("hong-xi"); await ready("hong-xi");
     await click('button[title="Player"]');
     await delay(1100);
     await click('[aria-label="Pause"]');
@@ -170,6 +229,7 @@ async function smoke() {
     await window.loadURL("vibloom://app/index.html");
     await ready("hong-xi");
     assert.equal(await run(`document.querySelector('[aria-label="Music companion"]').value`), "hong-xi");
+    assert.equal((await theme()).background, hongXiTheme.background, "saved model restores its complete theme");
     assert.ok(await run(`document.querySelector('.has-library') !== null`));
     window.setSize(390, 844);
     await delay(1000);

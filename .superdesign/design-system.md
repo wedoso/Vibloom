@@ -96,3 +96,16 @@ Vibloom is a private, browser-only local music library, continuous player, and s
 - UI font: Inter-like system sans-serif
 - Main radii: 14px, 22px, 26px
 - Breakpoints: 900px, 600px
+
+## Hong Xi companion theme
+
+Apply only beneath `.library-app[data-companion="hong-xi"]` via `src/hong-xi-theme.css`. Hiyori keeps the warm editorial system above. The persisted companion choice controls both the rendered model and the entire room; changing it must not remount the audio engine or reset playback, queue, comparison, or camera state.
+
+- Visual references: Hong Xi's powder-blue cable-knit sweater, navy plaid tie/skirt, silver headphones and small gold star. Use powder blue (#edf3fa), silver white (#f9fcff), navy ink (#24334c), slate text (#60718a), and blue controls (#486b99).
+- Use the existing system sans font for Hong Xi headings with gentle weight and tight tracking. Keep track titles consistent across library, player and transport. No network fonts or image textures.
+- Reserve extremely subtle CSS plaid for navigation and transport. Use thin blue-gray seams, silver surfaces and restrained cool shadows in cards, menus, queue/storage sheets and dialogs. Keep the stage visually open.
+- A uses steel blue (65 107 151); B uses muted violet (132 96 145). Share these colors across source selectors, waveform bars, timed lyrics, stage light and transport switch. Always preserve the visible A/B labels. Success, warning and destructive states retain their semantic colors.
+- Include welcome/import, library/search, player, focus mode, camera controls, menus, queue, storage, confirmation, updates, notifications and scene transitions. Preserve existing responsive breakpoints and reduced-motion behavior.
+- Keep all Hong Xi rules scoped; switching back to Hiyori restores the original surfaces, typography and accent without leftover global variables.
+
+Design reference: [Hong Xi theme v2](https://p.superdesign.dev/draft/c3569797-c354-49a4-90fc-5843878b8863). Production retains the actual app layout and controls; the draft is a palette/material reference.

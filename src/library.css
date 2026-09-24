@@ -36,6 +36,7 @@
   border-radius: 24px;
   color: var(--library-ink);
   background: rgba(255, 252, 247, .98);
+  font: 400 14px/1.5 var(--library-sans);
   box-shadow: 0 28px 70px rgba(55, 42, 31, .22);
   animation: update-dialog-in .28s cubic-bezier(.2, .82, .2, 1) both;
 }
@@ -142,7 +143,7 @@
   gap: 8px;
 }
 
-.update-actions button {
+.update-dialog .update-actions button {
   min-height: 40px;
   padding: 0 16px;
   display: inline-flex;
@@ -192,6 +193,13 @@
   backdrop-filter: blur(18px);
   position: relative;
   z-index: 20;
+}
+
+/* A backdrop-filter makes the header a containing block for fixed descendants.
+   Release it while the update dialog is open so its backdrop fills the window. */
+.library-header:has(.update-backdrop) {
+  backdrop-filter: none;
+  z-index: 180;
 }
 
 .library-header .wordmark {
@@ -2609,18 +2617,6 @@ button.track-index,
   outline: 2px solid var(--library-accent);
   outline-offset: 3px;
 }
-.library-app[data-companion="hong-xi"] {
-  --library-ink: #302d42;
-  --library-muted: #746b81;
-  --library-line: rgba(80, 57, 100, .15);
-  --library-paper: rgba(255, 248, 253, .82);
-  --library-accent: #915578;
-  background:
-    radial-gradient(circle at 78% 18%, rgba(211, 175, 215, .3), transparent 31rem),
-    linear-gradient(135deg, #faf3f8 0%, #f2edf6 46%, #e9e3f0 100%);
-}
-.library-app[data-companion="hong-xi"] .live2d-stage.light-a { --stage-light-rgb: 195 153 184; }
-.library-app[data-companion="hong-xi"] .live2d-stage.light-b { --stage-light-rgb: 145 170 198; }
 @media (max-width: 900px) {
   .companion-selector > span { display: none; }
 }
@@ -2629,7 +2625,6 @@ button.track-index,
   .library-header-actions { gap: 5px; }
   .companion-selector select { max-width: 94px; }
 }
-.library-app[data-companion="hong-xi"] .library-header { background: rgba(250, 246, 253, .85); }
 .model-error button {
   margin-top: 8px;
   padding: 6px 12px;
