@@ -228,7 +228,7 @@ type InternalModelControls = {
 };
 
 export default function Live2DStage({
-  companionId = "hiyori",
+  companionId = "hong-xi",
   featuresRef,
   variant,
   trackLabel,

@@ -63,7 +63,7 @@ export const EMPTY_SESSION: LibrarySession = {
   repeat: "off",
   volume: 0.9,
   cacheEnabled: true,
-  companionId: "hiyori",
+  companionId: "hong-xi",
 };
 
 export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): LibrarySnapshot {
@@ -73,7 +73,9 @@ export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): Library
     session: {
       ...EMPTY_SESSION,
       ...snapshot.session,
-      companionId: snapshot.session.companionId === "hong-xi" ? "hong-xi" : "hiyori",
+      companionId: snapshot.session.companionId === "hiyori" || snapshot.session.companionId === "hong-xi"
+        ? snapshot.session.companionId
+        : EMPTY_SESSION.companionId,
       cacheEnabled: snapshot.version >= 2 ? (snapshot.session.cacheEnabled ?? true) : true,
     },
   };

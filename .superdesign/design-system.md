@@ -99,7 +99,7 @@ Vibloom is a private, browser-only local music library, continuous player, and s
 
 ## Hong Xi companion theme
 
-Apply only beneath `.library-app[data-companion="hong-xi"]` via `src/hong-xi-theme.css`. Hiyori keeps the warm editorial system above. The persisted companion choice controls both the rendered model and the entire room; changing it must not remount the audio engine or reset playback, queue, comparison, or camera state.
+Hong Xi is the default for fresh libraries and missing model preferences; preserve an explicitly saved Hiyori selection. Apply only beneath `.library-app[data-companion="hong-xi"]` via `src/hong-xi-theme.css`. Hiyori keeps the warm editorial system above. The persisted companion choice controls both the rendered model and the entire room; changing it must not remount the audio engine or reset playback, queue, comparison, or camera state.
 
 - Visual references: Hong Xi's powder-blue cable-knit sweater, navy plaid tie/skirt, silver headphones and small gold star. Use powder blue (#edf3fa), silver white (#f9fcff), navy ink (#24334c), slate text (#60718a), and blue controls (#486b99).
 - Use the existing system sans font for Hong Xi headings with gentle weight and tight tracking. Keep track titles consistent across library, player and transport. No network fonts or image textures.

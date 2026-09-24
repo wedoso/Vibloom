@@ -2,7 +2,7 @@
 
 Your music library, brought to life.
 
-Vibloom is a private, local-first music player for the web, Windows, and macOS. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hiyori or Hong Xi as a rhythm-aware Live2D companion.
+Vibloom is a private, local-first music player for the web, Windows, and macOS. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hong Xi, the default rhythm-aware Live2D companion, or switch to Hiyori.
 
 [Open Vibloom on the web](https://wedoso.github.io/Vibloom/) · [Download the desktop app](https://github.com/wedoso/Vibloom/releases/latest)
 
@@ -45,7 +45,7 @@ The current library track is always Version A. Add or drop a Version B only when
 
 ![Vibloom Focus mode with synchronized lyrics and a compact transport](docs/assets/focus-mode.png)
 
-Press `F` for a distraction-free stage. Focus mode removes the waveform cards while keeping the same audio clock, playhead, camera, synchronized lyrics, compact A/B selector, and single bottom transport. The stage now reaches the transport instead of leaving a large empty band below Hiyori. Press `F` again or `Esc` to leave.
+Press `F` for a distraction-free stage. Focus mode removes the waveform cards while keeping the same audio clock, playhead, camera, synchronized lyrics, compact A/B selector, and single bottom transport. The stage now reaches the transport instead of leaving a large empty band below your companion. Press `F` again or `Esc` to leave.
 
 ## Synchronized lyrics
 
@@ -107,7 +107,7 @@ Hiyori Momose is a Live2D sample model. Its bundled notice is available at [LICE
 
 ### Live2D companions
 
-Choose **Hiyori** or **Hong Xi** from the **Companion** selector in the header. The choice is saved on this device with the library; existing libraries default to Hiyori. Switching companions preserves playback, the A/B source, queue, lyrics, volume, and camera mode. Hong Xi's complete theme pairs powder blue, navy and silver with subtle plaid, matching her sweater and headphones. It covers welcome, player, library, focus, menus, queue/storage, dialogs and transitions. Steel-blue A and muted-violet B remain consistent across waveforms, lyrics, source controls and stage light. Hiyori keeps the original warm theme. Both support pointer tracking, beat response, camera controls, and focus mode.
+**Hong Xi is the default companion.** Choose **Hong Xi** or **Hiyori** from the **Companion** selector in the header. The choice is saved on this device with the library. New libraries, resets, and older libraries without a saved model choice start with Hong Xi; an existing Hiyori selection is preserved. Switching companions preserves playback, the A/B source, queue, lyrics, volume, and camera mode. Hong Xi's complete theme pairs powder blue, navy and silver with subtle plaid, matching her sweater and headphones. It covers welcome, player, library, focus, menus, queue/storage, dialogs and transitions. Steel-blue A and muted-violet B remain consistent across waveforms, lyrics, source controls and stage light. Hiyori keeps the original warm theme. Both support pointer tracking, beat response, camera controls, and focus mode.
 
 Hong Xi's runtime assets are bundled in `public/live2d/hong-xi/`, copied from the supplied `~/Downloads/hx/yuql216` export. The bundle contains the model, 8192px texture, physics, display metadata, and five referenced expressions. PSD/Cubism editor projects and VTube Studio settings are not required. The original model manifest had empty blink IDs; the bundled manifest configures its existing left/right eye parameters. No authored motion clips were supplied, so Hong Xi combines a procedural beat response with six eased personality gestures: greeting, curious head tilt, double nod, eyes-closed enjoyment, shy blush, and star-eyed delight. A shuffle bag schedules gestures at musical phrase boundaries, with quiet gaps and softer choices for quiet passages. The original blush and star-eye parameters are used; angry/shadowed expressions and the headphone visibility toggle stay untouched. Pausing eases expressions back to neutral. Use **Say hello** on the welcome stage or the **React** smile button beside the camera controls for a response, including while paused. Hiyori retains its authored choreography.
 

@@ -53,6 +53,9 @@ async function smoke() {
         heading: getComputedStyle(document.querySelector('h1')).fontFamily };
     })()`);
     await window.loadURL("vibloom://app/index.html");
+    await ready("hong-xi");
+    assert.equal(await run(`document.querySelector('[aria-label="Music companion"]').value`), "hong-xi", "fresh libraries start with Hong Xi");
+    await select("hiyori");
     await ready("hiyori");
     const hiyoriTheme = await theme();
     await run(`(() => {

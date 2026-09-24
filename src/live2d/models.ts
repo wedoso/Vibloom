@@ -1,17 +1,17 @@
 export type CompanionId = "hiyori" | "hong-xi";
 
 export const COMPANIONS = {
-  hiyori: {
-    name: "Hiyori",
-    modelPath: "live2d/hiyori-pro/hiyori_pro_t11.model3.json",
-    authoredMotions: true,
-    shadowY: 0.463,
-  },
   "hong-xi": {
     name: "Hong Xi",
     modelPath: "live2d/hong-xi/yuql216.model3.json",
     authoredMotions: false,
     shadowY: 0.43,
+  },
+  hiyori: {
+    name: "Hiyori",
+    modelPath: "live2d/hiyori-pro/hiyori_pro_t11.model3.json",
+    authoredMotions: true,
+    shadowY: 0.463,
   },
 } as const;
 
