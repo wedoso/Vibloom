@@ -78,6 +78,10 @@ async function smoke() {
     };
     const open = (label) => waitFor("window.__mouthProbe?.current > 0.25", label);
     await window.loadURL("vibloom://app/index.html");
+    if (app.commandLine.getSwitchValue("disable-features").split(",").includes("WebGPUService")) {
+      assert.equal(await run(`(async () => Boolean(await navigator.gpu?.requestAdapter()))()`), false, "WASM test has no WebGPU adapter");
+      console.log("PASS WebGPU adapter disabled; exercising WASM fallback");
+    }
     await ready("hong-xi");
     await run(`(async () => {
       const context = new AudioContext({sampleRate: 44100});
