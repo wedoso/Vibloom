@@ -39,10 +39,21 @@ async function smoke() {
     window.webContents.on("console-message", (event) => {
       if (event.level === "error" || event.level === 3) errors.push(event.message);
     });
-    const run = (code) => window.webContents.executeJavaScript(code, true);
+    const run = (code) => new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Renderer did not respond within 30 seconds")), 30000);
+      window.webContents.executeJavaScript(code, true).then(
+        (value) => { clearTimeout(timeout); resolve(value); },
+        (error) => { clearTimeout(timeout); reject(error); },
+      );
+    });
     const waitFor = async (code, label) => {
       const attempts = label.endsWith("analyzed") ? 5000 : 150;
-      for (let i = 0; i < attempts; i++) { if (await run(code)) return; await delay(100); }
+      console.log(`WAIT ${label}`);
+      for (let i = 0; i < attempts; i++) {
+        if (await run(code)) return;
+        if (label.endsWith("analyzed") && i % 100 === 0) console.log(await run(`document.querySelector('.vocal-lip-sync').textContent`));
+        await delay(100);
+      }
       throw new Error(`Timed out: ${label}`);
     };
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
