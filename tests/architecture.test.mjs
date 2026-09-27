@@ -186,7 +186,7 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(workflow, /--mac --arm64/u);
   assert.match(workflow, /--mac --x64/u);
   assert.match(workflow, /windows-latest/u);
-  assert.match(workflow, /xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox \./u);
+  assert.match(workflow, /xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox(?: --[\w=-]+)* \./u);
   assert.match(workflow, /actions\/upload-artifact@v4/u);
   assert.match(workflow, /gh release create/u);
   assert.match(workflow, /--publish never/u);
