@@ -27,7 +27,7 @@ async function smoke() {
       if (!file.startsWith(`${path.join(root, "dist")}${path.sep}`)) return new Response("Not found", { status: 404 });
       return net.fetch(pathToFileURL(file).href);
     });
-    window = new BrowserWindow({ width: 1440, height: 1000, show: false,
+    window = new BrowserWindow({ width: 1440, height: 1000, show: process.env.CI === "true",
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
     window.webContents.setAudioMuted(true);
     window.webContents.on("console-message", (event) => {
@@ -68,6 +68,7 @@ async function smoke() {
           const values = model.parameters.values, ids = model.parameters.ids;
           const eye = values[ids.indexOf('ParamEyeLOpen')], gaze = values[ids.indexOf('ParamEyeBallX')];
           for (const id of ['Param31', 'Param32', 'ParamEyeLSmile', 'Param_Angle_Rotation9', 'Param_Angle_Rotation13']) { const value = values[ids.indexOf(id)]; probe.maxima[id] = Math.max(probe.maxima[id] || 0, value); probe.current[id] = value; }
+          probe.gaze = gaze;
           probe.eyeMin = Math.min(probe.eyeMin, eye); probe.eyeMax = Math.max(probe.eyeMax, eye);
           probe.gazeMin = Math.min(probe.gazeMin, gaze); probe.gazeMax = Math.max(probe.gazeMax, gaze);
           return update.apply(this, args);
@@ -84,10 +85,10 @@ async function smoke() {
     assert.deepEqual(await theme(), hiyoriTheme, "returning to Hiyori restores the original theme");
     await select("hong-xi"); await ready("hong-xi");
     await run(`window.dispatchEvent(new PointerEvent('pointermove', { clientX: 0, clientY: 0 }));`);
-    await delay(500);
+    await waitFor(`Math.abs(window.__poseProbe.gaze) > 0.08`, "gaze follows first pointer position");
+    const firstGaze = await run(`window.__poseProbe.gaze`);
     await run(`window.dispatchEvent(new PointerEvent('pointermove', { clientX: innerWidth, clientY: innerHeight }));`);
-    await delay(500);
-    assert.ok(await run(`window.__poseProbe.gazeMax - window.__poseProbe.gazeMin > 0.1`), "pointer tracking changes eye parameters");
+    await waitFor(`Math.abs(window.__poseProbe.gaze - ${firstGaze}) > 0.1`, "gaze follows opposite pointer position");
     await waitFor(`window.__poseProbe.eyeMin < 0.5 && window.__poseProbe.eyeMax > 0.9`, "Hong Xi blinks");
     await waitFor(`document.querySelector('.live2d-stage').dataset.gesture`, "ambient welcome gesture");
     const gestureBefore = await run(`document.querySelector('.live2d-stage').dataset.gesture`);

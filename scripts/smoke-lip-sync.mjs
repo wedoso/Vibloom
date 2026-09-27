@@ -32,7 +32,7 @@ async function smoke() {
     if (process.env.VIBLOOM_TEST_VOCAL_MODEL) {
       session.defaultSession.webRequest.onBeforeRequest({ urls: ["https://huggingface.co/*"] }, (_request, callback) => callback({ redirectURL: "vibloom://app/__test__/model.onnx" }));
     }
-    window = new BrowserWindow({ width: 1280, height: 900, show: false,
+    window = new BrowserWindow({ width: 1280, height: 900, show: process.env.CI === "true",
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
     window.webContents.setAudioMuted(true);
     const errors = [];
