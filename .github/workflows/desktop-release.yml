@@ -45,6 +45,7 @@ jobs:
           xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox .
           xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-lyrics-timing.mjs
           xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-media-session.mjs
+          xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-companions.mjs
 
       - name: Cache vocal separation model
         uses: actions/cache@v4

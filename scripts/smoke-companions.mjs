@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const profile = await mkdtemp(path.join(tmpdir(), "vibloom-companions-"));
 const output = path.join(root, "outputs/companion-smoke");
 app.setPath("userData", profile);
+app.on("window-all-closed", () => {});
 protocol.registerSchemesAsPrivileged([{ scheme: "vibloom", privileges: {
   standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true,
 } }]);
@@ -88,6 +89,17 @@ async function smoke() {
     await delay(500);
     assert.ok(await run(`window.__poseProbe.gazeMax - window.__poseProbe.gazeMin > 0.1`), "pointer tracking changes eye parameters");
     await waitFor(`window.__poseProbe.eyeMin < 0.5 && window.__poseProbe.eyeMax > 0.9`, "Hong Xi blinks");
+    await waitFor(`document.querySelector('.live2d-stage').dataset.gesture`, "ambient welcome gesture");
+    const gestureBefore = await run(`document.querySelector('.live2d-stage').dataset.gesture`);
+    const point = await run(`(() => { const button = document.querySelector('.companion-greeting'); const r = button.getBoundingClientRect(); const x = Math.round(r.x + r.width / 2), y = Math.round(r.y + r.height / 2); return { x, y, hittable: button.contains(document.elementFromPoint(x, y)) }; })()`);
+    assert.ok(point.hittable, "Say hello is not covered by another element");
+    window.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    window.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    await delay(200);
+    assert.equal(await run(`document.querySelector('.companion-greeting').textContent.trim()`), "Hello!");
+    assert.notEqual(await run(`document.querySelector('.live2d-stage').dataset.gesture`), gestureBefore, "physical click promptly replaces ambient gesture");
+    await waitFor(`document.querySelector('.companion-greeting').textContent.includes('Say hello')`, "greeting finishes");
+    console.log("PASS Say hello hit target, immediate reaction and feedback");
     await capture("hong-xi-welcome");
     console.log("PASS both welcome models render");
 

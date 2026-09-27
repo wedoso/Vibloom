@@ -108,6 +108,7 @@ async function smoke() {
     })()`);
     await select("hiyori");
     await closed("welcome");
+    await select("hong-xi");
     await run(`(() => {
       const transfer = new DataTransfer(); transfer.items.add(window.__wav('Voice A.wav', false));
       const input = document.querySelector('input[type="file"][multiple]'); input.files = transfer.files;
@@ -119,15 +120,31 @@ async function smoke() {
     if (!await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`)) await click('.transport-play');
     await range("Playback position", 4.2);
     await closed("unprepared vocals never fall back to the audible mix");
-    await click('[aria-label="Pause"]');
     await click('.vocal-lip-sync button');
     await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Cancel'`, "analysis starts");
     await click('.vocal-lip-sync button');
     await closed("cancelled analysis");
+    await range("Playback position", 0);
+    await click('[aria-label="Repeat off"]');
+    await click('[aria-label="Repeat all"]');
+    const positionBefore = await run(`Number(document.querySelector('[aria-label="Playback position"]').value)`);
+    await run("window.__uiTicks = 0; window.__heartbeat = setInterval(() => window.__uiTicks++, 50)");
     await click('.vocal-lip-sync button');
-    await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Vocal lip sync · On' || document.querySelector('.vocal-lip-sync [role="alert"]')`, "A analyzed");
+    await waitFor(`document.querySelector('.vocal-lip-sync progress')`, "progress bar");
+    await delay(1600);
+    await capture("background-preparation");
+    assert.ok(await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`), "playback continues during inference");
+    assert.ok(await run(`Number(document.querySelector('[aria-label="Playback position"]').value)`) > positionBefore + 1, "playback clock advances during inference");
+    await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Start singing'  || document.querySelector('.vocal-lip-sync [role="alert"]')`, "A analyzed");
     assert.equal(await run(`document.querySelector('.vocal-lip-sync [role="alert"]')?.textContent ?? ''`), "");
-    console.log("PASS local Demucs analysis, cancellation, retry; no mix fallback");
+    assert.ok(await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`), "playback continues during analysis");
+    assert.ok(await run("window.__uiTicks") > 10, "renderer remains responsive");
+    await run("clearInterval(window.__heartbeat)");
+    await closed("ready vocals wait for the user's singing toggle");
+    await click('.vocal-lip-sync button');
+    await click('[aria-label="Pause"]');
+    await click('[aria-label="Repeat one"]');
+    console.log("PASS background Demucs analysis, playback, progress, explicit singing, cancellation and retry");
     await run(`(() => {
       const transfer = new DataTransfer(); transfer.items.add(window.__wav('Instrumental B.wav', true));
       const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])');
@@ -147,6 +164,14 @@ async function smoke() {
       await click('.transport-play');
       await open(`${id} vocal A opens`);
       await capture(`${id}-singing`);
+      const beforeToggle = await run("window.__sourceStarts");
+      await click('.vocal-lip-sync button');
+      await closed(`${id} singing switched off`);
+      assert.equal(await run(`document.querySelector('.vocal-lip-sync button').textContent`), "Start singing");
+      assert.equal(await run("window.__sourceStarts"), beforeToggle, "singing toggle does not restart playback");
+      await click('.vocal-lip-sync button');
+      await range("Playback position", 4.2);
+      await open(`${id} cached singing restored`);
       await range("Volume", 0);
       await closed(`${id} volume zero`);
       await range("Volume", 0.9);
@@ -181,8 +206,9 @@ async function smoke() {
     await waitFor(`document.querySelector('.vocal-lip-sync button') && !document.querySelector('.vocal-lip-sync button').disabled`, "restored audio ready");
     await run(`window.Worker = class { constructor() { throw new Error('Saved timing should not run inference again'); } }; void 0;`);
     await click('.vocal-lip-sync button');
-    await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Vocal lip sync · On' || document.querySelector('.vocal-lip-sync [role="alert"]')`, "saved A timing");
+    await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Start singing' || document.querySelector('.vocal-lip-sync [role="alert"]')`, "saved A timing");
     assert.equal(await run(`document.querySelector('.vocal-lip-sync [role="alert"]')?.textContent ?? ''`), "");
+    await click('.vocal-lip-sync button');
     await click('.transport-ab-switch .source-b');
     await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Vocal lip sync · On' || document.querySelector('.vocal-lip-sync [role="alert"]')`, "saved B timing");
     assert.equal(await run(`document.querySelector('.vocal-lip-sync [role="alert"]')?.textContent ?? ''`), "");

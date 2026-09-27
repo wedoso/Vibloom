@@ -72,6 +72,8 @@ type DirectorInput = { dt: number; playing: boolean; welcome: boolean; energy: n
 export class HongXiPersonality {
   private active: HongXiGesture | null = null;
   private elapsed = 0;
+  private manual = false;
+  private transitionPose: Pose | null = null;
   private restTime = 0;
   private lastBeat = 0;
   private wasPlaying = false;
@@ -86,7 +88,19 @@ export class HongXiPersonality {
 
   constructor(private random: () => number = Math.random) {}
 
-  react() { this.pendingReaction = true; }
+  react() {
+    // A click takes priority over ambient gestures, blending from the pose the
+    // user actually sees. Repeated clicks during a manual reaction coalesce.
+    if (!this.manual) {
+      this.transitionPose = { ...this.pose };
+      this.previous = this.active ?? this.previous;
+      this.active = null;
+      this.releasePose = null;
+    }
+    this.pendingReaction = true;
+  }
+
+  get reacting() { return this.manual || this.pendingReaction; }
 
   get gesture() { return this.active; }
 
@@ -97,6 +111,8 @@ export class HongXiPersonality {
       this.releaseTime = 0;
       this.active = null;
       this.pendingReaction = false;
+      this.manual = false;
+      this.transitionPose = null;
       this.restTime = 0;
     }
     if (playing && !this.wasPlaying) this.lastBeat = beatCount;
@@ -111,10 +127,18 @@ export class HongXiPersonality {
     if (this.active) {
       this.elapsed += dt;
       this.pose = sampleHongXiGesture(this.active, this.elapsed);
+      if (this.transitionPose) {
+        const weight = ease(Math.min(1, this.elapsed / 0.3));
+        this.pose = Object.fromEntries(POSE_KEYS.map((id) => [id,
+          (this.transitionPose?.[id] ?? 0) * (1 - weight) + (this.pose[id] ?? 0) * weight,
+        ]));
+        if (weight === 1) this.transitionPose = null;
+      }
       const frames = HONG_XI_GESTURES[this.active];
       if (this.elapsed >= frames[frames.length - 1][0]) {
         this.previous = this.active;
         this.active = null;
+        this.manual = false;
         this.restTime = 0;
         this.lastBeat = beatCount;
       }
@@ -148,11 +172,12 @@ export class HongXiPersonality {
         if (candidate < 0) this.bag = [];
       }
       this.greeted = true;
+      this.manual = this.pendingReaction;
       this.pendingReaction = false;
       this.active = next;
       this.elapsed = 0;
     }
-    this.pose = {};
+    this.pose = this.transitionPose ?? {};
     return this.pose;
   }
 }

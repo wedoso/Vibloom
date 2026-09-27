@@ -8,11 +8,12 @@ const idle = (buffer: AudioBuffer | null): AnalysisState => ({ buffer, status: "
 
 export function useVocalLipSync(buffer: AudioBuffer | null, saved: VocalAnalysis | undefined, save: (buffer: AudioBuffer, analysis: VocalAnalysis) => void) {
   const cache = useRef(new WeakMap<AudioBuffer, Float32Array>());
+  const [requested, setRequested] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<AnalysisState>(idle(null));
   useEffect(() => {
-    if (!enabled || !buffer) return;
+    if (!requested || !buffer) return;
     const controller = new AbortController();
     const cached = cache.current.get(buffer) ?? (
       saved?.version === 1 && Array.isArray(saved.rms) && saved.rms.length === Math.ceil(buffer.duration * 50)
@@ -42,15 +43,16 @@ export function useVocalLipSync(buffer: AudioBuffer | null, saved: VocalAnalysis
       }
     });
     return () => controller.abort();
-  }, [buffer, enabled, attempt, saved, save]);
+  }, [buffer, requested, attempt, saved, save]);
   const sample = useCallback((time: number, volume: number) => (
     enabled && buffer ? sampleVocalEnvelope(cache.current.get(buffer) ?? null, time, volume) : 0
   ), [buffer, enabled]);
   return {
-    state: enabled && state.buffer === buffer ? state : idle(buffer),
+    state: requested && state.buffer === buffer ? state : idle(buffer),
     enabled,
     sample,
-    enable: () => { setEnabled(true); setAttempt((value) => value + 1); },
-    disable: () => setEnabled(false),
+    prepare: () => { setRequested(true); setAttempt((value) => value + 1); },
+    cancel: () => { setRequested(false); setEnabled(false); },
+    toggle: () => setEnabled((value) => !value),
   };
 }

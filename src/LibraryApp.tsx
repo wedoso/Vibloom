@@ -1786,12 +1786,14 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
             <div className="vocal-lip-sync" role="group" aria-label="Vocal lip sync">
               {vocalLipSync.state.status === "working" ? <>
                 <span role="status">{vocalLipSync.state.phase} · {Math.round(vocalLipSync.state.progress * 100)}%</span>
-                <button type="button" onClick={vocalLipSync.disable}>Cancel</button>
+                <progress aria-label="Vocal preparation progress" value={vocalLipSync.state.progress} max={1} />
+                <small>Preparing in the background · keep listening</small>
+                <button type="button" onClick={vocalLipSync.cancel}>Cancel</button>
               </> : <>
-                <button type="button" disabled={!vocalBuffer} onClick={vocalLipSync.enabled && vocalLipSync.state.status === "ready" ? vocalLipSync.disable : vocalLipSync.enable}>
-                  {vocalLipSync.state.status === "ready" ? "Vocal lip sync · On" : vocalLipSync.state.status === "error" ? "Retry vocal lip sync" : "Enable vocal lip sync"}
+                <button type="button" disabled={!vocalBuffer} aria-pressed={vocalLipSync.state.status === "ready" ? vocalLipSync.enabled : undefined} onClick={vocalLipSync.state.status === "ready" ? vocalLipSync.toggle : vocalLipSync.prepare}>
+                  {vocalLipSync.state.status === "ready" ? vocalLipSync.enabled ? "Vocal lip sync · On" : "Start singing" : vocalLipSync.state.status === "error" ? "Retry vocal lip sync" : "Prepare vocal lip sync"}
                 </button>
-                <small>{vocalLipSync.state.status === "ready" ? `Following vocals · ${activeSource === 0 ? "A" : "B"}` : "Local analysis · first download 172 MiB"}</small>
+                <small>{vocalLipSync.state.status === "ready" ? `${vocalLipSync.enabled ? "Following vocals" : "Vocals ready"} · ${activeSource === 0 ? "A" : "B"}` : "Local analysis · first download 172 MiB"}</small>
               </>}
               {vocalLipSync.state.status === "error" && <small role="alert">{vocalLipSync.state.error}</small>}
             </div>

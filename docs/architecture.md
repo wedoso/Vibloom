@@ -118,10 +118,11 @@ Playback's shared AudioContext time + selected source + volume ─────�
                           Cubism LipSync parameters
 ```
 
-**Enable vocal lip sync** starts local analysis for the selected source. First use
+**Prepare vocal lip sync** starts local analysis for the selected source. First use
 fetches a pinned, roughly 172 MiB model from Hugging Face; music never leaves the
 device. The model is cached in Cache Storage. Progress, cancellation, and retry
-remain available while normal playback continues. WebGPU is preferred, with
+remain available while normal playback continues. Preparation finishes with a
+**Start singing** toggle; turning singing off retains the prepared timing. WebGPU is preferred, with
 single-thread WASM fallback for static deployments without cross-origin isolation.
 WASM can be substantially slower than playback. The worker is terminated on
 cancellation, source replacement, unmount, or completion, releasing its inference
@@ -155,7 +156,8 @@ do not include those settings. It also does not replace music source separation.
 `npm run desktop:smoke:lipsync` runs the real model against a human speech clip
 mixed with generated instruments. Both Live2D models must close through the
 instrumental intro/outro and instrumental-only B, and open during the vocal section.
-It also covers cancellation/retry, no mix fallback, model switching, shorter B
+It also covers playback and renderer responsiveness during inference, the progress
+bar, explicit activation, cancellation/retry, no mix fallback, model switching, shorter B
 ending, volume zero, seeking, pause/resume, track end, and saved analysis reuse.
 For an already downloaded model, set `VIBLOOM_TEST_VOCAL_MODEL` to its local path.
 Screenshots go to `outputs/lip-sync-smoke/`. CI downloads the pinned weights before

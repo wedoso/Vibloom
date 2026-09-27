@@ -274,6 +274,7 @@ export default function Live2DStage({
   const [cameraPreset, setCameraPreset] = useState<"director" | "portrait" | "wide" | "manual">(startsInPortrait ? "portrait" : "director");
   const [zoomReadout, setZoomReadout] = useState(startsInPortrait ? Math.round(PORTRAIT_ZOOM * 100) : 100);
   const [showZoom, setShowZoom] = useState(false);
+  const [reacting, setReacting] = useState(false);
 
   useLayoutEffect(() => {
     let nextCameraUi: { mode: "auto" | "locked"; preset: "director" | "portrait" } | null = null;
@@ -358,6 +359,7 @@ export default function Live2DStage({
         ]);
         if (disposed) return;
         setStatus("loading");
+        setReacting(false);
         configureCubism4({ memorySizeMB: 64 });
         app = new Application({
           backgroundAlpha: 0,
@@ -891,7 +893,8 @@ export default function Live2DStage({
         const personality = new HongXiPersonality();
         let personalityPose: ReturnType<HongXiPersonality["update"]> = {};
         let personalityWeight = 0;
-        const reactToCompanion = () => personality.react();
+        let wasReacting = false;
+        const reactToCompanion = () => { personality.react(); setReacting(true); wasReacting = true; };
         if (!companion.authoredMotions) reactToCompanionRef.current = reactToCompanion;
         const applyPersonalityEyes = () => {
           if (companion.authoredMotions) return;
@@ -1474,6 +1477,11 @@ export default function Live2DStage({
           if (!companion.authoredMotions) {
             personalityPose = personality.update({ dt, playing: features.isPlaying, welcome: variantRef.current === "welcome", energy, beatCount });
             personalityWeight = follow(personalityWeight, personality.gesture ? 1 : 0, 4);
+            if (wasReacting !== personality.reacting) {
+              wasReacting = personality.reacting;
+              setReacting(wasReacting);
+            }
+            if (stageRef.current) stageRef.current.dataset.gesture = personality.gesture ?? "";
           }
           const stage = stageRef.current;
           if (stage) {
@@ -1702,13 +1710,13 @@ export default function Live2DStage({
           </button>
           {!companion.authoredMotions && <>
             <i aria-hidden="true" />
-            <button type="button" disabled={status !== "ready"} aria-label="Interact with Hong Xi" title="Say hello — Hong Xi will react" onClick={() => reactToCompanionRef.current?.()}><Smile size={15} strokeWidth={1.7} /><span>React</span></button>
+            <button type="button" disabled={status !== "ready"} aria-label="Interact with Hong Xi" title="Say hello — Hong Xi will react" onClick={() => reactToCompanionRef.current?.()}><Smile size={15} strokeWidth={1.7} /><span>{reacting ? "Reacting…" : "React"}</span></button>
           </>}
           <span className={`camera-zoom ${showZoom ? "is-visible" : ""}`}>{zoomReadout}%</span>
           <span className="camera-hint"><Mouse size={11} strokeWidth={1.7} /> scroll to frame</span>
         </div>
       )}
-      {variant === "welcome" && !companion.authoredMotions && <button className="companion-greeting" type="button" disabled={status !== "ready"} onClick={() => reactToCompanionRef.current?.()} aria-label="Interact with Hong Xi"><Smile size={15} /> Say hello</button>}
+      {variant === "welcome" && !companion.authoredMotions && <button className="companion-greeting" type="button" disabled={status !== "ready"} onClick={() => reactToCompanionRef.current?.()} aria-label="Interact with Hong Xi"><Smile size={15} /> {reacting ? "Hello!" : "Say hello"}</button>}
       {variant === "welcome" && onPickAudio && (
         <div className="stage-invitation">
           <span>YOUR MUSIC, HER MOVEMENT</span>
