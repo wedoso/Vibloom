@@ -1,6 +1,22 @@
 # Changelog
 
-Notable changes to Vibloom are recorded here. This file is maintained by Release Please from Conventional Commit messages merged into `main`.
+Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
+
+## [1.3.0](https://github.com/wedoso/Vibloom/compare/v1.2.0...v1.3.0) (2026-09-26)
+
+### Features
+
+- Import TXT lyrics, timestamp each line during playback, save drafts, and download synchronized LRC files.
+- Edit existing LRC timestamps with exact time entry, 0.1-second nudges, and a global offset; preserve metadata, bilingual lines, blank cues, and millisecond precision.
+- Add headset and system media controls with resumable playback, Now Playing metadata, and synchronized A/B pause/resume.
+
+### Fixes and maintenance
+
+- Cancel pending audio starts when a pause arrives while an audio device is resuming.
+- Preserve the edited track when playback ends during lyric timing; validate timestamp order before export.
+- Add desktop workflow tests for lyric conversion and media controls, and simplify the README.
+
+AirPods command handling is covered by simulated desktop controls; physical ear-detection testing is still pending.
 
 ## [1.2.0](https://github.com/wedoso/Vibloom/compare/v1.1.0...v1.2.0) (2026-09-24)
 

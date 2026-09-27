@@ -3,6 +3,55 @@ export type LyricLine = {
   text: string;
 };
 
+export type LyricTimingLine = { text: string; time: number | null };
+
+export function parseLyricsFile(source: string, fileName: string) {
+  const parsed = parseLrc(source);
+  if (parsed.lines.length) return {
+    lyrics: parsed.lines,
+    lyricTiming: undefined,
+    // Offset is already applied by parseLrc; retaining it would apply it twice.
+    lyricMetadata: source.replace(/^\uFEFF/u, "").split(/\r\n|\r|\n/u)
+      .map((line) => line.trim()).filter((line) => /^\[[a-z]+:[^\]\r\n]*\]$/iu.test(line) && !/^\[offset:/iu.test(line)),
+  };
+  if (!/\.txt$/iu.test(fileName)) throw new Error("No timestamped LRC lyrics");
+  const lyricTiming: LyricTimingLine[] = source.replace(/^\uFEFF/u, "").split(/\r\n|\r|\n/u)
+    .map((text) => text.trim()).filter(Boolean).map((text) => ({ text, time: null }));
+  if (!lyricTiming.length) throw new Error("Empty lyrics");
+  return { lyrics: [] as LyricLine[], lyricTiming };
+}
+
+export function formatLrcTime(time: number) {
+  const milliseconds = Math.round(Math.max(0, time) * 1000);
+  const fraction = String(milliseconds % 1000).padStart(3, "0");
+  return `${String(Math.floor(milliseconds / 60000)).padStart(2, "0")}:${String(Math.floor(milliseconds / 1000) % 60).padStart(2, "0")}.${milliseconds % 10 === 0 ? fraction.slice(0, 2) : fraction}`;
+}
+
+export function shiftLyricTiming(lines: LyricTimingLine[], seconds: number) {
+  if (!Number.isFinite(seconds)) throw new Error("Enter a valid offset in seconds.");
+  const shifted = lines.map((line) => ({ ...line, time: line.time === null ? null : Math.round((line.time + seconds) * 1000) / 1000 }));
+  if (shifted.some((line) => line.time !== null && line.time < 0)) throw new Error("This offset would move a line before 00:00. Choose a smaller negative offset.");
+  return shifted;
+}
+
+export function validateLyricTiming(lines: LyricTimingLine[]) {
+  if (!lines.length || lines.some((line) => line.time === null)) return "Timestamp every line before saving or downloading.";
+  let previous = -1;
+  for (const line of lines) {
+    const time = line.time as number;
+    if (!Number.isFinite(time) || time < 0) return "Timestamps must be valid, non-negative times.";
+    if (time < previous) return "Timestamps must follow the lyric order. Select a line to correct its time.";
+    previous = time;
+  }
+  return "";
+}
+
+export function serializeLrc(lines: LyricTimingLine[], metadata: string[] = []) {
+  const error = validateLyricTiming(lines);
+  if (error) throw new Error(error);
+  return [...metadata, ...lines.flatMap((line) => line.text.split("\n").map((text) => `[${formatLrcTime(line.time as number)}]${text}`))].join("\n") + "\n";
+}
+
 export type ParsedLrc = {
   lines: LyricLine[];
   title: string;
@@ -40,7 +89,6 @@ export function parseLrc(source: string): ParsedLrc {
     const timestamps = [...line.matchAll(TIMESTAMP)];
     if (!timestamps.length) continue;
     const text = line.replace(TIMESTAMP, "").trim();
-    if (!text) continue;
 
     for (const timestamp of timestamps) {
       const minutes = Number(timestamp[1]);

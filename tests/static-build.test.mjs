@@ -393,3 +393,47 @@ test("packages every companion dependency and configures Hong Xi blinking", asyn
     }
   }
 });
+
+test("imports plain TXT lyrics and exports completed timestamps as round-trippable LRC", async () => {
+  const { parseLyricsFile, serializeLrc, parseLrc, formatLrcTime, validateLyricTiming, decodeLrc } = await importTypeScriptModule(new URL("src/lrc.ts", root));
+  const draft = parseLyricsFile("\ufeff  第一行 \r\n\r\nSecond line\r第三行\n", "song.TXT");
+  assert.deepEqual(draft, { lyrics: [], lyricTiming: [
+    { text: "第一行", time: null }, { text: "Second line", time: null }, { text: "第三行", time: null },
+  ] });
+  assert.throws(() => serializeLrc(draft.lyricTiming), /every line/u);
+  assert.throws(() => parseLyricsFile(" \n\r\n", "empty.txt"), /Empty/u);
+  assert.throws(() => parseLyricsFile("plain lyrics", "invalid.lrc"), /timestamped/u);
+  assert.equal(parseLyricsFile("[00:01.00]Already timed", "song.txt").lyricTiming, undefined);
+  const timed = draft.lyricTiming.map((line, index) => ({ ...line, time: [0, 59.999, 123.45][index] }));
+  assert.equal(serializeLrc(timed), "[00:00.00]第一行\n[00:59.999]Second line\n[02:03.45]第三行\n");
+  assert.deepEqual(parseLrc(serializeLrc(timed)).lines, timed);
+  assert.equal(formatLrcTime(59.9996), "01:00.00");
+  assert.equal(formatLrcTime(3600), "60:00.00");
+  assert.equal(validateLyricTiming(timed), "");
+  for (const invalid of [NaN, Infinity, -1]) assert.throws(() => serializeLrc([{ text: "bad", time: invalid }]), /valid/u);
+  assert.throws(() => serializeLrc([{ text: "first", time: 3 }, { text: "second", time: 2 }]), /order/u);
+  assert.throws(() => serializeLrc([]), /every line/u);
+  const utf16 = Buffer.from("\ufeff第一行\r\n第二行", "utf16le");
+  assert.equal(parseLyricsFile(decodeLrc(utf16.buffer.slice(utf16.byteOffset, utf16.byteOffset + utf16.byteLength)), "utf16.txt").lyricTiming.length, 2);
+});
+
+
+test("edits imported LRC without losing translations, blank cues, metadata or millisecond precision", async () => {
+  const { parseLyricsFile, parseLrc, serializeLrc, shiftLyricTiming } = await importTypeScriptModule(new URL("src/lrc.ts", root));
+  const source = "[ti:Original title]\n[ar:Artist]\n[al:Album]\n[by:Editor]\n[offset:250]\n[00:01.123]原文\n[00:01.123]Translation\n[00:03.00][00:05.00]Refrain\n[00:07.00]\n";
+  const parsed = parseLyricsFile(source, "existing.lrc");
+  assert.deepEqual(parsed.lyrics.map((line) => line.time), [1.373, 3.25, 5.25, 7.25]);
+  const shifted = shiftLyricTiming(parsed.lyrics, -0.123);
+  const exported = serializeLrc(shifted, parsed.lyricMetadata);
+  assert.match(exported, /\[00:01.25\]原文\n\[00:01.25\]Translation/u);
+  assert.match(exported, /\[00:07.127\]\n$/u);
+  assert.doesNotMatch(exported, /offset/u);
+  assert.deepEqual(parseLrc(exported).lines, shifted);
+  assert.equal(parseLrc(exported).title, "Original title");
+  assert.equal(parseLrc(exported).artist, "Artist");
+  assert.match(exported, /\[al:Album\]\n\[by:Editor\]/u);
+  assert.deepEqual(shiftLyricTiming(shifted, 0.123), parsed.lyrics);
+  assert.throws(() => shiftLyricTiming(parsed.lyrics, -2), /before 00:00/u);
+  assert.throws(() => shiftLyricTiming(parsed.lyrics, NaN), /valid offset/u);
+  assert.deepEqual(shiftLyricTiming([{ text: "untimed", time: null }, { text: "timed", time: 2 }], 0.1), [{ text: "untimed", time: null }, { text: "timed", time: 2.1 }]);
+});

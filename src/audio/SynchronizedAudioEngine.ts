@@ -15,6 +15,7 @@ export class SynchronizedAudioEngine {
   private playbackOffset = 0;
   private playbackStartedAt = 0;
   private playing = false;
+  private playRequest = 0;
 
   constructor(contextFactory: () => AudioContext = () => new AudioContext()) {
     this.contextFactory = contextFactory;
@@ -99,7 +100,10 @@ export class SynchronizedAudioEngine {
   }
 
   async play(offset: number, leadSeconds: number, volume: number) {
+    const request = ++this.playRequest;
     const context = await this.ensureGraph(true, volume);
+    // A headset pause can arrive while the audio device is still resuming.
+    if (request !== this.playRequest) return false;
     this.stopAllSources();
     const when = context.currentTime + leadSeconds;
     const started = ([0, 1] as const).map((index) => this.startSource(index, when, offset));
@@ -111,6 +115,7 @@ export class SynchronizedAudioEngine {
   }
 
   pause() {
+    this.playRequest += 1;
     const pausedAt = this.getTimelineTime();
     this.playing = false;
     this.playbackOffset = pausedAt;
@@ -119,6 +124,7 @@ export class SynchronizedAudioEngine {
   }
 
   stop() {
+    this.playRequest += 1;
     const stoppedAt = this.getTimelineTime();
     this.playing = false;
     this.playbackOffset = stoppedAt;
@@ -141,6 +147,7 @@ export class SynchronizedAudioEngine {
   }
 
   markEnded(offset = this.getMaxDuration()) {
+    this.playRequest += 1;
     this.playing = false;
     this.playbackOffset = offset;
     this.stopAllSources();
@@ -169,6 +176,7 @@ export class SynchronizedAudioEngine {
   }
 
   async close() {
+    this.playRequest += 1;
     this.playing = false;
     this.stopAllSources();
     const context = this.graph?.context;
