@@ -46,12 +46,12 @@ async function smoke() {
         (error) => { clearTimeout(timeout); reject(error); },
       );
     });
-    const waitFor = async (code, label) => {
-      const attempts = label.endsWith("analyzed") ? 5000 : 150;
+    const waitFor = async (code, label, analysis = label.endsWith("analyzed")) => {
+      const attempts = analysis ? 5000 : 150;
       console.log(`WAIT ${label}`);
       for (let i = 0; i < attempts; i++) {
         if (await run(code)) return;
-        if (label.endsWith("analyzed") && i % 100 === 0) console.log(await run(`document.querySelector('.vocal-lip-sync').textContent`));
+        if (analysis && i % 100 === 0) console.log(await run(`document.querySelector('.library-list-panel') ? [...document.querySelectorAll('.track-vocal-job')].map(el => el.textContent).join(" | ") : document.querySelector('.vocal-lip-sync').textContent`));
         await delay(100);
       }
       throw new Error(`Timed out: ${label}`);
@@ -246,7 +246,7 @@ async function smoke() {
     await waitFor(`document.querySelector('[aria-label="Cancel vocal preparation for Queued cancellation"]')`, "second song queued");
     await click('[aria-label="Cancel vocal preparation for Queued cancellation"]');
     const startsBeforeLibrary = await run("window.__sourceStarts");
-    await waitFor(`[...document.querySelectorAll('.track-row')].find(row => row.textContent.includes('Library vocal preparation'))?.textContent.includes('Vocals ready')`, "library vocal preparation finished");
+    await waitFor(`[...document.querySelectorAll('.track-row')].find(row => row.textContent.includes('Library vocal preparation'))?.textContent.includes('Vocals ready')`, "library vocal preparation finished", true);
     assert.equal(await run("window.__sourceStarts"), startsBeforeLibrary, "library preparation does not replace playback sources");
     assert.ok(await run(`document.querySelector('.library-list-panel') !== null`), "processing stays in Library");
     await capture("library-vocal-preparation");
