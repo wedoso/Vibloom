@@ -2,7 +2,7 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
-## Unreleased
+## [1.4.0](https://github.com/wedoso/Vibloom/compare/v1.3.0...v1.4.0) (2026-09-27)
 
 - Add vocal-driven lip sync to Hong Xi and Hiyori using local Demucs separation. Save per-source timing, follow A/B selection and seeking, and close through instrumental passages, pause, or unavailable analysis. Prepare in the background with a progress bar, cancellation, and retry, then enable singing without interrupting playback.
 
