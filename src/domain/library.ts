@@ -5,7 +5,7 @@ export type TrackAvailability = "available" | "reconnect" | "missing" | "session
 export type TrackPersistence = "indexed" | "cached";
 export type RepeatMode = "off" | "all" | "one";
 
-export type VocalAnalysis = { version: 1; rms: number[] };
+export type VocalAnalysis = { version: 1; rms: number[] } | { version: 2; rms: number[]; visemes: number[] };
 
 export type TrackComparison = {
   vocalAnalysis?: VocalAnalysis;

@@ -51,6 +51,8 @@ import BrandMark from "./BrandMark";
 import UpdateControl from "./UpdateControl";
 import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
 import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
+import { SILENT_VOCAL_POSE, type VocalPose } from "./audio/vocals/envelope";
+import { useLibraryVocals } from "./audio/vocals/useLibraryVocals";
 import { useVocalLipSync } from "./audio/vocals/useVocalLipSync";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
 import { APP_VERSION } from "./appVersion";
@@ -503,7 +505,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const shortcutTogglePlayRef = useRef<() => Promise<void>>(async () => undefined);
   const shortcutSwitchSourceRef = useRef<(source: 0 | 1) => void>(() => undefined);
   const audioVisualRef = useRef({ ...EMPTY_AUDIO_VISUAL });
-  const vocalLevelRef = useRef(0);
+  const vocalLevelRef = useRef<VocalPose>(SILENT_VOCAL_POSE);
 
   const companion = COMPANIONS[session.companionId];
   const currentTrack = tracks.find((track) => track.id === session.currentTrackId) ?? null;
@@ -752,6 +754,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     return null;
   }, [platform]);
 
+  const [selectedVocalTracks, setSelectedVocalTracks] = useState<string[]>([]);
+  const saveLibraryVocals = useCallback((source: LibraryTrack, analysis: VocalAnalysis) => {
+    patchTracks((current) => current.map((track) => track.id === source.id && track.fingerprint === source.fingerprint ? { ...track, vocalAnalysis: analysis } : track));
+  }, [patchTracks]);
+  const libraryVocals = useLibraryVocals(resolveTrackFile, saveLibraryVocals);
+
   const decodeComparisonFile = useCallback(async (file: File, trackId: string, persistence: "indexed" | "cached", announce = true, displayName = file.name) => {
     const version = ++compareLoadVersionRef.current;
     setComparisonMotion("entering");
@@ -970,7 +978,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     const tick = () => {
       if (!playingRef.current) return;
       const reference = getTimelineTime();
-      vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : 0;
+      vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : SILENT_VOCAL_POSE;
       const maxDuration = audioEngine.getMaxDuration();
       const nextTime = Math.min(reference, maxDuration);
       setCurrentTime(nextTime);
@@ -1763,6 +1771,11 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
               <div><button type="button" onClick={() => void playAll(false)}><Play size={16} fill="currentColor" /> Play all</button><button type="button" onClick={() => void playAll(true)}><Shuffle size={16} /> Shuffle</button></div>
               <label><Search size={15} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your library" /></label>
             </div>
+            <div className="library-vocal-toolbar">
+              <label><input type="checkbox" aria-label="Select all visible songs for vocal preparation" checked={filteredTracks.length > 0 && filteredTracks.every((track) => selectedVocalTracks.includes(track.id))} onChange={(event) => setSelectedVocalTracks(event.target.checked ? filteredTracks.map((track) => track.id) : [])} /> Select songs</label>
+              <button type="button" disabled={!selectedVocalTracks.length} onClick={() => libraryVocals.prepare(tracks.filter((track) => selectedVocalTracks.includes(track.id)))}>Prepare vocal lip sync{selectedVocalTracks.length ? ` (${selectedVocalTracks.length})` : ""}</button>
+              <small>Processes in the background · keep listening</small>
+            </div>
             <div className="track-table" role="table" aria-label="Local music library">
               <div className="track-row track-table-header" role="row"><span>#</span><span>Track</span><span>Status</span><span>Time</span><span /></div>
               {filteredTracks.map((track, index) => {
@@ -1771,9 +1784,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 return (
                   <div className={`track-row ${active ? "is-active" : ""} ${unavailable ? "is-unavailable" : ""}`} role="row" key={track.id} onDoubleClick={() => void startTrack(track.id, true, 0)}>
                     <button className="track-index" type="button" aria-label={`Play ${trackDisplayName(track.name)}`} onClick={() => void startTrack(track.id, true, 0)}>{active && isPlaying ? <AudioLines size={14} /> : String(index + 1).padStart(2, "0")}</button>
-                    <span className="track-title"><strong>{trackDisplayName(track.name)}</strong><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
+                    <span className="track-title"><label className="vocal-track-select"><input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} /><strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
                     <span className="track-states">
                       <span className={`track-availability availability-${track.availability} ${track.persistence === "cached" ? "is-cached" : ""}`}>{track.persistence === "cached" ? "On device" : track.availability === "available" ? "Available" : track.availability === "session" ? "This session" : track.availability === "missing" ? "Missing" : "Reconnect"}</span>
+                      {(libraryVocals.jobs[track.id] || track.vocalAnalysis?.version === 2) && <span className="track-vocal-job" role="status">
+                        {libraryVocals.jobs[track.id]?.status === "working" || libraryVocals.jobs[track.id]?.status === "queued" ? <><span>{libraryVocals.jobs[track.id].phase} · {Math.round(libraryVocals.jobs[track.id].progress * 100)}%</span><progress aria-label={`Vocal preparation for ${trackDisplayName(track.name)}`} max={1} value={libraryVocals.jobs[track.id].progress} /><button type="button" aria-label={`Cancel vocal preparation for ${trackDisplayName(track.name)}`} onClick={() => libraryVocals.cancel(track.id)}>Cancel</button></> : libraryVocals.jobs[track.id]?.status === "error" ? <><span>{libraryVocals.jobs[track.id].error}</span><button type="button" onClick={() => libraryVocals.prepare([track])}>Retry</button></> : "Vocals ready"}
+                      </span>}
                       <span className="track-feature-icons">
                         {(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <span className="has-lyrics" role="img" aria-label={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"} title={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"}><FileText size={13} /></span>}
                         {track.comparison && <span className={`has-version-b comparison-${track.comparison.availability}`} role="img" aria-label="Version B attached" title={`${track.comparison.name} · ${track.comparison.persistence === "cached" ? "kept on device" : "reconnect next visit"}`}><ArrowLeftRight size={13} /></span>}
@@ -1781,7 +1797,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                     </span>
                     <span className="track-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
                     <span className="track-menu-wrap"><button type="button" aria-label={`Actions for ${trackDisplayName(track.name)}`} onClick={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)}><MoreHorizontal size={18} /></button>
-                      {menuTrackId === track.id && <span className="track-popover"><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => void openTimingEditor(track.id)}>{track.lyrics.length ? "Edit timing" : "Timestamp lyrics"}</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
+                      {menuTrackId === track.id && <span className="track-popover"><button type="button" onClick={() => { libraryVocals.prepare([track]); setMenuTrackId(""); }}>Prepare vocal lip sync</button><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => void openTimingEditor(track.id)}>{track.lyrics.length ? "Edit timing" : "Timestamp lyrics"}</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
                     </span>
                   </div>
                 );
@@ -1828,7 +1844,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
       {timingTrack?.lyricTiming && <LyricsTimingEditor key={timingTrack.id} name={trackDisplayName(timingTrack.name)} lines={timingTrack.lyricTiming} currentTime={currentTime} duration={timelineDuration} isPlaying={isPlaying} getTime={getTimelineTime}
         onChange={(lyricTiming) => patchTracks((current) => current.map((track) => track.id === timingTrack.id ? { ...track, lyricTiming } : track))}
-        onSeek={(time) => { void seekTo(time); }} onTogglePlay={() => { void togglePlay(); }} onSave={saveTimedLyrics} onClose={() => setTimingTrackId("")} />}
+        onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} onSeek={(time) => { void seekTo(time); }} onTogglePlay={() => { void togglePlay(); }} onSave={saveTimedLyrics} onClose={() => setTimingTrackId("")} />}
       {(importing || importSummary) && <div className="modal-backdrop"><section className="import-summary" role="dialog" aria-modal="true" aria-labelledby="import-title"><button className="sheet-close" type="button" aria-label="Close import summary" onClick={() => { if (!importing) setImportSummary(null); }}><X size={20} /></button><p>LOCAL INDEX</p><h2 id="import-title">{importing ? "Reading your music…" : "Import complete"}</h2>{importing ? <div className="import-loader"><span /><small>Indexing audio and matching lyrics without decoding every track.</small></div> : importSummary && <><div className="import-stats"><div><strong>{importSummary.accepted}</strong><span>New tracks</span></div><div><strong>{importSummary.lyrics}</strong><span>Lyrics matched</span></div><div><strong>{importSummary.duplicates}</strong><span>Reconnected / duplicate</span></div><div><strong>{importSummary.ignored}</strong><span>Ignored</span></div></div>{importSummary.errors.length > 0 && <div className="import-errors">{importSummary.errors.map((error) => <span key={error}>{error}</span>)}</div>}<button className="primary-action" type="button" onClick={() => setImportSummary(null)}>Open library</button></>}</section></div>}
 
       <div className={`side-sheet-backdrop ${queueOpen ? "is-open" : ""}`} onClick={() => setQueueOpen(false)}><aside className="side-sheet queue-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" type="button" aria-label="Close queue" onClick={() => setQueueOpen(false)}><X size={20} /></button><p>UP NEXT</p><h2>Current queue</h2><span>{session.queue.length} tracks · {session.shuffle ? "shuffle" : "in order"}</span><div className="queue-list">{session.queue.map((trackId, index) => { const track = tracks.find((candidate) => candidate.id === trackId); if (!track) return null; return <div className={trackId === session.currentTrackId ? "is-active" : ""} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", trackId)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveQueueTrack(event.dataTransfer.getData("text/plain"), trackId)} key={trackId}><span>{String(index + 1).padStart(2, "0")}</span><button type="button" onClick={() => void startTrack(trackId, true, 0)}><strong>{trackDisplayName(track.name)}</strong><small>{track.sourceLabel}</small></button><span className="queue-move"><button type="button" aria-label="Move up" onClick={() => reorderQueue(trackId, -1)}><ArrowUp size={13} /></button><button type="button" aria-label="Move down" onClick={() => reorderQueue(trackId, 1)}><ArrowDown size={13} /></button></span><button type="button" aria-label="Remove from queue" onClick={() => patchSession((current) => ({ ...current, queue: current.queue.filter((id) => id !== trackId) }))}><X size={14} /></button></div>; })}</div><button className="destructive-text-button" type="button" onClick={() => setConfirmAction("queue")}><Trash2 size={14} /> Clear queue only</button></aside></div>

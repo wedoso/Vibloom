@@ -2676,3 +2676,11 @@ button.track-index,
 
 .vocal-lip-sync progress { width: 100%; height: 5px; accent-color: var(--library-accent); }
 .vocal-lip-sync [role="status"] { width: 100%; }
+.library-vocal-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 0; font-size: 12px; }
+.library-vocal-toolbar label, .vocal-track-select { display: flex; align-items: center; gap: 9px; }
+.library-vocal-toolbar button, .track-vocal-job button { border: 1px solid var(--library-line); border-radius: 7px; background: transparent; color: inherit; padding: 6px 9px; cursor: pointer; }
+.library-vocal-toolbar button:disabled { opacity: .4; cursor: default; }
+.library-vocal-toolbar small { opacity: .6; }
+.vocal-track-select input, .library-vocal-toolbar input { accent-color: var(--library-accent); flex-shrink: 0; }
+.track-vocal-job { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 10px; max-width: 200px; }
+.track-vocal-job progress { width: 80px; accent-color: var(--library-accent); }

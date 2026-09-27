@@ -102,66 +102,69 @@ When pause lands partway through an authored gesture or synthesized transition, 
 
 ### Vocal-driven lip sync
 
-Lip sync follows separated vocals, never the beat detector or full-mix analyser.
-The separation model is Meta's [HTDemucs](https://github.com/facebookresearch/demucs),
-using the [`demucs-web` 1.0.2](https://github.com/timcsy/demucs-web) browser port
-and ONNX Runtime Web 1.24.3. The port owns model preprocessing, STFT/iSTFT,
-inference, and overlapping segment reconstruction; Vibloom does not reimplement
-source separation. The final mouth parameter update follows
-[Cubism's documented lip-sync interface](https://docs.live2d.com/en/cubism-sdk-manual/lipsync/).
+[HTDemucs](https://github.com/facebookresearch/demucs) via
+[`demucs-web` 1.0.2](https://github.com/timcsy/demucs-web) and ONNX Runtime Web
+1.24.3 isolates vocals. [`HeadAudio` 0.1.0](https://github.com/met4citizen/HeadAudio)
+([MIT notice](../public/licenses/HeadAudio.txt)) then supplies its MFCC processor and bundled Gaussian-prototype viseme
+model. Both algorithms run in the worker; the app supplies timing, persistence,
+and the projection onto the two mouth parameters available in these Live2D rigs.
 
 ```text
-Decoded A or B → worker → HTDemucs vocal stem → 20 ms RMS frames → library record
-                                                                    │
-Playback's shared AudioContext time + selected source + volume ──────┘
-                                     ↓
-                          Cubism LipSync parameters
+Library selection / decoded A or B → shared job queue → worker
+  → HTDemucs vocals → HeadAudio visemes + short-time RMS → saved 50 Hz frames
+Playback's shared AudioContext time + selected source + volume
+  → sample saved frames → Cubism mouth openness and form
 ```
 
-**Prepare vocal lip sync** starts local analysis for the selected source. First use
-fetches a pinned, roughly 172 MiB model from Hugging Face; music never leaves the
-device. The model is cached in Cache Storage. Progress, cancellation, and retry
-remain available while normal playback continues. Preparation finishes with a
-**Start singing** toggle; turning singing off retains the prepared timing. WebGPU is preferred, with
-single-thread WASM fallback for static deployments without cross-origin isolation.
-WASM can be substantially slower than playback. The worker is terminated on
-cancellation, source replacement, unmount, or completion, releasing its inference
-resources. Runtime JS/WASM ship locally; CSP permits WASM compilation and model
-fetches only from Hugging Face and its download hosts.
+Library can queue multiple songs without selecting them for playback. Only one
+analysis job holds model/decoded audio memory at a time, including Player jobs.
+Each Library job decodes independently when its turn arrives; processing never
+replaces playback buffers. Cancellation, retry and per-song progress remain
+available. Results belong to the original track fingerprint. The Player still
+requires explicit singing activation; preparation never starts another audio path.
 
-Analysis uses 24-second windows with two seconds of context at each edge to bound
-working memory. Web Audio resamples these windows to the model's 44.1 kHz stereo
-input. Only the vocal stem produces mouth timing: a −44 dB absolute floor and
-−20 dB vocal-to-mix power floor reject low-level separator leakage. The resulting
-50 Hz RMS envelope is compacted and persisted with each A/B source's existing
-library metadata. Deleting the track removes its timing; replacing B invalidates
-B's timing. A/B selection and seeking sample the appropriate envelope directly
-on the existing audio clock, with no additional playback source. Master volume
-scales that signal. Analysis unavailable, disabled, cancelled, or failed means a
-closed mouth, never a fallback to music amplitude. OS volume is outside this graph.
+The 172 MiB pinned Demucs weights are cached locally. Processing uses 24-second
+windows with two seconds of context on each side, resampled to 44.1 kHz stereo.
+The worker is terminated on cancellation/completion; Player jobs also cancel on
+source replacement. WebGPU is preferred, with single-thread WASM fallback for
+static hosting without cross-origin isolation. Progress reports the initialized
+ONNX GPU device or CPU fallback. FFT/resampling and viseme classification still
+use the CPU; this is not a claim of full GPU utilization. No audio is uploaded.
 
-`MusicLipSync` smooths vocal frames with a 35 ms attack / 75 ms release and caps
-openness at 0.8. It uses the library's resolved `LipSync` IDs; Hong Xi now explicitly
-declares `ParamMouthOpenY`, as Hiyori already does. Only real Core indexes are set
-in `beforeModelUpdate`, after motions, expressions, and physics. Authored singing
-cannot reopen a silent mouth. Smile shape (`ParamMouthForm`), eyes, gestures, and
-camera controls keep their existing owners. Cleanup removes the listener.
+RMS gating rejects separator leakage below 0.006 or 1% of mixture power.
+HeadAudio's 32 ms feature window and six 16 ms votes introduce causal delay;
+offline preparation assigns predictions approximately 56 ms earlier than their
+arrival. Window context is discarded consistently for both RMS and visemes.
+Local linear intensity preserves short dips instead of compressing every syllable
+into a sustained opening. Voiced bilabials can close the mouth at nonzero RMS.
+The bridge uses 12 ms attack / 18 ms release, with 25 ms mouth-form smoothing.
+It sets real Core parameters after motions/physics and leaves other channels alone.
 
-This gives vocal-timed opening and closing, not phoneme-specific A/I/U/E/O shapes.
-Separation can still leak instruments or miss very soft/background vocals in dense
-mixes. The official [MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
-would add a separate runtime and model-specific articulation settings; these models
-do not include those settings. It also does not replace music source separation.
+Version 2 timing stores RMS and viseme IDs. Version 1 amplitude-only results remain
+readable library metadata but are reprocessed on request. Each A/B source retains
+its own timing; seeking samples the shared clock directly. Silence, zero volume,
+pause, disabled singing, absent analysis and ended sources close the mouth.
 
-`npm run desktop:smoke:lipsync` runs the real model against a human speech clip
-mixed with generated instruments. Both Live2D models must close through the
-instrumental intro/outro and instrumental-only B, and open during the vocal section.
-It also covers playback and renderer responsiveness during inference, the progress
-bar, explicit activation, cancellation/retry, no mix fallback, model switching, shorter B
-ending, volume zero, seeking, pause/resume, track end, and saved analysis reuse.
-For an already downloaded model, set `VIBLOOM_TEST_VOCAL_MODEL` to its local path.
-Screenshots go to `outputs/lip-sync-smoke/`. CI downloads the pinned weights before
-this test; other unit and desktop tests remain independent of model downloads.
+These are estimated acoustic mouth shapes, not a phoneme transcript. HeadAudio's
+bundled model was trained on English speech, so sung vowels, other languages and
+background vocals can be misclassified. The models expose only mouth openness
+and form, not fifteen separately authored Oculus visemes; mapping is approximate.
+The official [Cubism MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
+requires an additional runtime and model-specific settings absent from these rigs.
+
+`npm run desktop:smoke:lipsync` runs real separation on a public speech fixture
+mixed with synthetic instruments. It checks actual Core openness/form changes,
+instrumental rejection, background playback and repeat, cancellation, Library
+selection/queue, A/B, volume, seeking, pause and persisted reuse. CI also exercises
+WASM with WebGPU disabled. Set `VIBLOOM_TEST_VOCAL_MODEL` to reuse local weights.
+Private song/LRC cross-checks are diagnostic only and stay outside the repository;
+line timing validates rough vocal entry, not phoneme recognition accuracy.
+
+Model selection fades the old host out for 220 ms before disposal and reveals
+the replacement after its first complete render. Rapid changes cancel pending
+selection timers; reduced-motion skips the transition. Hiyori's greeting reuses
+her official m08 welcome or m03 player clip, including while paused, then returns
+to the appropriate idle/listening controller without touching playback.
 
 ### Ready or paused
 

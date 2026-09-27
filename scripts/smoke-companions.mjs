@@ -59,6 +59,11 @@ async function smoke() {
     await select("hiyori");
     await ready("hiyori");
     const hiyoriTheme = await theme();
+    await click('[aria-label="Interact with Hiyori"]');
+    await waitFor(`document.querySelector('.live2d-stage').dataset.gesture === 'hello'`, "Hiyori greeting starts");
+    await capture("hiyori-welcome-greeting");
+    await waitFor(`document.querySelector('.companion-greeting').textContent.includes('Say hello')`, "Hiyori greeting finishes");
+    console.log("PASS Hiyori authored welcome greeting");
     await run(`(() => {
       const createModel = Live2DCubismCore.Model.fromMoc;
       Live2DCubismCore.Model.fromMoc = function(...args) {
@@ -220,7 +225,15 @@ async function smoke() {
     await click('[aria-label="Pause"]');
     const paused = await position();
     await select("hiyori"); await ready("hiyori");
-    await select("hong-xi"); await ready("hong-xi");
+    await click('[aria-label="Interact with Hiyori"]');
+    await waitFor(`document.querySelector('.live2d-stage').dataset.gesture === 'hello'`, "paused Hiyori greeting starts");
+    await waitFor(`document.querySelector('[aria-label="Interact with Hiyori"]').textContent.includes('React') && !document.querySelector('[aria-label="Interact with Hiyori"]').textContent.includes('Reacting')`, "paused Hiyori greeting completes");
+    assert.equal(await playing(), false);
+    assert.ok(Math.abs(await position() - paused) < .05);
+    await select("hong-xi");
+    assert.equal(await run(`document.querySelector('.live2d-stage').dataset.companion`), "hiyori", "outgoing model survives fade-out");
+    assert.ok(await run(`document.querySelector('.live2d-stage').classList.contains('is-switching-companion')`));
+    await ready("hong-xi");
     assert.equal(await playing(), false);
     assert.ok(Math.abs(await position() - paused) < 0.05);
     console.log("PASS cameras, focus, library, queue and paused position");

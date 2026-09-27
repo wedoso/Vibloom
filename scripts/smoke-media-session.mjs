@@ -107,8 +107,13 @@ async function smoke() {
   } finally {
     clearTimeout(timeout);
     window?.destroy();
-    await rm(profile, { recursive: true, force: true });
-    app.exit(exitCode);
+    // Chromium can briefly recreate cache files after its window is destroyed.
+    // Cleanup failure must never bypass exit and leave CI hanging after tests.
+    try {
+      await rm(profile, { recursive: true, force: true, maxRetries: 3 });
+    } finally {
+      app.exit(exitCode);
+    }
   }
 }
 void smoke();

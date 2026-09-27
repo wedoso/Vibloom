@@ -2,6 +2,7 @@ import * as ort from "onnxruntime-web/webgpu";
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
 import wasmModuleUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url";
 import { DemucsProcessor } from "demucs-web";
+import { vocalVisemes } from "./visemes";
 import { vocalEnvelope } from "./envelope";
 
 // Pin weights independently of changes to the upstream repository's main branch.
@@ -12,6 +13,7 @@ const scope = self as unknown as {
 };
 let processor: DemucsProcessor | null = null;
 let chunkSamples = 0;
+let backend = "WASM CPU";
 
 async function loadWeights() {
   let cache: Cache | null = null;
@@ -49,6 +51,7 @@ scope.onmessage = async ({ data }) => {
       // A single WASM thread also works on static GitHub Pages without COOP/COEP.
       ort.env.wasm.numThreads = 1;
       ort.env.wasm.proxy = false;
+      ort.env.webgpu.powerPreference = "high-performance";
       ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: wasmModuleUrl };
       const weights = await loadWeights();
       scope.postMessage({ type: "progress", phase: "Starting vocal analysis", progress: 0 });
@@ -56,17 +59,19 @@ scope.onmessage = async ({ data }) => {
         ort,
         sessionOptions: { executionProviders: ["webgpu", "wasm"], graphOptimizationLevel: "basic" },
         onProgress: ({ currentSegment }) => scope.postMessage({
-          type: "progress", phase: "Separating vocals",
+          type: "progress", phase: `Separating vocals · ${backend}`,
           progress: currentSegment / Math.ceil(chunkSamples / Math.floor(343980 * 0.75)),
         }),
       });
       await processor.loadModel(weights);
-      scope.postMessage({ type: "ready" });
+      backend = await ort.env.webgpu.device ? "WebGPU" : "WASM CPU";
+      scope.postMessage({ type: "ready", backend });
     } else if (data.type === "separate" && processor) {
       chunkSamples = data.left.length;
       const result = await processor.separate(data.left, data.right);
+      const visemes = await vocalVisemes(result.vocals.left, result.vocals.right);
       const frames = vocalEnvelope(result.vocals.left, result.vocals.right, data.left, data.right);
-      scope.postMessage({ type: "result", frames }, [frames.buffer]);
+      scope.postMessage({ type: "result", frames, visemes }, [frames.buffer, visemes.buffer]);
     }
   } catch (error) {
     scope.postMessage({ type: "error", message: error instanceof Error ? error.message : "Vocal analysis failed." });
