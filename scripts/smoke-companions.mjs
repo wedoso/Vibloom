@@ -137,13 +137,12 @@ async function smoke() {
     await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
     for (const source of ["a", "b"]) {
       await click(`.transport-ab-switch .source-${source}`);
-      await delay(280);
-      assert.ok(await run(`(() => {
+      await waitFor(`(() => {
         const color = getComputedStyle(document.querySelector('.waveform-source-${source} .waveform-bars i')).backgroundColor;
         return color === getComputedStyle(document.querySelector('.waveform-card.is-active .source-selector')).backgroundColor
           && color === getComputedStyle(document.querySelector('.stage-source-indicator > button.is-active')).backgroundColor
           && color === getComputedStyle(document.querySelector('.transport-ab-switch'), '::before').backgroundColor;
-      })()`), "audible source has one consistent color across waveform, stage and transport");
+      })()`, "audible source color settles consistently across waveform, stage and transport");
     }
     const before = await position();
     const starts = await run("window.__sourceStarts");
@@ -231,7 +230,7 @@ async function smoke() {
       await click('[aria-label="Interact with Hong Xi"]');
       await delay(1300);
       await capture(`hong-xi-reaction-${name}`);
-      await delay(3400);
+      await waitFor(`document.querySelector('.live2d-stage').dataset.gesture === ""`, "manual reaction returns to idle");
     }
     assert.ok(await run(`window.__poseProbe.maxima.Param31 > 0.5 && window.__poseProbe.maxima.Param32 > 0.9 && window.__poseProbe.maxima.ParamEyeLSmile > 0.9`), "blush, star eyes and smiling expressions reach the rendered model");
     assert.ok(await run(`Math.abs(window.__poseProbe.current.Param31) < 0.01 && Math.abs(window.__poseProbe.current.Param32) < 0.01 && Math.abs(window.__poseProbe.current.ParamEyeLSmile) < 0.01`), "expressions return to neutral");
