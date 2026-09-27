@@ -35,3 +35,6 @@
 .lyric-time-input input { width: 155px; padding: 8px; border: 1px solid #65544540; border-radius: 7px; background: white; color: inherit; font: inherit; font-size: 13px; }
 .lyric-timing-adjust > small { font-size: 11px; line-height: 1.5; }
 .lyric-timing-lines { flex-shrink: 0; }
+/* Stable transport geometry while hundredths change and the slider is dragged. */
+.lyric-timing-transport output, .lyric-timing-transport > span { flex: 0 0 8ch; font-family: ui-monospace, monospace; white-space: nowrap; }
+.lyric-timing-transport input[type="range"] { min-width: 0; transition: none; }

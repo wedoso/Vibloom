@@ -52,3 +52,12 @@ test("lip envelope is frame-rate independent and bounds invalid vocal levels", (
     assert.ok(Number.isFinite(values[0]) && values[0] >= 0 && values[0] <= 0.8);
   }
 });
+
+
+test("short bilabial closures reach the rig within 60 ms and do not alter other channels", () => {
+  const { values, sync } = fixture();
+  sync.update({ open: 1, form: 1 }, true, 1);
+  sync.update({ open: 0, form: 0 }, true, .06);
+  assert.ok(values[0] < .03);
+  assert.equal(values[1], .5);
+});

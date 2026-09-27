@@ -12,6 +12,9 @@ type Props = {
   getTime: () => number;
   onChange: (lines: LyricTimingLine[]) => void;
   onSeek: (time: number) => void;
+  onScrubStart: () => void;
+  onScrub: (time: number) => void;
+  onScrubEnd: (time: number) => void;
   onTogglePlay: () => void;
   onSave: (download: boolean) => void;
   onClose: () => void;
@@ -25,13 +28,15 @@ function TimeInput({ label, initial, action, onApply }: { label: string; initial
   </form>;
 }
 
-export default function LyricsTimingEditor({ name, lines, currentTime, duration, isPlaying, getTime, onChange, onSeek, onTogglePlay, onSave, onClose }: Props) {
+export default function LyricsTimingEditor({ name, lines, currentTime, duration, isPlaying, getTime, onChange, onSeek, onScrubStart, onScrub, onScrubEnd, onTogglePlay, onSave, onClose }: Props) {
   const [selected, setSelected] = useState(() => {
     const next = lines.findIndex((line) => line.time === null);
     return next < 0 ? 0 : next;
   });
   const [history, setHistory] = useState<Array<{ lines: LyricTimingLine[]; selected: number }>>([]);
   const [editError, setEditError] = useState("");
+  const scrubbing = useRef(false);
+  const scrubTime = useRef(currentTime);
   const selectedLine = lines[selected];
   const dialogRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -106,7 +111,11 @@ export default function LyricsTimingEditor({ name, lines, currentTime, duration,
           <button type="button" aria-label="Rewind 5 seconds" onClick={() => onSeek(Math.max(0, getTime() - 5))}><Rewind size={18} /></button>
           <button type="button" aria-label={isPlaying ? "Pause timing playback" : "Play timing playback"} onClick={onTogglePlay}>{isPlaying ? <Pause size={20} /> : <Play size={20} />}</button>
           <output>{formatLrcTime(currentTime)}</output>
-          <input type="range" aria-label="Timestamp playback position" min={0} max={Math.max(duration, 0.01)} step={0.001} value={Math.min(currentTime, duration)} onChange={(event) => onSeek(Number(event.target.value))} />
+          <input type="range" aria-label="Timestamp playback position" min={0} max={Math.max(duration, 0.01)} step={0.001} value={Math.min(currentTime, duration)} onPointerDown={(event) => { scrubbing.current = true; scrubTime.current = currentTime; event.currentTarget.setPointerCapture(event.pointerId); onScrubStart(); }}
+            onChange={(event) => { const time = Number(event.target.value); scrubTime.current = time; if (scrubbing.current) onScrub(time); else onSeek(time); }}
+            onPointerUp={() => { if (scrubbing.current) { scrubbing.current = false; onScrubEnd(scrubTime.current); } }}
+            onLostPointerCapture={() => { if (scrubbing.current) { scrubbing.current = false; onScrubEnd(scrubTime.current); } }}
+            onPointerCancel={() => { if (scrubbing.current) { scrubbing.current = false; onScrubEnd(scrubTime.current); } }} />
           <span>{formatLrcTime(duration)}</span>
         </div>
         <div className="lyric-timing-progress"><strong>{count} / {lines.length} timed</strong><span>Draft saved with this track</span></div>

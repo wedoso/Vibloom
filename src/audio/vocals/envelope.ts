@@ -27,3 +27,24 @@ export function sampleVocalEnvelope(frames: Float32Array | null, time: number, v
   const rms = (frames[index] + ((frames[index + 1] ?? 0) - frames[index]) * (position - index)) * volume;
   return rms > 0 ? Math.max(0, Math.min(1, (20 * Math.log10(rms) + 45) / 35)) : 0;
 }
+
+export type VocalPose = { open: number; form: number | null };
+export const SILENT_VOCAL_POSE: VocalPose = { open: 0, form: null };
+// Project Oculus visemes onto the two channels actually authored in these rigs.
+// A/I are broad, O/U narrow; bilabials close even when voiced (e.g. /m/).
+const VISEME_POSES = [
+  [1, 0.15], [.65, .5], [.35, 1], [.75, -.8], [.3, -1], [0, 0],
+  [.15, .4], [.22, .25], [.22, .3], [.1, .6], [.35, 0], [.2, .2], [.3, -.15], [.18, .35], [0, 0],
+] as const;
+
+export function sampleVocalPose(frames: Float32Array, visemes: Uint8Array, time: number, volume: number): VocalPose {
+  if (!Number.isFinite(time) || time < 0 || volume <= 0) return SILENT_VOCAL_POSE;
+  const index = Math.floor(time * VOCAL_FRAME_RATE);
+  if (index >= frames.length || !frames[index]) return SILENT_VOCAL_POSE;
+  const pose = VISEME_POSES[visemes[index]] ?? VISEME_POSES[14];
+  // Local linear dynamics preserve consonant dips that log compression erased.
+  let peak = .025;
+  for (let i = Math.max(0, index - 10); i < Math.min(frames.length, index + 11); i++) peak = Math.max(peak, frames[i]);
+  const intensity = Math.min(1, frames[index] / peak) * Math.min(1, volume / .3);
+  return { open: pose[0] * intensity, form: pose[1] };
+}

@@ -66,6 +66,20 @@ async function smoke() {
     await button("Timestamp lyrics");
     await waitFor(`document.querySelectorAll('.lyric-timing-lines button').length === 3`, "TXT editor opens");
     assert.equal(await run(`document.querySelector('.lyric-timing-download').disabled`), true);
+    await click('[aria-label="Play timing playback"]');
+    const slider = await run(`(() => { const r = document.querySelector('[aria-label="Timestamp playback position"]').getBoundingClientRect(); return {x: r.x, y: Math.round(r.y + r.height / 2), width: r.width}; })()`);
+    window.webContents.sendInputEvent({type: 'mouseDown', x: Math.round(slider.x + slider.width * .25), y: slider.y, button: 'left', clickCount: 1});
+    window.webContents.sendInputEvent({type: 'mouseMove', x: Math.round(slider.x + slider.width * .7), y: slider.y, button: 'left'});
+    await delay(250);
+    assert.ok(await run(`Boolean(document.querySelector('[aria-label="Play timing playback"]'))`), "scrubbing pauses the shared clock");
+    const dragFrames = await run(`new Promise(resolve => { const samples = []; const tick = () => { const el = document.querySelector('[aria-label="Timestamp playback position"]'); const r = el.getBoundingClientRect(); samples.push({value: Number(el.value), x:r.x, width:r.width}); if(samples.length === 12) resolve(samples); else requestAnimationFrame(tick); }; tick(); })`);
+    assert.ok(Math.max(...dragFrames.map(s => s.value)) - Math.min(...dragFrames.map(s => s.value)) < .001, "playback cannot fight the dragged thumb");
+    assert.ok(Math.max(...dragFrames.map(s => s.width)) - Math.min(...dragFrames.map(s => s.width)) < .1, "timestamp updates do not resize the timeline");
+    window.webContents.sendInputEvent({type: 'mouseUp', x: Math.round(slider.x + slider.width * .7), y: slider.y, button: 'left', clickCount: 1});
+    await waitFor(`Boolean(document.querySelector('[aria-label="Pause timing playback"]'))`, "scrub resumes playback once");
+    await click('[aria-label="Pause timing playback"]');
+    console.log("PASS timing slider physical drag, stable thumb and layout, pause/resume");
+
     await seek(0); await key("Space", " "); await delay(250); await key("KeyT", "t");
     assert.notEqual(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:00.00", "stamp reads live audio clock");
     await key("Space", " "); await key("KeyZ", "z");

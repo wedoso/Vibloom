@@ -3021,3 +3021,9 @@ html[data-scene-transition="exit"].is-scene-revealing .welcome-choices {
 
   .solo-mode-label { display: none; }
 }
+/* Fade the current model out before disposing it; reveal the replacement only
+   after Cubism has rendered its first complete frame. Audio keeps running. */
+.live2d-host { opacity: 1; transition: opacity 220ms ease, transform 320ms ease; }
+.live2d-stage.is-switching-companion .live2d-host,
+.live2d-stage[data-status="loading"] .live2d-host { opacity: 0; transform: translateY(10px); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .live2d-host { transition: none; transform: none !important; } }

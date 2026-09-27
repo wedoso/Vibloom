@@ -92,10 +92,13 @@ async function smoke() {
       Live2DCubismCore.Model.fromMoc = function(...args) {
         const model = create.apply(this, args), update = model.update;
         const mouth = model.parameters.ids.indexOf('ParamMouthOpenY');
-        const probe = window.__mouthProbe = { current: 0, samples: [], index: mouth };
+        const form = model.parameters.ids.indexOf('ParamMouthForm');
+        const probe = window.__mouthProbe = { current: 0, samples: [], forms: [], index: mouth };
         model.update = function(...args) {
           probe.current = model.parameters.values[mouth];
           probe.samples.push(probe.current);
+          probe.forms.push(model.parameters.values[form]);
+          if (probe.forms.length > 300) probe.forms.shift();
           if (probe.samples.length > 300) probe.samples.shift();
           return update.apply(this, args);
         };
@@ -109,7 +112,7 @@ async function smoke() {
       window.Worker = class extends Worker { constructor(...args) { super(...args); window.__workerStarts++; } };
       const start = AudioBufferSourceNode.prototype.start;
       window.__sourceStarts = 0;
-      AudioBufferSourceNode.prototype.start = function(...args) { window.__sourceStarts++; return start.apply(this, args); };
+      AudioBufferSourceNode.prototype.start = function(...args) { if (this.context instanceof AudioContext) window.__sourceStarts++; return start.apply(this, args); };
       window.__wav = (name, silent) => {
         const rate = 44100, samples = rate * (silent ? 3 : 12), bytes = new ArrayBuffer(44 + samples * 2), view = new DataView(bytes);
         const text = (offset, value) => [...value].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)));
@@ -190,6 +193,11 @@ async function smoke() {
       await range("Playback position", 4.2);
       await click('.transport-play');
       await open(`${id} vocal A opens`);
+      await run("window.__mouthProbe.samples = []; window.__mouthProbe.forms = []");
+      await delay(1700);
+      const articulation = await run("({open: window.__mouthProbe.samples, form: window.__mouthProbe.forms})");
+      assert.ok(Math.max(...articulation.open) - Math.min(...articulation.open) > .15, `${id}: syllabic mouth movement`);
+      assert.ok(Math.max(...articulation.form) - Math.min(...articulation.form) > .15, `${id}: visemes change actual Cubism mouth shape`);
       await capture(`${id}-singing`);
       const beforeToggle = await run("window.__sourceStarts");
       await click('.vocal-lip-sync button');
@@ -223,6 +231,29 @@ async function smoke() {
       await click('[aria-label="Pause"]');
       console.log(`PASS ${id}: actual vocals, instrumental rejection, A/B, ended source, volume, seek, pause/resume`);
     }
+    // Process a different song from Library without replacing current playback.
+    await run(`(() => {
+      const transfer = new DataTransfer(); transfer.items.add(window.__wav('Library vocal preparation.wav', true)); transfer.items.add(window.__wav('Queued cancellation.wav', true));
+      const input = document.querySelector('input[type="file"][multiple]'); input.files = transfer.files; input.dispatchEvent(new Event('change', {bubbles:true}));
+    })()`);
+    await waitFor(`document.querySelector('#import-title')?.textContent === 'Import complete'`, "library test tracks imported");
+    await click('[aria-label="Close import summary"]');
+    await click('button[title="Library"]');
+    await waitFor(`document.querySelector('[aria-label="Select Library vocal preparation for vocal preparation"]')`, "library selection");
+    await click('[aria-label="Select Library vocal preparation for vocal preparation"]');
+    await click('[aria-label="Select Queued cancellation for vocal preparation"]');
+    await click('.library-vocal-toolbar button');
+    await waitFor(`document.querySelector('[aria-label="Cancel vocal preparation for Queued cancellation"]')`, "second song queued");
+    await click('[aria-label="Cancel vocal preparation for Queued cancellation"]');
+    const startsBeforeLibrary = await run("window.__sourceStarts");
+    await waitFor(`[...document.querySelectorAll('.track-row')].find(row => row.textContent.includes('Library vocal preparation'))?.textContent.includes('Vocals ready')`, "library vocal preparation finished");
+    assert.equal(await run("window.__sourceStarts"), startsBeforeLibrary, "library preparation does not replace playback sources");
+    assert.ok(await run(`document.querySelector('.library-list-panel') !== null`), "processing stays in Library");
+    await capture("library-vocal-preparation");
+    await run(`[...document.querySelectorAll('.queue-list > div:not(.is-active) [aria-label="Remove from queue"]')].forEach(button => button.click())`);
+    console.log("PASS Library selection, background queue, queued cancellation and saved results");
+    await click('button[title="Player"]');
+    await waitFor(`document.querySelector('.comparison-deck')`, "return to player");
     await range("Playback position", 11.5);
     await click('.transport-play');
     await waitFor(`Boolean(document.querySelector('[aria-label="Play"]'))`, "track ends");
@@ -232,7 +263,6 @@ async function smoke() {
     await ready("hiyori");
     await waitFor(`document.querySelector('.vocal-lip-sync button') && !document.querySelector('.vocal-lip-sync button').disabled`, "restored audio ready");
     await run(`window.Worker = class { constructor() { throw new Error('Saved timing should not run inference again'); } }; void 0;`);
-    await click('.vocal-lip-sync button');
     await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Start singing' || document.querySelector('.vocal-lip-sync [role="alert"]')`, "saved A timing");
     assert.equal(await run(`document.querySelector('.vocal-lip-sync [role="alert"]')?.textContent ?? ''`), "");
     await click('.vocal-lip-sync button');

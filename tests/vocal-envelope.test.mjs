@@ -5,7 +5,7 @@ import ts from "typescript";
 
 const source = await readFile(new URL("../src/audio/vocals/envelope.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { vocalEnvelope, sampleVocalEnvelope } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const { vocalEnvelope, sampleVocalEnvelope, sampleVocalPose } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 
 test("loud instrumental audio cannot open the mouth without a separated vocal signal", () => {
   const mix = new Float32Array(4410).fill(0.8), silent = new Float32Array(4410);
@@ -26,4 +26,21 @@ test("vocal timing follows seek positions and volume, including unavailable or e
   assert.equal(sampleVocalEnvelope(frames, 0.04, 1), 0);
   for (const time of [-1, NaN, Infinity, 0.08, 10]) assert.equal(sampleVocalEnvelope(frames, time, 1), 0);
   assert.equal(sampleVocalEnvelope(null, 0.02, 1), 0);
+});
+
+
+test("equal loudness produces distinct vowels and a closed voiced bilabial", () => {
+  const rms = new Float32Array(50).fill(.2);
+  const visemes = new Uint8Array(50);
+  visemes[10] = 2; visemes[20] = 4; visemes[30] = 5;
+  const a = sampleVocalPose(rms, visemes, 0, 1);
+  const i = sampleVocalPose(rms, visemes, .2, 1);
+  const u = sampleVocalPose(rms, visemes, .4, 1);
+  assert.ok(a.open > i.open);
+  assert.ok(i.form > 0 && u.form < 0);
+  assert.equal(sampleVocalPose(rms, visemes, .6, 1).open, 0);
+  rms[5] = .01;
+  assert.ok(sampleVocalPose(rms, visemes, .1, 1).open < a.open * .1, "short consonant dip survives normalization");
+  assert.equal(sampleVocalPose(rms, visemes, .2, 0).open, 0);
+  assert.equal(sampleVocalPose(rms, visemes, 1, 1).open, 0);
 });
