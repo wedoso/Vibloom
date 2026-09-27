@@ -28,13 +28,16 @@
     "audit": "npm audit --omit=dev",
     "desktop:smoke:companions": "npm run build && electron scripts/smoke-companions.mjs",
     "desktop:smoke:lyrics": "npm run build && electron scripts/smoke-lyrics-timing.mjs",
-    "desktop:smoke:media": "npm run build && electron scripts/smoke-media-session.mjs"
+    "desktop:smoke:media": "npm run build && electron scripts/smoke-media-session.mjs",
+    "desktop:smoke:lipsync": "npm run build && electron scripts/smoke-lip-sync.mjs"
   },
   "dependencies": {
     "@pixi/sound": "^5.2.3",
     "@pixi/unsafe-eval": "^7.4.3",
+    "demucs-web": "1.0.2",
     "electron-updater": "^6.8.9",
     "lucide-react": "^0.468.0",
+    "onnxruntime-web": "1.24.3",
     "pixi-live2d-display-advanced": "^1.1.0",
     "pixi.js": "^7.4.3",
     "react": "19.2.6",

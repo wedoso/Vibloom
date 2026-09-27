@@ -6,12 +6,14 @@ import { AudioVisualFeatures } from "./audioVisual";
 import { COMPANIONS, hongXiPose, type CompanionId } from "./live2d/models";
 import { HONG_XI_PERSONALITY_PARAMS, HongXiPersonality } from "./live2d/hongXiPersonality";
 import { normalizeViewportGaze } from "./live2d/gaze";
+import { MusicLipSync } from "./live2d/musicLipSync";
 
 type StageVariant = "welcome" | "player";
 
 type Live2DStageProps = {
   companionId?: CompanionId;
   featuresRef: MutableRefObject<AudioVisualFeatures>;
+  vocalLevelRef: MutableRefObject<number>;
   variant: StageVariant;
   trackLabel: string;
   activeSource: 0 | 1;
@@ -202,6 +204,7 @@ type MotionAssetController = {
 };
 
 type MotionManagerController = {
+  lipSyncIds: string[];
   groups: { idle: string };
   queueManager?: { _motions?: MotionQueueEntryController[] };
   loadMotion: (group: string, index: number) => Promise<MotionAssetController | undefined>;
@@ -215,6 +218,7 @@ type MotionManagerController = {
 };
 
 type InternalModelControls = {
+  lipSync: boolean;
   coreModel: CoreModel;
   focusController: FocusController;
   eyeBlink?: unknown;
@@ -230,6 +234,7 @@ type InternalModelControls = {
 export default function Live2DStage({
   companionId = "hong-xi",
   featuresRef,
+  vocalLevelRef,
   variant,
   trackLabel,
   activeSource,
@@ -269,6 +274,7 @@ export default function Live2DStage({
   const [cameraPreset, setCameraPreset] = useState<"director" | "portrait" | "wide" | "manual">(startsInPortrait ? "portrait" : "director");
   const [zoomReadout, setZoomReadout] = useState(startsInPortrait ? Math.round(PORTRAIT_ZOOM * 100) : 100);
   const [showZoom, setShowZoom] = useState(false);
+  const [reacting, setReacting] = useState(false);
 
   useLayoutEffect(() => {
     let nextCameraUi: { mode: "auto" | "locked"; preset: "director" | "portrait" } | null = null;
@@ -353,6 +359,7 @@ export default function Live2DStage({
         ]);
         if (disposed) return;
         setStatus("loading");
+        setReacting(false);
         configureCubism4({ memorySizeMB: 64 });
         app = new Application({
           backgroundAlpha: 0,
@@ -673,6 +680,18 @@ export default function Live2DStage({
         const poseVelocities = new Map<number, number>();
         let poseHistoryAt = performance.now() / 1000;
         const core = internalModel.coreModel;
+        internalModel.lipSync = false;
+        const musicLipSync = new MusicLipSync(core, internalModel.motionManager.lipSyncIds);
+        let lipSyncUpdatedAt = performance.now();
+        const applyMusicLipSync = () => {
+          const now = performance.now();
+          musicLipSync.update(
+            vocalLevelRef.current,
+            variantRef.current === "player" && featuresRef.current.isPlaying,
+            (now - lipSyncUpdatedAt) / 1000,
+          );
+          lipSyncUpdatedAt = now;
+        };
         const focusController = internalModel.focusController;
         // Cubism creates virtual indexes for missing IDs instead of returning -1.
         // Never treat those virtual channels as real joints on another model.
@@ -874,7 +893,8 @@ export default function Live2DStage({
         const personality = new HongXiPersonality();
         let personalityPose: ReturnType<HongXiPersonality["update"]> = {};
         let personalityWeight = 0;
-        const reactToCompanion = () => personality.react();
+        let wasReacting = false;
+        const reactToCompanion = () => { personality.react(); setReacting(true); wasReacting = true; };
         if (!companion.authoredMotions) reactToCompanionRef.current = reactToCompanion;
         const applyPersonalityEyes = () => {
           if (companion.authoredMotions) return;
@@ -1004,6 +1024,7 @@ export default function Live2DStage({
         internalModel.on("afterMotionUpdate", capturePoseHistory);
         internalModel.on("beforeModelUpdate", applyRestEyeHandoff);
         internalModel.on("beforeModelUpdate", applyPersonalityEyes);
+        internalModel.on("beforeModelUpdate", applyMusicLipSync);
         cleanupMotionPose = () => {
           internalModel.off("afterMotionUpdate", applyPoseTransition);
           internalModel.off("afterMotionUpdate", applyMusicPose);
@@ -1011,6 +1032,7 @@ export default function Live2DStage({
           internalModel.off("afterMotionUpdate", capturePoseHistory);
           internalModel.off("beforeModelUpdate", applyRestEyeHandoff);
           internalModel.off("beforeModelUpdate", applyPersonalityEyes);
+          internalModel.off("beforeModelUpdate", applyMusicLipSync);
           if (reactToCompanionRef.current === reactToCompanion) reactToCompanionRef.current = null;
         };
 
@@ -1455,6 +1477,11 @@ export default function Live2DStage({
           if (!companion.authoredMotions) {
             personalityPose = personality.update({ dt, playing: features.isPlaying, welcome: variantRef.current === "welcome", energy, beatCount });
             personalityWeight = follow(personalityWeight, personality.gesture ? 1 : 0, 4);
+            if (wasReacting !== personality.reacting) {
+              wasReacting = personality.reacting;
+              setReacting(wasReacting);
+            }
+            if (stageRef.current) stageRef.current.dataset.gesture = personality.gesture ?? "";
           }
           const stage = stageRef.current;
           if (stage) {
@@ -1588,7 +1615,7 @@ export default function Live2DStage({
         console.warn("Live2D cleanup completed with a renderer warning", error);
       }
     };
-  }, [companion, featuresRef, loadAttempt]);
+  }, [companion, featuresRef, vocalLevelRef, loadAttempt]);
 
   const listeningLabel = variant === "welcome"
     ? "Waiting for a track"
@@ -1683,13 +1710,13 @@ export default function Live2DStage({
           </button>
           {!companion.authoredMotions && <>
             <i aria-hidden="true" />
-            <button type="button" disabled={status !== "ready"} aria-label="Interact with Hong Xi" title="Say hello — Hong Xi will react" onClick={() => reactToCompanionRef.current?.()}><Smile size={15} strokeWidth={1.7} /><span>React</span></button>
+            <button type="button" disabled={status !== "ready"} aria-label="Interact with Hong Xi" title="Say hello — Hong Xi will react" onClick={() => reactToCompanionRef.current?.()}><Smile size={15} strokeWidth={1.7} /><span>{reacting ? "Reacting…" : "React"}</span></button>
           </>}
           <span className={`camera-zoom ${showZoom ? "is-visible" : ""}`}>{zoomReadout}%</span>
           <span className="camera-hint"><Mouse size={11} strokeWidth={1.7} /> scroll to frame</span>
         </div>
       )}
-      {variant === "welcome" && !companion.authoredMotions && <button className="companion-greeting" type="button" disabled={status !== "ready"} onClick={() => reactToCompanionRef.current?.()} aria-label="Interact with Hong Xi"><Smile size={15} /> Say hello</button>}
+      {variant === "welcome" && !companion.authoredMotions && <button className="companion-greeting" type="button" disabled={status !== "ready"} onClick={() => reactToCompanionRef.current?.()} aria-label="Interact with Hong Xi"><Smile size={15} /> {reacting ? "Hello!" : "Say hello"}</button>}
       {variant === "welcome" && onPickAudio && (
         <div className="stage-invitation">
           <span>YOUR MUSIC, HER MOVEMENT</span>

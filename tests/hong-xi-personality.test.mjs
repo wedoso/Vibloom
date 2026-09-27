@@ -87,3 +87,18 @@ test("quiet music never uses star eyes or negative expression switches", () => {
     assert.equal(pose.Param23, undefined);
   }
 });
+
+
+test("a welcome click immediately replaces the ambient gesture with a smooth manual response", () => {
+  const director = new HongXiPersonality();
+  let pose;
+  for (let i = 0; i < 100; i++) pose = director.update({ ...defaults, welcome: true });
+  assert.equal(director.gesture, "hello");
+  director.react();
+  const first = director.update({ ...defaults, welcome: true });
+  assert.equal(director.gesture, "shy", "manual reaction starts on the next frame, not after hello ends");
+  assert.equal(director.reacting, true);
+  assert.deepEqual(first, pose, "no jump from the interrupted pose");
+  for (let i = 0; i < 60; i++) pose = director.update({ ...defaults, welcome: true });
+  assert.ok(pose.Param31 > 0.7, "blush becomes visible within one second");
+});

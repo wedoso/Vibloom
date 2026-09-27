@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const profile = await mkdtemp(path.join(tmpdir(), "vibloom-companions-"));
 const output = path.join(root, "outputs/companion-smoke");
 app.setPath("userData", profile);
+app.on("window-all-closed", () => {});
 protocol.registerSchemesAsPrivileged([{ scheme: "vibloom", privileges: {
   standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true,
 } }]);
@@ -26,7 +27,7 @@ async function smoke() {
       if (!file.startsWith(`${path.join(root, "dist")}${path.sep}`)) return new Response("Not found", { status: 404 });
       return net.fetch(pathToFileURL(file).href);
     });
-    window = new BrowserWindow({ width: 1440, height: 1000, show: false,
+    window = new BrowserWindow({ width: 1440, height: 1000, show: process.env.CI === "true",
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
     window.webContents.setAudioMuted(true);
     window.webContents.on("console-message", (event) => {
@@ -67,6 +68,7 @@ async function smoke() {
           const values = model.parameters.values, ids = model.parameters.ids;
           const eye = values[ids.indexOf('ParamEyeLOpen')], gaze = values[ids.indexOf('ParamEyeBallX')];
           for (const id of ['Param31', 'Param32', 'ParamEyeLSmile', 'Param_Angle_Rotation9', 'Param_Angle_Rotation13']) { const value = values[ids.indexOf(id)]; probe.maxima[id] = Math.max(probe.maxima[id] || 0, value); probe.current[id] = value; }
+          probe.gaze = gaze;
           probe.eyeMin = Math.min(probe.eyeMin, eye); probe.eyeMax = Math.max(probe.eyeMax, eye);
           probe.gazeMin = Math.min(probe.gazeMin, gaze); probe.gazeMax = Math.max(probe.gazeMax, gaze);
           return update.apply(this, args);
@@ -83,11 +85,22 @@ async function smoke() {
     assert.deepEqual(await theme(), hiyoriTheme, "returning to Hiyori restores the original theme");
     await select("hong-xi"); await ready("hong-xi");
     await run(`window.dispatchEvent(new PointerEvent('pointermove', { clientX: 0, clientY: 0 }));`);
-    await delay(500);
+    await waitFor(`Math.abs(window.__poseProbe.gaze) > 0.08`, "gaze follows first pointer position");
+    const firstGaze = await run(`window.__poseProbe.gaze`);
     await run(`window.dispatchEvent(new PointerEvent('pointermove', { clientX: innerWidth, clientY: innerHeight }));`);
-    await delay(500);
-    assert.ok(await run(`window.__poseProbe.gazeMax - window.__poseProbe.gazeMin > 0.1`), "pointer tracking changes eye parameters");
+    await waitFor(`Math.abs(window.__poseProbe.gaze - ${firstGaze}) > 0.1`, "gaze follows opposite pointer position");
     await waitFor(`window.__poseProbe.eyeMin < 0.5 && window.__poseProbe.eyeMax > 0.9`, "Hong Xi blinks");
+    await waitFor(`document.querySelector('.live2d-stage').dataset.gesture`, "ambient welcome gesture");
+    const gestureBefore = await run(`document.querySelector('.live2d-stage').dataset.gesture`);
+    const point = await run(`(() => { const button = document.querySelector('.companion-greeting'); const r = button.getBoundingClientRect(); const x = Math.round(r.x + r.width / 2), y = Math.round(r.y + r.height / 2); return { x, y, hittable: button.contains(document.elementFromPoint(x, y)) }; })()`);
+    assert.ok(point.hittable, "Say hello is not covered by another element");
+    window.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    window.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    await delay(200);
+    assert.equal(await run(`document.querySelector('.companion-greeting').textContent.trim()`), "Hello!");
+    assert.notEqual(await run(`document.querySelector('.live2d-stage').dataset.gesture`), gestureBefore, "physical click promptly replaces ambient gesture");
+    await waitFor(`document.querySelector('.companion-greeting').textContent.includes('Say hello')`, "greeting finishes");
+    console.log("PASS Say hello hit target, immediate reaction and feedback");
     await capture("hong-xi-welcome");
     console.log("PASS both welcome models render");
 
@@ -124,13 +137,12 @@ async function smoke() {
     await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
     for (const source of ["a", "b"]) {
       await click(`.transport-ab-switch .source-${source}`);
-      await delay(280);
-      assert.ok(await run(`(() => {
+      await waitFor(`(() => {
         const color = getComputedStyle(document.querySelector('.waveform-source-${source} .waveform-bars i')).backgroundColor;
         return color === getComputedStyle(document.querySelector('.waveform-card.is-active .source-selector')).backgroundColor
           && color === getComputedStyle(document.querySelector('.stage-source-indicator > button.is-active')).backgroundColor
           && color === getComputedStyle(document.querySelector('.transport-ab-switch'), '::before').backgroundColor;
-      })()`), "audible source has one consistent color across waveform, stage and transport");
+      })()`, "audible source color settles consistently across waveform, stage and transport");
     }
     const before = await position();
     const starts = await run("window.__sourceStarts");
@@ -218,7 +230,7 @@ async function smoke() {
       await click('[aria-label="Interact with Hong Xi"]');
       await delay(1300);
       await capture(`hong-xi-reaction-${name}`);
-      await delay(3400);
+      await waitFor(`document.querySelector('.live2d-stage').dataset.gesture === ""`, "manual reaction returns to idle");
     }
     assert.ok(await run(`window.__poseProbe.maxima.Param31 > 0.5 && window.__poseProbe.maxima.Param32 > 0.9 && window.__poseProbe.maxima.ParamEyeLSmile > 0.9`), "blush, star eyes and smiling expressions reach the rendered model");
     assert.ok(await run(`Math.abs(window.__poseProbe.current.Param31) < 0.01 && Math.abs(window.__poseProbe.current.Param32) < 0.01 && Math.abs(window.__poseProbe.current.ParamEyeLSmile) < 0.01`), "expressions return to neutral");
