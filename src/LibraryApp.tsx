@@ -911,8 +911,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const nextTrack = useCallback(async (natural = false) => {
     const current = sessionRef.current;
     if (!current.queue.length) return;
+    // Replaying the loaded track must retain its buffers and in-flight vocal
+    // analysis, including a one-item queue repeating in "all" mode.
+    const playFromStart = (trackId: string) => loadedTrackIdRef.current === trackId && audioEngine.getBuffer(0)
+      ? startPlayback(0)
+      : startTrackRef.current(trackId, true, 0);
     if (natural && current.repeat === "one" && current.currentTrackId) {
-      await startTrackRef.current(current.currentTrackId, true, 0);
+      await playFromStart(current.currentTrackId);
       return;
     }
     let candidates: string[] = [];
@@ -934,11 +939,11 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     }
     for (const nextId of candidates) {
       if (current.shuffle) shuffleBagRef.current = shuffleBagRef.current.filter((id) => id !== nextId);
-      if (await startTrackRef.current(nextId, true, 0)) return;
+      if (await playFromStart(nextId)) return;
     }
     if (playingRef.current) pausePlayback();
     setMessage("Queue complete. Reconnect any unavailable tracks to include them.");
-  }, [pausePlayback]);
+  }, [audioEngine, pausePlayback, startPlayback]);
 
   useEffect(() => {
     endedRef.current = () => { void nextTrack(true); };
@@ -963,6 +968,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       return;
     }
     const tick = () => {
+      if (!playingRef.current) return;
       const reference = getTimelineTime();
       vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : 0;
       const maxDuration = audioEngine.getMaxDuration();
@@ -986,6 +992,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         setCurrentTime(maxDuration);
         setIsPlaying(false);
         if (!timingTrackId) endedRef.current();
+        // A buffered repeat may resume within the same React batch. Keep a
+        // frame scheduled; the effect cleanup cancels it if playback stays off.
+        animationFrameRef.current = requestAnimationFrame(tick);
         return;
       }
       animationFrameRef.current = requestAnimationFrame(tick);

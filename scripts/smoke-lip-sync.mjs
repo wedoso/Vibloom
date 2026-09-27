@@ -101,6 +101,12 @@ async function smoke() {
         };
         return model;
       };
+      const decode = BaseAudioContext.prototype.decodeAudioData;
+      window.__decodeCount = 0;
+      BaseAudioContext.prototype.decodeAudioData = function(...args) { window.__decodeCount++; return decode.apply(this, args); };
+      const Worker = window.Worker;
+      window.__workerStarts = 0;
+      window.Worker = class extends Worker { constructor(...args) { super(...args); window.__workerStarts++; } };
       const start = AudioBufferSourceNode.prototype.start;
       window.__sourceStarts = 0;
       AudioBufferSourceNode.prototype.start = function(...args) { window.__sourceStarts++; return start.apply(this, args); };
@@ -142,10 +148,14 @@ async function smoke() {
     await range("Playback position", 0);
     await click('[aria-label="Repeat off"]');
     await click('[aria-label="Repeat all"]');
-    const positionBefore = await run(`Number(document.querySelector('[aria-label="Playback position"]').value)`);
     await run("window.__uiTicks = 0; window.__heartbeat = setInterval(() => window.__uiTicks++, 50)");
     await click('.vocal-lip-sync button');
     await waitFor(`document.querySelector('.vocal-lip-sync progress')`, "progress bar");
+    const workersBeforeLoop = await run("window.__workerStarts");
+    const decodesBeforeLoop = await run("window.__decodeCount");
+    await range("Playback position", 11.5);
+    await waitFor(`Number(document.querySelector('[aria-label="Playback position"]').value) < 2 && Boolean(document.querySelector('[aria-label="Pause"]'))`, "repeat during preparation");
+    const positionBefore = await run(`Number(document.querySelector('[aria-label="Playback position"]').value)`);
     await delay(1600);
     await capture("background-preparation");
     assert.ok(await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`), "playback continues during inference");
@@ -155,11 +165,13 @@ async function smoke() {
     assert.ok(await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`), "playback continues during analysis");
     assert.ok(await run("window.__uiTicks") > 10, "renderer remains responsive");
     await run("clearInterval(window.__heartbeat)");
+    assert.equal(await run("window.__workerStarts"), workersBeforeLoop, "repeat does not restart vocal separation");
+    assert.equal(await run("window.__decodeCount"), decodesBeforeLoop, "repeat reuses decoded audio");
     await closed("ready vocals wait for the user's singing toggle");
     await click('.vocal-lip-sync button');
     await click('[aria-label="Pause"]');
     await click('[aria-label="Repeat one"]');
-    console.log("PASS background Demucs analysis, playback, progress, explicit singing, cancellation and retry");
+    console.log("PASS background Demucs analysis, uninterrupted repeat, progress, explicit singing, cancellation and retry");
     await run(`(() => {
       const transfer = new DataTransfer(); transfer.items.add(window.__wav('Instrumental B.wav', true));
       const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])');
