@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const profile = await mkdtemp(path.join(tmpdir(), "vibloom-media-"));
 const output = path.join(root, "outputs/media-session-smoke");
 app.setPath("userData", profile);
+app.on("window-all-closed", () => {}); // Exit only after cleanup, preserving test failures.
 protocol.registerSchemesAsPrivileged([{ scheme: "vibloom", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let window;

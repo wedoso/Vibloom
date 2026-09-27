@@ -28,6 +28,7 @@ export type LibraryTrack = {
   lyricsFileName: string;
   lyrics: LyricLine[];
   lyricTiming?: LyricTimingLine[];
+  lyricMetadata?: string[];
   comparison: TrackComparison | null;
 };
 

@@ -16,7 +16,7 @@
 .lyric-timing-progress { font-size: 11px; }
 .lyric-timing-progress > span { opacity: .6; }
 .lyric-timing-lines { overflow: auto; min-height: 100px; max-height: 36dvh; border: 1px solid #65544526; border-radius: 12px; }
-.lyric-timing-lines button { width: 100%; display: grid; grid-template-columns: 26px 78px 1fr; border: 0; border-radius: 0; padding: 12px; text-align: left; line-height: 1.6; }
+.lyric-timing-lines button { width: 100%; display: grid; grid-template-columns: 26px 92px 1fr; border: 0; border-radius: 0; padding: 12px; text-align: left; line-height: 1.6; }
 .lyric-timing-lines button + button { border-top: 1px solid #65544512; }
 .lyric-timing-lines button > span:last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
 .lyric-timing-lines button > span:first-child { opacity: .45; }
@@ -29,3 +29,9 @@
 .lyric-timing-hint { min-height: 20px; }
 .library-lyrics-empty.lyrics-plain { flex-wrap: wrap; height: auto; min-height: 60px; }
 @media (max-width: 600px) { .modal-backdrop.lyric-timing-backdrop { padding: 8px; } .lyric-timing-editor { padding: 16px; max-height: calc(100dvh - 16px); gap: 12px; } .lyric-timing-progress { align-items: flex-start; flex-direction: column; gap: 4px; } }
+.lyric-timing-adjust { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 14px; }
+.lyric-time-input, .lyric-timing-nudge { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
+.lyric-time-input label { display: grid; gap: 5px; font-size: 11px; }
+.lyric-time-input input { width: 155px; padding: 8px; border: 1px solid #65544540; border-radius: 7px; background: white; color: inherit; font: inherit; font-size: 13px; }
+.lyric-timing-adjust > small { font-size: 11px; line-height: 1.5; }
+.lyric-timing-lines { flex-shrink: 0; }

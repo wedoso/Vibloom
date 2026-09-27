@@ -415,7 +415,7 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
 
   return (
     <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} key={`${variant}:${fileName}`} aria-label={`Lyrics from ${fileName}`}>
-      <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace</button><button type="button" onClick={onRemoveLyrics}>Remove</button>{timing?.length ? <button type="button" onClick={onTiming}>Edit timing</button> : null}</span>
+      <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace</button><button type="button" onClick={onRemoveLyrics}>Remove</button><button type="button" onClick={onTiming}>Edit timing</button></span>
       <div className="library-lyrics-viewport" ref={viewportRef}>
         <div className="library-lyrics-list">
           {lines.map((line, index) => (
@@ -1038,11 +1038,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       let lyrics: LyricLine[] = [];
       let lyricsFileName = "";
       let lyricTiming: LyricTimingLine[] | undefined;
+      let lyricMetadata: string[] | undefined;
       const lyricFile = lyricMap.get(lyricMatchKey(path))
         ?? [...lyricMap.entries()].find(([key]) => key.endsWith(`/${withoutExtension(normalizeFileName(file.name))}`))?.[1];
       if (lyricFile) {
         try {
-          ({ lyrics, lyricTiming } = parseLyricsFile(decodeLrc(await lyricFile.arrayBuffer()), lyricFile.name));
+          ({ lyrics, lyricTiming, lyricMetadata } = parseLyricsFile(decodeLrc(await lyricFile.arrayBuffer()), lyricFile.name));
           lyricsFileName = lyricFile.name;
           if (lyrics.length || lyricTiming?.length) summary.lyrics += 1;
         } catch {
@@ -1063,6 +1064,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         lyricsFileName,
         lyrics,
         lyricTiming,
+        lyricMetadata,
         comparison: null,
       };
       runtimeFilesRef.current.set(track.id, file);
@@ -1152,6 +1154,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         ...track,
         lyrics: parsed.lyrics,
         lyricTiming: parsed.lyricTiming,
+        lyricMetadata: parsed.lyricMetadata,
         lyricsFileName: file.name,
       } : track));
       setMessage(`Lyrics attached · ${target ? trackDisplayName(target.name) : file.name}`);
@@ -1167,13 +1170,15 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     if (loadedTrackIdRef.current !== trackId) {
       if (!await startTrack(trackId, false, 0)) return;
     }
+    patchTracks((current) => current.map((track) => track.id === trackId && !track.lyricTiming?.length
+      ? { ...track, lyricTiming: track.lyrics.map((line) => ({ ...line })) } : track));
     setTimingTrackId(trackId);
   }
 
   function saveTimedLyrics(download: boolean) {
     if (!timingTrack?.lyricTiming) return;
     try {
-      const source = serializeLrc(timingTrack.lyricTiming);
+      const source = serializeLrc(timingTrack.lyricTiming, timingTrack.lyricMetadata);
       const fileName = `${withoutExtension(timingTrack.lyricsFileName || timingTrack.name)}.lrc`;
       const lyrics = parseLrc(source).lines;
       patchTracks((current) => current.map((track) => track.id === timingTrack.id ? { ...track, lyrics, lyricsFileName: fileName } : track));
@@ -1200,6 +1205,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       ...track,
       lyrics: [],
       lyricTiming: undefined,
+      lyricMetadata: undefined,
       lyricsFileName: "",
     } : track));
     setMenuTrackId("");
@@ -1742,7 +1748,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                     </span>
                     <span className="track-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
                     <span className="track-menu-wrap"><button type="button" aria-label={`Actions for ${trackDisplayName(track.name)}`} onClick={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)}><MoreHorizontal size={18} /></button>
-                      {menuTrackId === track.id && <span className="track-popover"><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{!!track.lyricTiming?.length && <button type="button" onClick={() => void openTimingEditor(track.id)}>Timestamp lyrics</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
+                      {menuTrackId === track.id && <span className="track-popover"><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => void openTimingEditor(track.id)}>{track.lyrics.length ? "Edit timing" : "Timestamp lyrics"}</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
                     </span>
                   </div>
                 );

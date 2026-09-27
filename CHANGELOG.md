@@ -7,6 +7,7 @@ Notable changes to Vibloom are recorded here. Release entries summarize the chan
 ### Features
 
 - Import TXT lyrics, timestamp each line during playback, save drafts, and download synchronized LRC files.
+- Edit existing LRC timestamps with exact time entry, 0.1-second nudges, and a global offset; preserve metadata, bilingual lines, blank cues, and millisecond precision.
 - Add headset and system media controls with resumable playback, Now Playing metadata, and synchronized A/B pause/resume.
 
 ### Fixes and maintenance

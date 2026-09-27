@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const profile = await mkdtemp(path.join(tmpdir(), "vibloom-lyrics-"));
 const output = path.join(root, "outputs/lyrics-timing-smoke");
 app.setPath("userData", profile);
+app.on("window-all-closed", () => {}); // Exit only after cleanup, preserving test failures.
 protocol.registerSchemesAsPrivileged([{ scheme: "vibloom", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let window;
@@ -25,13 +26,16 @@ async function smoke() {
     });
     window = new BrowserWindow({ width: 1280, height: 900, show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
     window.webContents.setAudioMuted(true);
-    const run = (code) => window.webContents.executeJavaScript(code, true);
+    const run = async (code) => {
+      try { return await window.webContents.executeJavaScript(code, true); }
+      catch (error) { throw new Error(`Renderer command failed: ${code}`, { cause: error }); }
+    };
     const waitFor = async (code, label) => {
       for (let i = 0; i < 150; i++) { if (await run(code)) return; await delay(100); }
       throw new Error(`Timed out: ${label}`);
     };
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
-    const button = (text) => run(`[...document.querySelectorAll('button')].find(b => b.textContent === ${JSON.stringify(text)}).click()`);
+    const button = (text) => run(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)}).click()`);
     const key = (code, key) => run(`(document.activeElement?.closest('.lyric-timing-editor') ? document.activeElement : document.querySelector('.lyric-timing-editor')).dispatchEvent(new KeyboardEvent('keydown', {code: ${JSON.stringify(code)}, key: ${JSON.stringify(key)}, bubbles: true, cancelable: true}))`);
     const seek = async (value) => {
       await run(`(() => { const input = document.querySelector('[aria-label="Timestamp playback position"]'); input.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${value}); input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
@@ -88,7 +92,7 @@ async function smoke() {
     await writeFile(path.join(output, "editor.png"), (await window.webContents.capturePage()).toPNG());
     await button("Save synced lyrics");
     await waitFor(`!document.querySelector('.lyric-timing-editor')`, "saving closes editor");
-    await click('[aria-label="Actions for Timing test"]'); await button("Timestamp lyrics");
+    await click('[aria-label="Actions for Timing test"]'); await button("Edit timing");
     await waitFor(`document.querySelector('.lyric-timing-editor')`, "saved timestamps can be edited again");
     const downloaded = new Promise((resolve, reject) => {
       window.webContents.session.once("will-download", (_event, item) => {
@@ -119,9 +123,47 @@ async function smoke() {
     await waitFor(`document.querySelectorAll('.lyric-timing-lines button').length === 2`, "new draft ready");
     assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "--:--.--", "replacement clears old timestamps");
     await click('[aria-label="Close timestamp editor"]');
+    // Directly imported LRC (without any TXT timing draft) can be adjusted.
+    await button("Replace");
+    const originalLrc = "[ti:Existing song]\n[ar:Artist]\n[offset:100]\n[00:01.123]原文\n[00:01.123]Translation\n[00:03.00]Next\n[00:06.00]\n";
+    await run(`(() => { const input = document.querySelector('input[accept=".lrc,.txt,text/plain"]'); const data = new DataTransfer(); data.items.add(new File([${JSON.stringify(originalLrc)}], 'existing.lrc', {type:'text/plain'})); input.files = data.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+    await waitFor(`document.querySelector('.library-lyrics-label')?.textContent.includes('Edit timing')`, "imported LRC edit entry");
+    await button("Edit timing");
+    await waitFor(`document.querySelectorAll('.lyric-timing-lines button').length === 3`, "existing timestamps loaded");
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:01.223");
+    const inputValue = (label, value) => run(`(() => { const input = document.querySelector('[aria-label="' + ${JSON.stringify(label)} + '"]'); input.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+    await inputValue("All lines offset (seconds)", "-2"); await button("Shift all");
+    assert.ok(await run(`document.querySelector('.lyric-timing-hint').textContent.includes('before 00:00')`));
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:01.223", "invalid offset leaves draft unchanged");
+    await inputValue("All lines offset (seconds)", "0.5"); await button("Shift all");
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:01.723");
+    await inputValue("Line 1 time (seconds)", "1.125"); await button("Set time");
+    await button("+0.1 s");
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:01.225");
+    await button("Undo");
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:01.125");
+    await button("Seek to line");
+    assert.equal(await run(`Number(document.querySelector('[aria-label="Timestamp playback position"]').value)`), 1.125);
+    const lrcDownload = new Promise((resolve, reject) => {
+      window.webContents.session.once("will-download", (_event, item) => {
+        item.setSavePath(path.join(output, item.getFilename()));
+        item.once("done", (_event, state) => state === "completed" ? resolve(item.getSavePath()) : reject(new Error(state)));
+      });
+    });
+    await click('.lyric-timing-download');
+    assert.equal(await readFile(await lrcDownload, "utf8"), "[ti:Existing song]\n[ar:Artist]\n[00:01.125]原文\n[00:01.125]Translation\n[00:03.60]Next\n[00:06.60]\n");
+    await writeFile(path.join(output, "existing-lrc-editor.png"), (await window.webContents.capturePage()).toPNG());
+    await click('[aria-label="Close timestamp editor"]');
+    await delay(500);
+    await window.loadURL("vibloom://app/index.html");
+    await waitFor(`document.querySelector('.open-library-button')`, "reloaded player");
+    await button("Edit timing");
+    await waitFor(`document.querySelector('.lyric-timing-lines time')?.textContent === '00:01.125'`, "LRC edits persist");
+    await button("Save synced lyrics");
+    await waitFor(`!document.querySelector('.lyric-timing-editor')`, "saved LRC");
     await button("Remove");
     await waitFor(`document.querySelector('.library-lyrics-empty')?.textContent.includes('No matched lyrics')`, "lyrics removed");
-    console.log("PASS TXT import, playback timestamps, undo/reset, persistence, order validation, LRC download, end-of-track isolation, and narrow layout");
+    console.log("PASS LRC editing, metadata/translation preservation, TXT import, playback timestamps, undo/reset, persistence, order validation, LRC download, end-of-track isolation, and narrow layout");
   } catch (error) {
     console.error(error);
     exitCode = 1;
