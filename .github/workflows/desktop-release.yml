@@ -46,6 +46,20 @@ jobs:
           xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-lyrics-timing.mjs
           xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-media-session.mjs
 
+      - name: Cache vocal separation model
+        uses: actions/cache@v4
+        with:
+          path: .cache/htdemucs.onnx
+          key: htdemucs-92e33df61cfc9eb820272aaa62d2ef6dcf4d950d
+
+      - name: Test vocal-driven Live2D mouth movement
+        run: |
+          mkdir -p .cache
+          if [ ! -f .cache/htdemucs.onnx ]; then
+            curl --fail --location --retry 3 'https://huggingface.co/timcsy/demucs-web-onnx/resolve/92e33df61cfc9eb820272aaa62d2ef6dcf4d950d/htdemucs_embedded.onnx' --output .cache/htdemucs.onnx
+          fi
+          xvfb-run --auto-servernum env VIBLOOM_TEST_VOCAL_MODEL=.cache/htdemucs.onnx npx electron --no-sandbox scripts/smoke-lip-sync.mjs
+
       - name: Audit production dependencies
         run: npm run audit
 

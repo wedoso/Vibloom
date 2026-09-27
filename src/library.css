@@ -2652,3 +2652,23 @@ button.track-index,
 }
 .companion-greeting:focus-visible { outline: 2px solid var(--library-accent); outline-offset: 3px; }
 .companion-greeting:disabled { opacity: .5; cursor: wait; }
+
+.vocal-lip-sync {
+  position: absolute;
+  z-index: 4;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px 10px;
+  width: min(90%, 360px);
+  font-size: 11px;
+  color: var(--library-muted);
+  text-align: center;
+}
+.vocal-lip-sync button { border: 1px solid var(--library-line); border-radius: 18px; padding: 6px 11px; background: var(--library-paper); color: var(--library-ink); font: inherit; cursor: pointer; }
+.vocal-lip-sync small[role="alert"] { width: 100%; }
+.is-library-focus .vocal-lip-sync { top: 72px; }

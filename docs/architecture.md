@@ -92,13 +92,74 @@ Clip changes use a single synthesized joint trajectory. A phrase first queues it
 
 The two compatible sets never use that connector across their boundary. Loading or clearing the first track opens the solid scene curtain; React changes the stage variant only after the curtain fully covers the viewport. During that hidden commit, Vibloom stops the current controller, restores model parameters, sets Arm A/Arm B ownership directly for the destination, and prepares its first pose. The curtain remains opaque for two more paint opportunities before reveal. The unavoidable mesh swap is therefore a scene cut, never a visible motion fade or hard pose jump.
 
-The beat tracker remains the timing authority. Its 360 ms nod begins on every accepted learned beat, independent of the longer authored clip. Full motions may change only on that same beat edge: energetic material can introduce a reviewed gesture after eight beats, restrained material waits sixteen, and all normal changes land on eight-beat phrase boundaries. Gestures return to the rotating base motion on a beat near their authored ending; quiet passages still rotate base motions after a complete cycle. A/B source changes affect gaze and the existing low-weight body accent only.
+The beat tracker remains the timing authority. Its 360 ms nod begins on every accepted learned beat, independent of the longer authored clip. Full motions may change only on that same beat edge: energetic material can introduce a reviewed gesture after eight beats, restrained material waits sixteen, and all normal changes land on eight-beat phrase boundaries. Gestures return to the rotating base motion on a beat near their authored ending; quiet passages still rotate base motions after a complete cycle. A/B source changes affect gaze, the existing low-weight body accent, and the selected vocal lip-sync envelope.
 
 The first `startMotion` request can occasionally be rejected while Cubism still owns a stale loading or priority reservation. Playback therefore clears stale reservations before requesting `Idle[0]`, then runs a 550 ms watchdog. The watchdog requests the same official motion only when playback is active, no request is in flight, and Cubism's motion queue is genuinely empty. It never stacks multiple motions or falls back to a random Idle clip.
 
 When pause lands partway through an authored gesture or synthesized transition, Vibloom cancels that controller, captures every parameter authored by the admitted whitelist, and eases the complete pose to model defaults for 1.2 seconds with zero velocity at both ends. The handoff runs before Physics and Pose. Eye openness uses a shorter 360 ms transfer into the SDK's live blink value. After the handoff, every channel is released.
 
 ## Playback states
+
+### Vocal-driven lip sync
+
+Lip sync follows separated vocals, never the beat detector or full-mix analyser.
+The separation model is Meta's [HTDemucs](https://github.com/facebookresearch/demucs),
+using the [`demucs-web` 1.0.2](https://github.com/timcsy/demucs-web) browser port
+and ONNX Runtime Web 1.24.3. The port owns model preprocessing, STFT/iSTFT,
+inference, and overlapping segment reconstruction; Vibloom does not reimplement
+source separation. The final mouth parameter update follows
+[Cubism's documented lip-sync interface](https://docs.live2d.com/en/cubism-sdk-manual/lipsync/).
+
+```text
+Decoded A or B → worker → HTDemucs vocal stem → 20 ms RMS frames → library record
+                                                                    │
+Playback's shared AudioContext time + selected source + volume ──────┘
+                                     ↓
+                          Cubism LipSync parameters
+```
+
+**Enable vocal lip sync** starts local analysis for the selected source. First use
+fetches a pinned, roughly 172 MiB model from Hugging Face; music never leaves the
+device. The model is cached in Cache Storage. Progress, cancellation, and retry
+remain available while normal playback continues. WebGPU is preferred, with
+single-thread WASM fallback for static deployments without cross-origin isolation.
+WASM can be substantially slower than playback. The worker is terminated on
+cancellation, source replacement, unmount, or completion, releasing its inference
+resources. Runtime JS/WASM ship locally; CSP permits WASM compilation and model
+fetches only from Hugging Face and its download hosts.
+
+Analysis uses 24-second windows with two seconds of context at each edge to bound
+working memory. Web Audio resamples these windows to the model's 44.1 kHz stereo
+input. Only the vocal stem produces mouth timing: a −44 dB absolute floor and
+−20 dB vocal-to-mix power floor reject low-level separator leakage. The resulting
+50 Hz RMS envelope is compacted and persisted with each A/B source's existing
+library metadata. Deleting the track removes its timing; replacing B invalidates
+B's timing. A/B selection and seeking sample the appropriate envelope directly
+on the existing audio clock, with no additional playback source. Master volume
+scales that signal. Analysis unavailable, disabled, cancelled, or failed means a
+closed mouth, never a fallback to music amplitude. OS volume is outside this graph.
+
+`MusicLipSync` smooths vocal frames with a 35 ms attack / 75 ms release and caps
+openness at 0.8. It uses the library's resolved `LipSync` IDs; Hong Xi now explicitly
+declares `ParamMouthOpenY`, as Hiyori already does. Only real Core indexes are set
+in `beforeModelUpdate`, after motions, expressions, and physics. Authored singing
+cannot reopen a silent mouth. Smile shape (`ParamMouthForm`), eyes, gestures, and
+camera controls keep their existing owners. Cleanup removes the listener.
+
+This gives vocal-timed opening and closing, not phoneme-specific A/I/U/E/O shapes.
+Separation can still leak instruments or miss very soft/background vocals in dense
+mixes. The official [MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
+would add a separate runtime and model-specific articulation settings; these models
+do not include those settings. It also does not replace music source separation.
+
+`npm run desktop:smoke:lipsync` runs the real model against a human speech clip
+mixed with generated instruments. Both Live2D models must close through the
+instrumental intro/outro and instrumental-only B, and open during the vocal section.
+It also covers cancellation/retry, no mix fallback, model switching, shorter B
+ending, volume zero, seeking, pause/resume, track end, and saved analysis reuse.
+For an already downloaded model, set `VIBLOOM_TEST_VOCAL_MODEL` to its local path.
+Screenshots go to `outputs/lip-sync-smoke/`. CI downloads the pinned weights before
+this test; other unit and desktop tests remain independent of model downloads.
 
 ### Ready or paused
 

@@ -10,6 +10,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(packageMetadata.version),
   },
   plugins: [react()],
+  worker: { format: "es" },
   build: {
     outDir: "dist",
     emptyOutDir: true,

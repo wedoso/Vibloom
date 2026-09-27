@@ -170,8 +170,11 @@ async function smoke() {
   } finally {
     clearTimeout(timeout);
     window?.destroy();
-    await rm(profile, { recursive: true, force: true });
-    app.exit(exitCode);
+    try {
+      await rm(profile, { recursive: true, force: true, maxRetries: 3 });
+    } finally {
+      app.exit(exitCode);
+    }
   }
 }
 void smoke();

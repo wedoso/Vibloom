@@ -6,12 +6,14 @@ import { AudioVisualFeatures } from "./audioVisual";
 import { COMPANIONS, hongXiPose, type CompanionId } from "./live2d/models";
 import { HONG_XI_PERSONALITY_PARAMS, HongXiPersonality } from "./live2d/hongXiPersonality";
 import { normalizeViewportGaze } from "./live2d/gaze";
+import { MusicLipSync } from "./live2d/musicLipSync";
 
 type StageVariant = "welcome" | "player";
 
 type Live2DStageProps = {
   companionId?: CompanionId;
   featuresRef: MutableRefObject<AudioVisualFeatures>;
+  vocalLevelRef: MutableRefObject<number>;
   variant: StageVariant;
   trackLabel: string;
   activeSource: 0 | 1;
@@ -202,6 +204,7 @@ type MotionAssetController = {
 };
 
 type MotionManagerController = {
+  lipSyncIds: string[];
   groups: { idle: string };
   queueManager?: { _motions?: MotionQueueEntryController[] };
   loadMotion: (group: string, index: number) => Promise<MotionAssetController | undefined>;
@@ -215,6 +218,7 @@ type MotionManagerController = {
 };
 
 type InternalModelControls = {
+  lipSync: boolean;
   coreModel: CoreModel;
   focusController: FocusController;
   eyeBlink?: unknown;
@@ -230,6 +234,7 @@ type InternalModelControls = {
 export default function Live2DStage({
   companionId = "hong-xi",
   featuresRef,
+  vocalLevelRef,
   variant,
   trackLabel,
   activeSource,
@@ -673,6 +678,18 @@ export default function Live2DStage({
         const poseVelocities = new Map<number, number>();
         let poseHistoryAt = performance.now() / 1000;
         const core = internalModel.coreModel;
+        internalModel.lipSync = false;
+        const musicLipSync = new MusicLipSync(core, internalModel.motionManager.lipSyncIds);
+        let lipSyncUpdatedAt = performance.now();
+        const applyMusicLipSync = () => {
+          const now = performance.now();
+          musicLipSync.update(
+            vocalLevelRef.current,
+            variantRef.current === "player" && featuresRef.current.isPlaying,
+            (now - lipSyncUpdatedAt) / 1000,
+          );
+          lipSyncUpdatedAt = now;
+        };
         const focusController = internalModel.focusController;
         // Cubism creates virtual indexes for missing IDs instead of returning -1.
         // Never treat those virtual channels as real joints on another model.
@@ -1004,6 +1021,7 @@ export default function Live2DStage({
         internalModel.on("afterMotionUpdate", capturePoseHistory);
         internalModel.on("beforeModelUpdate", applyRestEyeHandoff);
         internalModel.on("beforeModelUpdate", applyPersonalityEyes);
+        internalModel.on("beforeModelUpdate", applyMusicLipSync);
         cleanupMotionPose = () => {
           internalModel.off("afterMotionUpdate", applyPoseTransition);
           internalModel.off("afterMotionUpdate", applyMusicPose);
@@ -1011,6 +1029,7 @@ export default function Live2DStage({
           internalModel.off("afterMotionUpdate", capturePoseHistory);
           internalModel.off("beforeModelUpdate", applyRestEyeHandoff);
           internalModel.off("beforeModelUpdate", applyPersonalityEyes);
+          internalModel.off("beforeModelUpdate", applyMusicLipSync);
           if (reactToCompanionRef.current === reactToCompanion) reactToCompanionRef.current = null;
         };
 
@@ -1588,7 +1607,7 @@ export default function Live2DStage({
         console.warn("Live2D cleanup completed with a renderer warning", error);
       }
     };
-  }, [companion, featuresRef, loadAttempt]);
+  }, [companion, featuresRef, vocalLevelRef, loadAttempt]);
 
   const listeningLabel = variant === "welcome"
     ? "Waiting for a track"

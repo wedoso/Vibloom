@@ -51,6 +51,7 @@ import BrandMark from "./BrandMark";
 import UpdateControl from "./UpdateControl";
 import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
 import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
+import { useVocalLipSync } from "./audio/vocals/useVocalLipSync";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
 import { APP_VERSION } from "./appVersion";
 import {
@@ -64,6 +65,7 @@ import {
   normalizeFileName,
   RepeatMode,
   withoutExtension,
+  type VocalAnalysis,
 } from "./domain/library";
 import { decodeLrc, LyricLine, parseLrc, parseLyricsFile, serializeLrc, type LyricTimingLine } from "./lrc";
 import LyricsTimingEditor from "./LyricsTimingEditor";
@@ -501,6 +503,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const shortcutTogglePlayRef = useRef<() => Promise<void>>(async () => undefined);
   const shortcutSwitchSourceRef = useRef<(source: 0 | 1) => void>(() => undefined);
   const audioVisualRef = useRef({ ...EMPTY_AUDIO_VISUAL });
+  const vocalLevelRef = useRef(0);
 
   const companion = COMPANIONS[session.companionId];
   const currentTrack = tracks.find((track) => track.id === session.currentTrackId) ?? null;
@@ -527,6 +530,26 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       return next;
     });
   }, []);
+
+  const comparisonName = currentTrack?.comparison?.name;
+  const comparisonSize = currentTrack?.comparison?.size;
+  const comparisonModified = currentTrack?.comparison?.lastModified;
+  const vocalBuffer = activeSource === 0
+    ? primaryLoad.stage === "idle" && currentTrack ? audioEngine.getBuffer(0) : null
+    : comparisonReady && comparisonName === compareSlot.name && comparisonSize === compareSlot.size ? audioEngine.getBuffer(1) : null;
+  const savedVocals = activeSource === 0 ? currentTrack?.vocalAnalysis : currentTrack?.comparison?.vocalAnalysis;
+  const saveVocals = useCallback((buffer: AudioBuffer, analysis: VocalAnalysis) => {
+    if (audioEngine.getBuffer(activeSource) !== buffer) return;
+    patchTracks((current) => current.map((track) => {
+      if (track.id !== session.currentTrackId) return track;
+      if (activeSource === 0) return { ...track, vocalAnalysis: analysis };
+      const comparison = track.comparison;
+      return comparison && comparison.name === comparisonName && comparison.size === comparisonSize && comparison.lastModified === comparisonModified
+        ? { ...track, comparison: { ...comparison, vocalAnalysis: analysis } } : track;
+    }));
+  }, [audioEngine, activeSource, session.currentTrackId, comparisonName, comparisonSize, comparisonModified, patchTracks]);
+  const vocalLipSync = useVocalLipSync(vocalBuffer, savedVocals, saveVocals);
+  const sampleVocals = vocalLipSync.sample;
 
   const patchSession = useCallback((patch: Partial<LibrarySession> | ((current: LibrarySession) => LibrarySession)) => {
     setSession((current) => {
@@ -941,6 +964,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     }
     const tick = () => {
       const reference = getTimelineTime();
+      vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : 0;
       const maxDuration = audioEngine.getMaxDuration();
       const nextTime = Math.min(reference, maxDuration);
       setCurrentTime(nextTime);
@@ -970,7 +994,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     return () => {
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [activeSource, audioEngine, compareSlot.status, getTimelineTime, isPlaying, timingTrackId]);
+  }, [activeSource, audioEngine, compareSlot.status, getTimelineTime, isPlaying, timingTrackId, sampleVocals]);
 
   useEffect(() => () => {
     void audioEngine.close();
@@ -1667,7 +1691,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
             </div>
           </div>
           <div className="library-welcome-stage">
-            <Live2DStage companionId={session.companionId} featuresRef={audioVisualRef} variant="welcome" trackLabel="Waiting for your library" activeSource={0} isComparing={false} isPlaying={false} focusMode={false} />
+            <Live2DStage companionId={session.companionId} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="welcome" trackLabel="Waiting for your library" activeSource={0} isComparing={false} isPlaying={false} focusMode={false} />
           </div>
         </section>
       ) : (
@@ -1759,9 +1783,21 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           </section>
 
           <aside className="persistent-stage-panel">
+            <div className="vocal-lip-sync" role="group" aria-label="Vocal lip sync">
+              {vocalLipSync.state.status === "working" ? <>
+                <span role="status">{vocalLipSync.state.phase} · {Math.round(vocalLipSync.state.progress * 100)}%</span>
+                <button type="button" onClick={vocalLipSync.disable}>Cancel</button>
+              </> : <>
+                <button type="button" disabled={!vocalBuffer} onClick={vocalLipSync.enabled && vocalLipSync.state.status === "ready" ? vocalLipSync.disable : vocalLipSync.enable}>
+                  {vocalLipSync.state.status === "ready" ? "Vocal lip sync · On" : vocalLipSync.state.status === "error" ? "Retry vocal lip sync" : "Enable vocal lip sync"}
+                </button>
+                <small>{vocalLipSync.state.status === "ready" ? `Following vocals · ${activeSource === 0 ? "A" : "B"}` : "Local analysis · first download 172 MiB"}</small>
+              </>}
+              {vocalLipSync.state.status === "error" && <small role="alert">{vocalLipSync.state.error}</small>}
+            </div>
             <div className="now-listening-heading"><p>NOW LISTENING</p><h2>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</h2><span>{currentTrack?.sourceLabel ?? "Your local library"}</span></div>
             {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
-            <div className="persistent-stage-canvas"><Live2DStage companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} featuresRef={audioVisualRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={compareSlot.status === "ready"} isPlaying={isPlaying} focusMode={focusMode} /></div>
+            <div className="persistent-stage-canvas"><Live2DStage companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={compareSlot.status === "ready"} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><button type="button" className={activeSource === 0 ? "is-active" : ""} onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button>{comparisonReady && <><i /><button type="button" className={activeSource === 1 ? "is-active" : ""} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button></>}<small>{comparisonReady ? `Listening to ${activeSource === 0 ? "library track" : "version B"}` : "Solo playback"}</small></div>
           </aside>
         </div>
