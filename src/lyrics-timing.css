@@ -1,0 +1,31 @@
+.modal-backdrop.lyric-timing-backdrop { z-index: 100; padding: 20px; }
+.lyric-timing-editor { width: min(720px, 100%); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; gap: 16px; padding: 26px; overflow: auto; border: 1px solid var(--library-line); border-radius: 22px; background: #faf7f1; color: var(--library-ink); box-shadow: 0 28px 100px #29221c30; font-family: var(--library-sans); }
+.lyric-timing-editor header, .lyric-timing-editor footer, .lyric-timing-transport, .lyric-timing-actions, .lyric-timing-progress { display: flex; align-items: center; gap: 10px; }
+.lyric-timing-editor header, .lyric-timing-progress { justify-content: space-between; }
+.lyric-timing-editor header small { color: var(--library-accent); font-size: 10px; letter-spacing: .15em; font-weight: 700; }
+.lyric-timing-editor h2 { margin: 5px 0; font-size: 24px; }
+.lyric-timing-editor p { margin: 0; font-size: 12px; line-height: 1.7; }
+.lyric-timing-editor header p { overflow-wrap: anywhere; }
+.lyric-timing-editor button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #65544526; border-radius: 9px; background: #fff9; color: inherit; padding: 10px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.lyric-timing-editor button:disabled { opacity: .4; cursor: not-allowed; }
+.lyric-timing-editor button:focus-visible, .lyric-timing-editor input:focus-visible { outline: 2px solid var(--library-accent); outline-offset: 2px; }
+.lyric-timing-editor kbd { padding: 2px 5px; border: 1px solid #65544526; border-radius: 4px; }
+.lyric-timing-transport { flex-wrap: wrap; }
+.lyric-timing-transport input { flex: 1; min-width: 80px; accent-color: var(--library-accent); }
+.lyric-timing-transport output, .lyric-timing-transport > span { font-size: 12px; font-variant-numeric: tabular-nums; }
+.lyric-timing-progress { font-size: 11px; }
+.lyric-timing-progress > span { opacity: .6; }
+.lyric-timing-lines { overflow: auto; min-height: 100px; max-height: 36dvh; border: 1px solid #65544526; border-radius: 12px; }
+.lyric-timing-lines button { width: 100%; display: grid; grid-template-columns: 26px 78px 1fr; border: 0; border-radius: 0; padding: 12px; text-align: left; line-height: 1.6; }
+.lyric-timing-lines button + button { border-top: 1px solid #65544512; }
+.lyric-timing-lines button > span:last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lyric-timing-lines button > span:first-child { opacity: .45; }
+.lyric-timing-lines time { font-variant-numeric: tabular-nums; color: var(--library-accent); }
+.lyric-timing-lines button.is-selected { background: #547f791a; box-shadow: inset 3px 0 var(--library-accent); }
+.lyric-timing-actions { flex-wrap: wrap; }
+.lyric-timing-actions .lyric-timing-stamp { flex: 1; background: var(--library-accent); color: white; }
+.lyric-timing-editor footer { width: 100%; margin: 0; padding: 0; color: var(--library-ink); justify-content: flex-end; flex-wrap: wrap; }
+.lyric-timing-editor .lyric-timing-download { background: var(--library-ink); color: white; }
+.lyric-timing-hint { min-height: 20px; }
+.library-lyrics-empty.lyrics-plain { flex-wrap: wrap; height: auto; min-height: 60px; }
+@media (max-width: 600px) { .modal-backdrop.lyric-timing-backdrop { padding: 8px; } .lyric-timing-editor { padding: 16px; max-height: calc(100dvh - 16px); gap: 12px; } .lyric-timing-progress { align-items: flex-start; flex-direction: column; gap: 4px; } }

@@ -119,6 +119,18 @@ test("schedules A and B against one clock and preserves the pause position", asy
   context.currentTime = 20;
   assert.equal(engine.getTimelineTime(), 7);
   assert.deepEqual(stopped, [120, 90]);
+
+  // Removing a headset while its output device is resuming must cancel playback.
+  let resume;
+  context.state = "suspended";
+  context.resume = () => new Promise((resolve) => { resume = resolve; });
+  const pendingPlay = engine.play(7, 0.025, 0.9);
+  engine.pause();
+  resume();
+  assert.equal(await pendingPlay, false);
+  assert.equal(engine.isPlaying, false);
+  assert.equal(engine.getTimelineTime(), 7);
+  assert.equal(starts.length, 2, "cancelled resume does not schedule either source");
 });
 
 test("keeps the desktop renderer sandboxed and packages both operating systems", async () => {

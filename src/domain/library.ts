@@ -1,5 +1,5 @@
 import type { CompanionId } from "../live2d/models";
-import type { LyricLine } from "../lrc";
+import type { LyricLine, LyricTimingLine } from "../lrc";
 
 export type TrackAvailability = "available" | "reconnect" | "missing" | "session";
 export type TrackPersistence = "indexed" | "cached";
@@ -27,6 +27,7 @@ export type LibraryTrack = {
   persistence: TrackPersistence;
   lyricsFileName: string;
   lyrics: LyricLine[];
+  lyricTiming?: LyricTimingLine[];
   comparison: TrackComparison | null;
 };
 

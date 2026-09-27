@@ -2,115 +2,62 @@
 
 Your music library, brought to life.
 
-Vibloom is a private, local-first music player for the web, Windows, and macOS. Bring a song, a whole album, or a folder; build a queue; add synchronized lyrics; compare two versions of a mix; and listen with Hong Xi, the default rhythm-aware Live2D companion, or switch to Hiyori.
+A private music player for the web, macOS, and Windows, with synchronized A/B comparison, timed lyrics, and Live2D companions. No account, uploads, or analytics; your music stays on your device.
 
-[Open Vibloom on the web](https://wedoso.github.io/Vibloom/) · [Download the desktop app](https://github.com/wedoso/Vibloom/releases/latest)
+[Open the web player](https://wedoso.github.io/Vibloom/) · [Download the desktop app](https://github.com/wedoso/Vibloom/releases/latest)
 
 ![Vibloom welcome screen](docs/assets/landing.png)
 
-## Everything stays yours
+## Features
 
-Vibloom has no account, server upload, analytics, or cloud music locker. Audio and lyrics are read and processed locally in the browser or desktop app.
-
-New music is kept on this device by default so reopening the tab does not normally require reconnecting your files. You can pause automatic caching, remove individual cached copies, clear all cached audio while keeping the library, or reset Vibloom completely from **Storage**.
-
-Browser storage can still be cleared by private-browsing rules, site-data cleanup, or operating-system pressure. Vibloom always shows which tracks are available, stored on-device, or need reconnection.
-
-## A complete local player
-
-![Vibloom library with availability, lyrics, and Version B tags](docs/assets/library.png)
-
-- Import multiple audio files, matching `.lrc` lyrics, or a complete folder.
-- Play in order, shuffle without repeats, repeat one track, or repeat the queue.
-- Reorder the queue and choose **Play next** without changing the library.
-- Search your collection and resume the last track and position after reopening.
-- Use `Space` to play or pause, arrow keys to seek five seconds, and `F` to enter or leave Focus mode.
-- Use Director for automatic phrase-level framing, Portrait for an upper-body shot, or Wide for a full-body view.
-- Use the mouse wheel for manual framing up to 400%. Every camera mode adapts to the available stage, protects the title area, and applies a soft edge fade when close framing reaches a boundary.
-- Both companions follow the pointer across the entire player window, including the library and control areas—not only when the pointer is close to the model.
-
-## Hear the difference
+- **Local library:** import audio files or folders, search, reorder the queue, shuffle, repeat, and resume your last position. Music is cached by default; manage local copies in **Storage**.
+- **A/B comparison:** add a second version, switch instantly on one shared audio clock, and compare waveforms. Both versions can be kept on-device.
+- **Lyrics:** attach LRC files for synchronized scrolling, or timestamp plain TXT lyrics and download an LRC file. Same-named lyric files match automatically during import.
+- **Headset controls:** system play/pause and seek commands share the player's transport, preserving position and A/B synchronization. AirPods ear detection depends on device settings and OS/browser support; physical AirPods testing is still pending.
+- **Live2D companions:** Hong Xi is the default; switch to Hiyori in the header. Both respond to music and pointer movement, with camera controls and Focus mode. Your choice is saved.
+- **Desktop updates:** click the version beside the logo to check for updates. On macOS, closing the window keeps music playing; `Command-Q` quits.
 
 ![Vibloom comparing two synchronized versions](docs/assets/listening-room.png)
 
-The current library track is always Version A. Add or drop a Version B only when you need it; Vibloom then shows two color-matched waveforms on one shared timeline.
-
-- A and B start from the same audio clock and stay sample-aligned.
-- Use the visible A/B controls or press `1` / `2` (`A` / `B`) to switch.
-- Replace or remove Version B at any time.
-- Different-length files are called out clearly; the shared timeline follows the longer version and identifies a source that has already ended.
-- Version B is cached with its Version A track and receives a visible tag in the library.
-
-## Focus on the music
-
-![Vibloom Focus mode with synchronized lyrics and a compact transport](docs/assets/focus-mode.png)
-
-Press `F` for a distraction-free stage. Focus mode removes the waveform cards while keeping the same audio clock, playhead, camera, synchronized lyrics, compact A/B selector, and single bottom transport. The stage now reaches the transport instead of leaving a large empty band below your companion. Press `F` again or `Esc` to leave.
-
-## Synchronized lyrics
-
-![Hong Xi with synchronized lyrics in the powder-blue listening room](docs/assets/hong-xi-lyrics.png)
-
-Attach, replace, or remove an `.lrc` file from the current song or its library menu. Lyrics scroll with playback and use the audible source color: steel blue for Version A and muted violet for Version B with Hong Xi; teal and rose with Hiyori. UTF-8 and BOM-marked UTF-16 files are supported, including offsets, repeated timestamps, and multilingual lines.
-
-## Desktop and browser support
-
-The Windows and macOS apps use the same React renderer and product code as the web version; Electron adds only the native window, security boundary, and packaging layer. Each build displays its version in the header so users can compare it with the [latest release](https://github.com/wedoso/Vibloom/releases/latest).
-
-Click the version beside the Vibloom logo to check for updates. The web player links to the newest installer; an installed Windows or macOS app can download a newer signed release in the background and restart to install it.
-
-On macOS, closing the player window hides it while audio keeps playing. Click Vibloom in the Dock to bring the window back, or press `Command-Q` when you want to quit the app and stop playback completely.
-
-The web version targets current Safari, Chrome, and Firefox on desktop. Folder drag-and-drop depends on browser support; the visible folder picker is always available as a fallback.
-
-Common MP3, WAV, M4A/AAC, FLAC, OGG, Opus, WebM Audio, and AIFF files are accepted when the browser can decode them. Individual files larger than 300 MB are rejected to protect the tab.
-
 ## Quick start
 
-1. Open Vibloom and choose **Import your music**.
-2. Pick files or a folder. Include same-named `.lrc` files if you have them.
-3. Choose a song, **Play all**, or **Shuffle**.
-4. Open **Queue** to change what plays next.
-5. Choose **Add version B** when you want an exact mix comparison.
-6. Open **Storage** whenever you want to review or clear local copies.
+1. Choose **Import your music**, then select files or a folder. Include matching `.lrc` or `.txt` files if available.
+2. Play a song, arrange **Queue**, or add Version B to compare a second mix.
+3. For TXT lyrics, choose **Timestamp lyrics**. Press `T` as each line starts, `Space` to play/pause, and `Z` to undo. Select a line to correct it; drafts are saved with the track. Finish with **Save & download .lrc**.
 
-## For contributors
+| Shortcut | Action |
+| --- | --- |
+| `Space` | Play / pause |
+| `←` / `→` | Seek five seconds |
+| `1` / `2` or `A` / `B` | Switch comparison source |
+| `F` / `Esc` | Toggle / leave Focus mode |
 
-Vibloom is a static React/Vite app and can be hosted without a backend. The Electron desktop shell loads that same production renderer rather than maintaining a separate UI implementation.
+Common MP3, WAV, M4A/AAC, FLAC, OGG, Opus, WebM Audio, and AIFF files are accepted when supported by the runtime's decoder, up to 300 MB per file. Lyrics support UTF-8 and BOM-marked UTF-16. Browser storage may be cleared by private browsing, site-data cleanup, or storage pressure; reconnect source files when prompted.
+
+## Development
+
+Requires Node.js 22.13 or later.
 
 ```bash
 git clone https://github.com/wedoso/Vibloom.git
 cd Vibloom
 npm ci
-npm run dev
+npm run dev             # Web development
+npm run desktop:dev     # Electron development
+npm run check           # Lint, tests, and production build
 ```
 
-Run the complete validation suite with `npm run check`. A production build is emitted to `dist/` with `npm run build`. GitHub Pages deployment is configured in [deploy-pages.yml](.github/workflows/deploy-pages.yml).
-
-The same renderer can run as a Windows or macOS desktop application:
+`npm run build` writes the static site to `dist/`. Desktop smoke tests use isolated profiles:
 
 ```bash
-npm run desktop:dev
 npm run desktop:smoke
+npm run desktop:smoke:lyrics
+npm run desktop:smoke:media
+npm run desktop:smoke:companions
 ```
 
-Installer builds and the GitHub Actions release workflow are documented in [the desktop build guide](docs/desktop.md). `package.json` is the single version source for the web header, desktop runtime, installer metadata, and update channel; the release manifest records the most recently published version and can temporarily trail the candidate version on a feature branch. Release Please finalizes the version on `main`; merging its release PR creates the Git tag and GitHub Release, then the desktop workflow builds Windows plus Apple Silicon and Intel macOS installers. The two macOS architectures run in parallel before their signed and notarized artifacts and auto-update metadata are attached to the release. Download the current version from the [Releases page](https://github.com/wedoso/Vibloom/releases/latest).
-
-Detailed implementation contracts live in [the player specification](docs/library-player.md) and [architecture notes](docs/architecture.md).
+See [desktop builds and releases](docs/desktop.md), [player behavior](docs/library-player.md), and [architecture](docs/architecture.md) for details. Version history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-Vibloom source code is available under the [MIT License](LICENSE).
-
-Hiyori Momose is a Live2D sample model. Its bundled notice is available at [LICENSE-HIYORI.txt](public/live2d/hiyori/LICENSE-HIYORI.txt); the model and Cubism runtime remain subject to Live2D's applicable licenses and terms.
-
-
-### Live2D companions
-
-**Hong Xi is the default companion.** Choose **Hong Xi** or **Hiyori** from the **Companion** selector in the header. The choice is saved on this device with the library. New libraries, resets, and older libraries without a saved model choice start with Hong Xi; an existing Hiyori selection is preserved. Switching companions preserves playback, the A/B source, queue, lyrics, volume, and camera mode. Hong Xi's complete theme pairs powder blue, navy and silver with subtle plaid, matching her sweater and headphones. It covers welcome, player, library, focus, menus, queue/storage, dialogs and transitions. Steel-blue A and muted-violet B remain consistent across waveforms, lyrics, source controls and stage light. Hiyori keeps the original warm theme. Both support pointer tracking, beat response, camera controls, and focus mode.
-
-Hong Xi's runtime assets are bundled in `public/live2d/hong-xi/`. The bundle contains the model, 8192px texture, physics, display metadata, and five referenced expressions. PSD/Cubism editor projects and VTube Studio settings are not required. The original model manifest had empty blink IDs; the bundled manifest configures its existing left/right eye parameters. No authored motion clips were supplied, so Hong Xi combines a procedural beat response with six eased personality gestures: greeting, curious head tilt, double nod, eyes-closed enjoyment, shy blush, and star-eyed delight. A shuffle bag schedules gestures at musical phrase boundaries, with quiet gaps and softer choices for quiet passages. The original blush and star-eye parameters are used; angry/shadowed expressions and the headphone visibility toggle stay untouched. Pausing eases expressions back to neutral. Use **Say hello** on the welcome stage or the **React** smile button beside the camera controls for a response, including while paused. Hiyori retains its authored choreography.
-
-Hong Xi artwork is user-supplied and is not covered by this repository's MIT source-code license. No separate redistribution license was included in the supplied export.
-
-Run `npm run desktop:smoke:companions` to exercise both models in Electron with generated local audio, A/B switching, lyrics, focus/camera controls, preference restoration, loading failure recovery, and rapid model switching. It uses an isolated temporary profile and does not modify your music library. Screenshots are saved under `outputs/companion-smoke/`.
+Source code: [MIT](LICENSE). Hiyori and the Cubism runtime retain their applicable Live2D terms; see [Hiyori's notice](public/live2d/hiyori/LICENSE-HIYORI.txt). Hong Xi artwork is not covered by the source-code license; no separate redistribution license was included with its supplied export.

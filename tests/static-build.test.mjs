@@ -393,3 +393,25 @@ test("packages every companion dependency and configures Hong Xi blinking", asyn
     }
   }
 });
+
+test("imports plain TXT lyrics and exports completed timestamps as round-trippable LRC", async () => {
+  const { parseLyricsFile, serializeLrc, parseLrc, formatLrcTime, validateLyricTiming, decodeLrc } = await importTypeScriptModule(new URL("src/lrc.ts", root));
+  const draft = parseLyricsFile("\ufeff  第一行 \r\n\r\nSecond line\r第三行\n", "song.TXT");
+  assert.deepEqual(draft, { lyrics: [], lyricTiming: [
+    { text: "第一行", time: null }, { text: "Second line", time: null }, { text: "第三行", time: null },
+  ] });
+  assert.throws(() => serializeLrc(draft.lyricTiming), /every line/u);
+  assert.throws(() => parseLyricsFile(" \n\r\n", "empty.txt"), /Empty/u);
+  assert.throws(() => parseLyricsFile("plain lyrics", "invalid.lrc"), /timestamped/u);
+  assert.equal(parseLyricsFile("[00:01.00]Already timed", "song.txt").lyricTiming, undefined);
+  const timed = draft.lyricTiming.map((line, index) => ({ ...line, time: [0, 59.999, 123.45][index] }));
+  assert.equal(serializeLrc(timed), "[00:00.00]第一行\n[01:00.00]Second line\n[02:03.45]第三行\n");
+  assert.deepEqual(parseLrc(serializeLrc(timed)).lines, timed.map((line, index) => ({ ...line, time: [0, 60, 123.45][index] })));
+  assert.equal(formatLrcTime(3600), "60:00.00");
+  assert.equal(validateLyricTiming(timed), "");
+  for (const invalid of [NaN, Infinity, -1]) assert.throws(() => serializeLrc([{ text: "bad", time: invalid }]), /valid/u);
+  assert.throws(() => serializeLrc([{ text: "first", time: 3 }, { text: "second", time: 2 }]), /order/u);
+  assert.throws(() => serializeLrc([]), /every line/u);
+  const utf16 = Buffer.from("\ufeff第一行\r\n第二行", "utf16le");
+  assert.equal(parseLyricsFile(decodeLrc(utf16.buffer.slice(utf16.byteOffset, utf16.byteOffset + utf16.byteLength)), "utf16.txt").lyricTiming.length, 2);
+});

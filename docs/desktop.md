@@ -46,8 +46,8 @@ build version. Vite injects that value into the shared renderer, and Electron
 Builder uses the same value for the desktop application and installer filenames.
 Do not duplicate the version in UI source files or workflow variables. The
 release manifest is different: it records the latest version already published,
-so it may trail `package.json` on a feature branch and is advanced by Release
-Please only when the matching release is created.
+so it may trail `package.json` on a feature branch. Release Please updates it
+with the release PR; a manual release must update it to the published version too.
 
 Merges to `main` run `.github/workflows/release-please.yml`. Conventional Commit
 messages update one release pull request:
@@ -84,6 +84,11 @@ personal access token with repository Contents, Pull requests, and Issues write
 access. The workflow exits successfully with an explanatory summary when this
 secret is absent; quality checks, Pages deployment, and manual/tagged desktop
 packaging remain available.
+
+If the token is unavailable, prepare the version, lockfile, manifest, and changelog
+in a reviewed PR. After its checks pass and it is merged, push the matching `v*`
+tag at the merge commit. The tagged desktop workflow builds and publishes the
+release; verify every installer and update-metadata file before calling it complete.
 
 Using this token is important because the repository's default `GITHUB_TOKEN`
 cannot create pull requests under the current repository security settings, and

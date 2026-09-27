@@ -65,9 +65,11 @@ import {
   RepeatMode,
   withoutExtension,
 } from "./domain/library";
-import { decodeLrc, LyricLine, parseLrc } from "./lrc";
+import { decodeLrc, LyricLine, parseLrc, parseLyricsFile, serializeLrc, type LyricTimingLine } from "./lrc";
+import LyricsTimingEditor from "./LyricsTimingEditor";
 import { browserLibraryPlatform } from "./platform/browserLibraryPlatform";
 import type { LibraryPlatform, StorageState } from "./platform/libraryPlatform";
+import { useMediaSession } from "./platform/useMediaSession";
 import "./library.css";
 import "./hong-xi-theme.css";
 
@@ -362,7 +364,7 @@ function repeatLabel(mode: RepeatMode) {
   return "Repeat off";
 }
 
-function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyrics, onRemoveLyrics, variant = "console" }: { lines: LyricLine[]; currentTime: number; fileName: string; activeSource: 0 | 1; onAttachLyrics: () => void; onRemoveLyrics: () => void; variant?: "console" | "focus" }) {
+function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyrics, onRemoveLyrics, timing, onTiming, variant = "console" }: { lines: LyricLine[]; currentTime: number; fileName: string; activeSource: 0 | 1; onAttachLyrics: () => void; onRemoveLyrics: () => void; timing?: LyricTimingLine[]; onTiming: () => void; variant?: "console" | "focus" }) {
   const lineRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const activeIndex = useMemo(() => {
@@ -392,19 +394,28 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
     });
   }, [activeIndex]);
 
+  if (!lines.length && timing?.length) {
+    return <div className={`library-lyrics-empty lyrics-plain lyrics-variant-${variant}`}>
+      <FileText size={18} /><span>TXT lyrics · {timing.length} lines</span>
+      <button type="button" onClick={onTiming}>Timestamp lyrics</button>
+      <button type="button" onClick={onAttachLyrics}>Replace</button>
+      <button type="button" onClick={onRemoveLyrics}>Remove</button>
+    </div>;
+  }
+
   if (!lines.length) {
     return (
       <div className={`library-lyrics-empty lyrics-variant-${variant}`}>
         <FileText size={18} />
         <span>No matched lyrics for this track</span>
-        <button type="button" onClick={onAttachLyrics}>Attach .lrc</button>
+        <button type="button" onClick={onAttachLyrics}>Attach .lrc / .txt</button>
       </div>
     );
   }
 
   return (
     <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} key={`${variant}:${fileName}`} aria-label={`Lyrics from ${fileName}`}>
-      <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace .lrc</button><button type="button" onClick={onRemoveLyrics}>Remove</button></span>
+      <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace</button><button type="button" onClick={onRemoveLyrics}>Remove</button>{timing?.length ? <button type="button" onClick={onTiming}>Edit timing</button> : null}</span>
       <div className="library-lyrics-viewport" ref={viewportRef}>
         <div className="library-lyrics-list">
           {lines.map((line, index) => (
@@ -456,6 +467,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const [primaryPeaks, setPrimaryPeaks] = useState<number[]>([]);
   const [comparePeaks, setComparePeaks] = useState<number[]>([]);
   const [confirmAction, setConfirmAction] = useState<"cache" | "queue" | "reset" | null>(null);
+  const [timingTrackId, setTimingTrackId] = useState("");
   const [dragging, setDragging] = useState(false);
 
   const filesInputRef = useRef<HTMLInputElement>(null);
@@ -477,6 +489,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const primaryLoadVersionRef = useRef(0);
   const compareLoadVersionRef = useRef(0);
   const playingRef = useRef(false);
+  const playbackIntentVersionRef = useRef(0);
   const waveformScrubbingRef = useRef(false);
   const waveformScrubWasPlayingRef = useRef(false);
   const shuffleBagRef = useRef<string[]>([]);
@@ -491,6 +504,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
   const companion = COMPANIONS[session.companionId];
   const currentTrack = tracks.find((track) => track.id === session.currentTrackId) ?? null;
+  const timingTrack = tracks.find((track) => track.id === timingTrackId) ?? null;
   const filteredTracks = useMemo(() => {
     const query = normalizeFileName(search);
     if (!query) return tracks;
@@ -664,6 +678,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [audioEngine]);
 
   const pausePlayback = useCallback(() => {
+    playbackIntentVersionRef.current += 1;
     const pausedAt = audioEngine.pause();
     playingRef.current = false;
     setCurrentTime(pausedAt);
@@ -769,6 +784,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [audioEngine, createSourceAt, ensureAudioGraph, getTimelineTime]);
 
   const startTrack = useCallback(async (trackId: string, play = true, resumeAt = 0) => {
+    const playbackIntentVersion = playbackIntentVersionRef.current;
     const track = tracksRef.current.find((candidate) => candidate.id === trackId);
     if (!track) return false;
     const file = await resolveTrackFile(track);
@@ -829,7 +845,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setPrimaryPeaks(makeWaveformPeaks(buffer));
     setPrimaryLoad({ stage: "idle", progress: 100 });
     setMessage(`${play ? "Playing" : "Ready"} · ${trackDisplayName(track.name)}`);
-    if (play) await startPlayback(safeTime);
+    if (play && playbackIntentVersion === playbackIntentVersionRef.current) await startPlayback(safeTime);
     if (track.comparison) {
       const comparisonFile = track.comparison.persistence === "cached"
         ? await platform.audioFiles.get(comparisonCacheKey(track.id))
@@ -945,7 +961,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         audioEngine.markEnded(maxDuration);
         setCurrentTime(maxDuration);
         setIsPlaying(false);
-        endedRef.current();
+        if (!timingTrackId) endedRef.current();
         return;
       }
       animationFrameRef.current = requestAnimationFrame(tick);
@@ -954,7 +970,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     return () => {
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [activeSource, audioEngine, compareSlot.status, getTimelineTime, isPlaying]);
+  }, [activeSource, audioEngine, compareSlot.status, getTimelineTime, isPlaying, timingTrackId]);
 
   useEffect(() => () => {
     void audioEngine.close();
@@ -969,10 +985,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setImportOpen(false);
     const summary: ImportSummary = { accepted: 0, lyrics: 0, duplicates: 0, ignored: 0, errors: [] };
     const audioFiles = files.filter((file) => file.type.startsWith("audio/") || SUPPORTED_AUDIO.test(file.name));
-    const lyricFiles = files.filter((file) => /\.lrc$/iu.test(file.name));
+    const lyricFiles = files.filter((file) => /\.(lrc|txt)$/iu.test(file.name));
     summary.ignored = files.length - audioFiles.length - lyricFiles.length;
     const lyricMap = new Map<string, FileWithPath>();
-    for (const file of lyricFiles) lyricMap.set(lyricMatchKey(relativePathOf(file)), file);
+    for (const file of lyricFiles) {
+      const key = lyricMatchKey(relativePathOf(file));
+      if (!lyricMap.has(key) || /\.lrc$/iu.test(file.name)) lyricMap.set(key, file);
+    }
     const existingByFingerprint = new Map(tracksRef.current.map((track) => [track.fingerprint, track]));
     const imported: LibraryTrack[] = [];
     let cacheThisImport = sessionRef.current.cacheEnabled;
@@ -1018,13 +1037,14 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       }
       let lyrics: LyricLine[] = [];
       let lyricsFileName = "";
+      let lyricTiming: LyricTimingLine[] | undefined;
       const lyricFile = lyricMap.get(lyricMatchKey(path))
         ?? [...lyricMap.entries()].find(([key]) => key.endsWith(`/${withoutExtension(normalizeFileName(file.name))}`))?.[1];
       if (lyricFile) {
         try {
-          lyrics = parseLrc(decodeLrc(await lyricFile.arrayBuffer())).lines;
+          ({ lyrics, lyricTiming } = parseLyricsFile(decodeLrc(await lyricFile.arrayBuffer()), lyricFile.name));
           lyricsFileName = lyricFile.name;
-          if (lyrics.length) summary.lyrics += 1;
+          if (lyrics.length || lyricTiming?.length) summary.lyrics += 1;
         } catch {
           summary.errors.push(`${lyricFile.name} could not be parsed`);
         }
@@ -1042,6 +1062,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         persistence: "indexed",
         lyricsFileName,
         lyrics,
+        lyricTiming,
         comparison: null,
       };
       runtimeFilesRef.current.set(track.id, file);
@@ -1125,19 +1146,51 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     event.target.value = "";
     if (!file || !trackId) return;
     try {
-      const parsed = parseLrc(decodeLrc(await file.arrayBuffer()));
-      if (!parsed.lines.length) throw new Error("No timestamped lyric lines");
+      const parsed = parseLyricsFile(decodeLrc(await file.arrayBuffer()), file.name);
       const target = tracksRef.current.find((track) => track.id === trackId);
       patchTracks((current) => current.map((track) => track.id === trackId ? {
         ...track,
-        lyrics: parsed.lines,
+        lyrics: parsed.lyrics,
+        lyricTiming: parsed.lyricTiming,
         lyricsFileName: file.name,
       } : track));
       setMessage(`Lyrics attached · ${target ? trackDisplayName(target.name) : file.name}`);
     } catch {
-      setMessage("That file has no valid timestamped LRC lyrics.");
+      setMessage("Choose a non-empty TXT file or a valid timestamped LRC file.");
     } finally {
       lyricsTargetTrackIdRef.current = "";
+    }
+  }
+
+  async function openTimingEditor(trackId: string) {
+    setMenuTrackId("");
+    if (loadedTrackIdRef.current !== trackId) {
+      if (!await startTrack(trackId, false, 0)) return;
+    }
+    setTimingTrackId(trackId);
+  }
+
+  function saveTimedLyrics(download: boolean) {
+    if (!timingTrack?.lyricTiming) return;
+    try {
+      const source = serializeLrc(timingTrack.lyricTiming);
+      const fileName = `${withoutExtension(timingTrack.lyricsFileName || timingTrack.name)}.lrc`;
+      const lyrics = parseLrc(source).lines;
+      patchTracks((current) => current.map((track) => track.id === timingTrack.id ? { ...track, lyrics, lyricsFileName: fileName } : track));
+      if (download) {
+        const url = URL.createObjectURL(new Blob([source], { type: "text/plain;charset=utf-8" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      setMessage(download ? "Synced lyrics saved · LRC download started." : "Synced lyrics saved.");
+      if (!download) setTimingTrackId("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not export lyrics.");
     }
   }
 
@@ -1146,6 +1199,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     patchTracks((current) => current.map((track) => track.id === trackId ? {
       ...track,
       lyrics: [],
+      lyricTiming: undefined,
       lyricsFileName: "",
     } : track));
     setMenuTrackId("");
@@ -1191,6 +1245,23 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     const trackId = sessionRef.current.currentTrackId || sessionRef.current.queue[0] || tracksRef.current[0]?.id;
     if (trackId) await startTrack(trackId, true, sessionRef.current.currentTime);
   }
+
+  useMediaSession({
+    enabled: !!currentTrack,
+    title: currentTrack ? trackDisplayName(activeSource === 1 ? compareSlot.name : currentTrack.name) : "",
+    album: currentTrack?.sourceLabel ?? "",
+    isPlaying,
+    duration: timelineDuration,
+    position: isPlaying ? Math.floor(currentTime) : currentTime,
+  }, {
+    play: async () => { if (!playingRef.current) await togglePlay(); },
+    pause: pausePlayback,
+    next: async () => { if (!timingTrackId) await nextTrack(false); },
+    previous: async () => { if (!timingTrackId) await previousTrack(); },
+    seek: seekTo,
+    getTime: getTimelineTime,
+    onError: () => setMessage("System playback control failed. Try playing again from Vibloom."),
+  });
 
   function cycleRepeat() {
     const next: RepeatMode = session.repeat === "off" ? "all" : session.repeat === "all" ? "one" : "off";
@@ -1497,7 +1568,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      if (event.defaultPrevented || timingTrackId || target?.matches("input, textarea, select, [contenteditable='true']")) return;
       const key = event.key.toLowerCase();
       if (key === "escape") {
         if (focusModeRef.current) setFocusWithTransition(false);
@@ -1526,7 +1597,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [compareSlot.status, getTimelineTime, seekTo, setFocusWithTransition, toggleFocusMode]);
+  }, [compareSlot.status, getTimelineTime, seekTo, setFocusWithTransition, toggleFocusMode, timingTrackId]);
 
   return (
     <main data-companion={session.companionId} className={`library-app ${tracks.length ? "has-library" : "is-empty"} ${focusMode ? "is-library-focus" : ""}`}>
@@ -1540,10 +1611,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         <span className="scene-curtain-copy scene-curtain-copy-focus-enter"><small>Focus mode</small><strong><span>The noise</span><em>falls away.</em></strong><i>One track · One room · One moment</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-focus-exit"><small>Full room</small><strong><span>The session</span><em>returns.</em></strong><i>Controls and comparison restored</i></span>
       </div>
-      <input ref={filesInputRef} type="file" accept="audio/*,.flac,.aiff,.aif,.lrc" multiple hidden onChange={handleFilesInput} />
-      <input ref={folderInputRef} type="file" accept="audio/*,.flac,.aiff,.aif,.lrc" multiple hidden onChange={handleFilesInput} />
+      <input ref={filesInputRef} type="file" accept="audio/*,.flac,.aiff,.aif,.lrc,.txt" multiple hidden onChange={handleFilesInput} />
+      <input ref={folderInputRef} type="file" accept="audio/*,.flac,.aiff,.aif,.lrc,.txt" multiple hidden onChange={handleFilesInput} />
       <input ref={compareInputRef} type="file" accept="audio/*,.flac,.aiff,.aif" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void loadComparisonFile(file); event.target.value = ""; }} />
-      <input ref={lyricsInputRef} type="file" accept=".lrc,text/plain" hidden onChange={(event) => void handleLyricsInput(event)} />
+      <input ref={lyricsInputRef} type="file" accept=".lrc,.txt,text/plain" hidden onChange={(event) => void handleLyricsInput(event)} />
       {focusMode && <button className="focus-exit-control" type="button" aria-label="Exit focus mode (F or Escape)" onClick={() => setFocusWithTransition(false)}><Minimize2 size={15} /><span>Exit focus</span><kbd>Esc</kbd></button>}
 
       <header className="library-header">
@@ -1585,7 +1656,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
             <p>Build a queue from your own music, keep lyrics in sync, and let {companion.name} stay with every track. Nothing is uploaded.</p>
             <div className="welcome-import-surface">
               <button className="welcome-import-primary" type="button" onClick={() => setImportOpen((value) => !value)}><Upload size={18} /><span><strong>Import your music</strong><small>Files, albums, lyrics, or a complete folder</small></span><ChevronDown size={16} /></button>
-              {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>One or many audio and LRC files</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>Choose a folder</strong><small>Preserve album order and matching lyrics</small></span></button></div>}
+              {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>Audio, LRC, and TXT lyric files</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>Choose a folder</strong><small>Preserve album order and matching lyrics</small></span></button></div>}
               <p>Drop files here anytime · everything stays on this device</p>
             </div>
           </div>
@@ -1636,7 +1707,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 {activeSourceEnded && <div className="comparison-status-lane" aria-live="polite">
                   <div className="comparison-ended-alert">Version {activeSource === 0 ? "A" : "B"} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>
                 </div>}
-                <div className="console-lower"><LyricsPanel lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+                <div className="console-lower"><LyricsPanel timing={currentTrack?.lyricTiming} onTiming={() => { if (currentTrack) void openTimingEditor(currentTrack.id); }} lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
               </div>
             </div>
           ) : (
@@ -1665,13 +1736,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                     <span className="track-states">
                       <span className={`track-availability availability-${track.availability} ${track.persistence === "cached" ? "is-cached" : ""}`}>{track.persistence === "cached" ? "On device" : track.availability === "available" ? "Available" : track.availability === "session" ? "This session" : track.availability === "missing" ? "Missing" : "Reconnect"}</span>
                       <span className="track-feature-icons">
-                        {track.lyrics.length > 0 && <span className="has-lyrics" role="img" aria-label="Synced lyrics attached" title="Synced lyrics attached"><FileText size={13} /></span>}
+                        {(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <span className="has-lyrics" role="img" aria-label={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"} title={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"}><FileText size={13} /></span>}
                         {track.comparison && <span className={`has-version-b comparison-${track.comparison.availability}`} role="img" aria-label="Version B attached" title={`${track.comparison.name} · ${track.comparison.persistence === "cached" ? "kept on device" : "reconnect next visit"}`}><ArrowLeftRight size={13} /></span>}
                       </span>
                     </span>
                     <span className="track-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
                     <span className="track-menu-wrap"><button type="button" aria-label={`Actions for ${trackDisplayName(track.name)}`} onClick={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)}><MoreHorizontal size={18} /></button>
-                      {menuTrackId === track.id && <span className="track-popover"><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{track.lyrics.length ? "Replace lyrics (.lrc)" : "Attach lyrics (.lrc)"}</button>{track.lyrics.length > 0 && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
+                      {menuTrackId === track.id && <span className="track-popover"><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{!!track.lyricTiming?.length && <button type="button" onClick={() => void openTimingEditor(track.id)}>Timestamp lyrics</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
                     </span>
                   </div>
                 );
@@ -1683,7 +1754,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
           <aside className="persistent-stage-panel">
             <div className="now-listening-heading"><p>NOW LISTENING</p><h2>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</h2><span>{currentTrack?.sourceLabel ?? "Your local library"}</span></div>
-            {focusMode && currentTrack?.lyrics.length ? <LyricsPanel lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
+            {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
             <div className="persistent-stage-canvas"><Live2DStage companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} featuresRef={audioVisualRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={compareSlot.status === "ready"} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><button type="button" className={activeSource === 0 ? "is-active" : ""} onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button>{comparisonReady && <><i /><button type="button" className={activeSource === 1 ? "is-active" : ""} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button></>}<small>{comparisonReady ? `Listening to ${activeSource === 0 ? "library track" : "version B"}` : "Solo playback"}</small></div>
           </aside>
@@ -1702,6 +1773,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
       {message && <div className="library-status" role="status">{message}</div>}
 
+      {timingTrack?.lyricTiming && <LyricsTimingEditor key={timingTrack.id} name={trackDisplayName(timingTrack.name)} lines={timingTrack.lyricTiming} currentTime={currentTime} duration={timelineDuration} isPlaying={isPlaying} getTime={getTimelineTime}
+        onChange={(lyricTiming) => patchTracks((current) => current.map((track) => track.id === timingTrack.id ? { ...track, lyricTiming } : track))}
+        onSeek={(time) => { void seekTo(time); }} onTogglePlay={() => { void togglePlay(); }} onSave={saveTimedLyrics} onClose={() => setTimingTrackId("")} />}
       {(importing || importSummary) && <div className="modal-backdrop"><section className="import-summary" role="dialog" aria-modal="true" aria-labelledby="import-title"><button className="sheet-close" type="button" aria-label="Close import summary" onClick={() => { if (!importing) setImportSummary(null); }}><X size={20} /></button><p>LOCAL INDEX</p><h2 id="import-title">{importing ? "Reading your music…" : "Import complete"}</h2>{importing ? <div className="import-loader"><span /><small>Indexing audio and matching lyrics without decoding every track.</small></div> : importSummary && <><div className="import-stats"><div><strong>{importSummary.accepted}</strong><span>New tracks</span></div><div><strong>{importSummary.lyrics}</strong><span>Lyrics matched</span></div><div><strong>{importSummary.duplicates}</strong><span>Reconnected / duplicate</span></div><div><strong>{importSummary.ignored}</strong><span>Ignored</span></div></div>{importSummary.errors.length > 0 && <div className="import-errors">{importSummary.errors.map((error) => <span key={error}>{error}</span>)}</div>}<button className="primary-action" type="button" onClick={() => setImportSummary(null)}>Open library</button></>}</section></div>}
 
       <div className={`side-sheet-backdrop ${queueOpen ? "is-open" : ""}`} onClick={() => setQueueOpen(false)}><aside className="side-sheet queue-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" type="button" aria-label="Close queue" onClick={() => setQueueOpen(false)}><X size={20} /></button><p>UP NEXT</p><h2>Current queue</h2><span>{session.queue.length} tracks · {session.shuffle ? "shuffle" : "in order"}</span><div className="queue-list">{session.queue.map((trackId, index) => { const track = tracks.find((candidate) => candidate.id === trackId); if (!track) return null; return <div className={trackId === session.currentTrackId ? "is-active" : ""} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", trackId)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveQueueTrack(event.dataTransfer.getData("text/plain"), trackId)} key={trackId}><span>{String(index + 1).padStart(2, "0")}</span><button type="button" onClick={() => void startTrack(trackId, true, 0)}><strong>{trackDisplayName(track.name)}</strong><small>{track.sourceLabel}</small></button><span className="queue-move"><button type="button" aria-label="Move up" onClick={() => reorderQueue(trackId, -1)}><ArrowUp size={13} /></button><button type="button" aria-label="Move down" onClick={() => reorderQueue(trackId, 1)}><ArrowDown size={13} /></button></span><button type="button" aria-label="Remove from queue" onClick={() => patchSession((current) => ({ ...current, queue: current.queue.filter((id) => id !== trackId) }))}><X size={14} /></button></div>; })}</div><button className="destructive-text-button" type="button" onClick={() => setConfirmAction("queue")}><Trash2 size={14} /> Clear queue only</button></aside></div>

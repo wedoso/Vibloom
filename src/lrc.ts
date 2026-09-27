@@ -3,6 +3,41 @@ export type LyricLine = {
   text: string;
 };
 
+export type LyricTimingLine = { text: string; time: number | null };
+
+export function parseLyricsFile(source: string, fileName: string) {
+  const parsed = parseLrc(source);
+  if (parsed.lines.length) return { lyrics: parsed.lines, lyricTiming: undefined };
+  if (!/\.txt$/iu.test(fileName)) throw new Error("No timestamped LRC lyrics");
+  const lyricTiming: LyricTimingLine[] = source.replace(/^\uFEFF/u, "").split(/\r\n|\r|\n/u)
+    .map((text) => text.trim()).filter(Boolean).map((text) => ({ text, time: null }));
+  if (!lyricTiming.length) throw new Error("Empty lyrics");
+  return { lyrics: [] as LyricLine[], lyricTiming };
+}
+
+export function formatLrcTime(time: number) {
+  const hundredths = Math.round(Math.max(0, time) * 100);
+  return `${String(Math.floor(hundredths / 6000)).padStart(2, "0")}:${String(Math.floor(hundredths / 100) % 60).padStart(2, "0")}.${String(hundredths % 100).padStart(2, "0")}`;
+}
+
+export function validateLyricTiming(lines: LyricTimingLine[]) {
+  if (!lines.length || lines.some((line) => line.time === null)) return "Timestamp every line before saving or downloading.";
+  let previous = -1;
+  for (const line of lines) {
+    const time = line.time as number;
+    if (!Number.isFinite(time) || time < 0) return "Timestamps must be valid, non-negative times.";
+    if (time < previous) return "Timestamps must follow the lyric order. Select a line to correct its time.";
+    previous = time;
+  }
+  return "";
+}
+
+export function serializeLrc(lines: LyricTimingLine[]) {
+  const error = validateLyricTiming(lines);
+  if (error) throw new Error(error);
+  return lines.map((line) => `[${formatLrcTime(line.time as number)}]${line.text}`).join("\n") + "\n";
+}
+
 export type ParsedLrc = {
   lines: LyricLine[];
   title: string;
