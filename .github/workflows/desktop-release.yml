@@ -39,13 +39,14 @@ jobs:
       - name: Lint, test, and build
         run: npm run check
 
+      # Explicit software WebGL for the GPU-less runner (Chromium SwiftShader).
       - name: Smoke-test the Electron renderer
         run: |
           npm run build
-          xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox .
-          xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-lyrics-timing.mjs
-          xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-media-session.mjs
-          xvfb-run --auto-servernum npx electron --no-sandbox scripts/smoke-companions.mjs
+          xvfb-run --auto-servernum env VIBLOOM_SMOKE_TEST=1 npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader .
+          xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-lyrics-timing.mjs
+          xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-media-session.mjs
+          xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-companions.mjs
 
       - name: Cache vocal separation model
         uses: actions/cache@v4
@@ -59,7 +60,7 @@ jobs:
           if [ ! -f .cache/htdemucs.onnx ]; then
             curl --fail --location --retry 3 'https://huggingface.co/timcsy/demucs-web-onnx/resolve/92e33df61cfc9eb820272aaa62d2ef6dcf4d950d/htdemucs_embedded.onnx' --output .cache/htdemucs.onnx
           fi
-          xvfb-run --auto-servernum env VIBLOOM_TEST_VOCAL_MODEL=.cache/htdemucs.onnx npx electron --no-sandbox scripts/smoke-lip-sync.mjs
+          xvfb-run --auto-servernum env VIBLOOM_TEST_VOCAL_MODEL=.cache/htdemucs.onnx npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-lip-sync.mjs
 
       - name: Audit production dependencies
         run: npm run audit
