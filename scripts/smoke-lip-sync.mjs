@@ -159,11 +159,16 @@ async function smoke() {
     await click('[aria-label="Select Voice A for vocal preparation"]');
     await waitFor(`!document.documentElement.classList.contains("is-scene-transitioning")`, "library transition complete");
     await capture("library-selection");
+    const workersBeforeSubmission = await run("window.__workerStarts");
     await click('.library-vocal-toolbar button');
     await waitFor(`document.querySelector('.vocal-lip-sync progress')`, "Player subscribes to Library task immediately");
     const mirrored = await run(`({player:document.querySelector('.vocal-lip-sync progress').value,library:document.querySelector('.track-vocal-job progress').value})`);
     assert.equal(mirrored.player, mirrored.library, "both views show the same progress snapshot");
+    // Progress is published while the file is still being read/decoded. That
+    // does not mean runAnalysis has constructed its worker yet (especially CPU CI).
+    await waitFor(`window.__workerStarts > ${workersBeforeSubmission}`, "Library analysis worker starts after decoding");
     const sharedWorkers = await run("window.__workerStarts");
+    assert.equal(sharedWorkers, workersBeforeSubmission + 1, "one worker starts for the submitted source");
     await click('[aria-label="Actions for Voice A"]');
     await run(`[...document.querySelectorAll('.track-popover button')].find(b=>b.textContent==='Prepare vocal lip sync').click()`);
     assert.equal(await run("window.__workerStarts"), sharedWorkers, "duplicate menu submission is deduplicated");
@@ -184,6 +189,7 @@ async function smoke() {
     assert.ok(await run("window.__uiTicks") > 10, "renderer remains responsive");
     await run("clearInterval(window.__heartbeat)");
     assert.equal(await run("window.__workerStarts"), workersBeforeLoop, "repeat does not restart vocal separation");
+    assert.equal(await run("window.__workerStarts"), sharedWorkers, "no duplicate worker starts before analysis completes");
     assert.equal(await run("window.__decodeCount"), decodesBeforeLoop, "repeat reuses decoded audio");
     await closed("ready vocals wait for the user's singing toggle");
     await click('.vocal-lip-sync button');
