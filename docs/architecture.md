@@ -116,6 +116,12 @@ Playback's shared AudioContext time + selected source + volume
   → stabilized energy / vowel curves → Cubism mouth openness and form
 ```
 
+Library enters temporary selection mode through **Prepare lip sync** and returns
+to normal rows after submission or cancellation. `VocalJobStore` owns task state
+and deduplicates by track fingerprint plus A/B source identity. Library and Player
+subscribe through `useSyncExternalStore`; progress, errors, cancellation and ready
+results are immediately shared. Switching playback does not cancel preparation;
+the original source identity guards persistence. The store is disposed with the app.
 Library can queue multiple songs without selecting them for playback. Only one
 analysis job holds model/decoded audio memory at a time, including Player jobs.
 Each Library job decodes independently when its turn arrives; processing never
@@ -125,8 +131,8 @@ requires explicit singing activation; preparation never starts another audio pat
 
 The 172 MiB pinned Demucs weights are cached locally. Processing uses 24-second
 windows with two seconds of context on each side, resampled to 44.1 kHz stereo.
-The worker is terminated on cancellation/completion; Player jobs also cancel on
-source replacement. WebGPU is preferred, with single-thread WASM fallback for
+The worker is terminated on cancellation/completion; source identity keeps results
+attached to the submitted source. WebGPU is preferred, with single-thread WASM fallback for
 static hosting without cross-origin isolation. Progress reports the initialized
 ONNX GPU device or CPU fallback. FFT/resampling and viseme classification still
 use the CPU; this is not a claim of full GPU utilization. No audio is uploaded.
@@ -143,7 +149,11 @@ slow two-second gain reference. Jaw opening has no viseme aperture multiplier or
 final 0.8 attenuation. It merges brief label excursions, accepts vowels of at least
 80 ms and holds their shapes for at least 120 ms between changes within a phrase.
 A PP label needs both 80 ms persistence and a 60 ms energy valley to force closure.
-The final bridge retains 12 ms attack / 18 ms release and 25 ms form smoothing;
+Finite offline attack/release kernels taper energy changes without delaying the
+first voiced frame. Vowels use 100 ms smoothstep transitions; sustained FF/CH may
+supply restrained form changes but never control jaw amplitude. Monotone cubic
+sampling joins frame slopes without overshoot. The final bridge retains 12 ms
+attack / 18 ms release and 25 ms form smoothing;
 stabilization happens before rendering, independently of display frame rate.
 It sets real Core parameters after motions/physics and leaves other channels alone.
 
@@ -263,7 +273,8 @@ The checks cover the portable build, multilingual/offset/UTF-16 LRC parsing, syn
 The memoized editor receives a stable clock getter and callbacks, not per-frame
 React time. Its uncontrolled range reads AudioContext time through a DOM ref on
 each animation frame; the time label and background React UI update at 10 Hz.
-Pointer scrubbing pauses playback, gives the thumb exclusive local ownership and
+A fixed-column CSS Grid and stable scrollbar gutters isolate transport geometry
+from changing timestamp precision and lyric selection. Pointer scrubbing pauses playback, gives the thumb exclusive local ownership and
 commits once on release/cancel/lost capture. Keyboard seeking commits directly.
 The desktop smoke test measures live frame/React commit counts and audio source
 restarts as well as export, draft persistence and LRC adjustment.

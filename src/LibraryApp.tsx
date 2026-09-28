@@ -53,6 +53,7 @@ import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
 import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
 import { SILENT_VOCAL_POSE, type VocalPose } from "./audio/vocals/envelope";
 import { useLibraryVocals } from "./audio/vocals/useLibraryVocals";
+import { VocalJobStore, vocalJobKey } from "./audio/vocals/jobStore";
 import { useVocalLipSync } from "./audio/vocals/useVocalLipSync";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
 import { APP_VERSION } from "./appVersion";
@@ -540,17 +541,21 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     ? primaryLoad.stage === "idle" && currentTrack ? audioEngine.getBuffer(0) : null
     : comparisonReady && comparisonName === compareSlot.name && comparisonSize === compareSlot.size ? audioEngine.getBuffer(1) : null;
   const savedVocals = activeSource === 0 ? currentTrack?.vocalAnalysis : currentTrack?.comparison?.vocalAnalysis;
-  const saveVocals = useCallback((buffer: AudioBuffer, analysis: VocalAnalysis) => {
-    if (audioEngine.getBuffer(activeSource) !== buffer) return;
+  const vocalTrackId = currentTrack?.id;
+  const vocalFingerprint = currentTrack?.fingerprint;
+  const saveVocals = (buffer: AudioBuffer, analysis: VocalAnalysis) => {
+    if (!buffer) return;
     patchTracks((current) => current.map((track) => {
-      if (track.id !== session.currentTrackId) return track;
+      if (track.id !== vocalTrackId || track.fingerprint !== vocalFingerprint) return track;
       if (activeSource === 0) return { ...track, vocalAnalysis: analysis };
       const comparison = track.comparison;
       return comparison && comparison.name === comparisonName && comparison.size === comparisonSize && comparison.lastModified === comparisonModified
         ? { ...track, comparison: { ...comparison, vocalAnalysis: analysis } } : track;
     }));
-  }, [audioEngine, activeSource, session.currentTrackId, comparisonName, comparisonSize, comparisonModified, patchTracks]);
-  const vocalLipSync = useVocalLipSync(vocalBuffer, savedVocals, saveVocals);
+  };
+  const [vocalJobs] = useState(() => new VocalJobStore());
+  useEffect(() => () => vocalJobs.dispose(), [vocalJobs]);
+  const vocalLipSync = useVocalLipSync(vocalJobs, currentTrack ? vocalJobKey(currentTrack, activeSource) : "", vocalBuffer, savedVocals, saveVocals);
   const sampleVocals = vocalLipSync.sample;
 
   const patchSession = useCallback((patch: Partial<LibrarySession> | ((current: LibrarySession) => LibrarySession)) => {
@@ -754,11 +759,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     return null;
   }, [platform]);
 
+  const [vocalSelectionMode, setVocalSelectionMode] = useState(false);
   const [selectedVocalTracks, setSelectedVocalTracks] = useState<string[]>([]);
   const saveLibraryVocals = useCallback((source: LibraryTrack, analysis: VocalAnalysis) => {
     patchTracks((current) => current.map((track) => track.id === source.id && track.fingerprint === source.fingerprint ? { ...track, vocalAnalysis: analysis } : track));
   }, [patchTracks]);
-  const libraryVocals = useLibraryVocals(resolveTrackFile, saveLibraryVocals);
+  const libraryVocals = useLibraryVocals(vocalJobs, resolveTrackFile, saveLibraryVocals);
 
   const decodeComparisonFile = useCallback(async (file: File, trackId: string, persistence: "indexed" | "cached", announce = true, displayName = file.name) => {
     const version = ++compareLoadVersionRef.current;
@@ -1783,23 +1789,25 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
               <label><Search size={15} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your library" /></label>
             </div>
             <div className="library-vocal-toolbar">
-              <label><input type="checkbox" aria-label="Select all visible songs for vocal preparation" checked={filteredTracks.length > 0 && filteredTracks.every((track) => selectedVocalTracks.includes(track.id))} onChange={(event) => setSelectedVocalTracks(event.target.checked ? filteredTracks.map((track) => track.id) : [])} /> Select songs</label>
-              <button type="button" disabled={!selectedVocalTracks.length} onClick={() => libraryVocals.prepare(tracks.filter((track) => selectedVocalTracks.includes(track.id)))}>Prepare vocal lip sync{selectedVocalTracks.length ? ` (${selectedVocalTracks.length})` : ""}</button>
-              <small>Processes in the background · keep listening</small>
+              {vocalSelectionMode ? <><label><input type="checkbox" aria-label="Select all visible songs for vocal preparation" checked={filteredTracks.length > 0 && filteredTracks.every((track) => selectedVocalTracks.includes(track.id))} onChange={(event) => setSelectedVocalTracks(event.target.checked ? filteredTracks.map((track) => track.id) : [])} /> Select songs</label>
+              <button type="button" disabled={!selectedVocalTracks.length} onClick={() => { libraryVocals.prepare(tracks.filter((track) => selectedVocalTracks.includes(track.id))); setSelectedVocalTracks([]); setVocalSelectionMode(false); }}>Prepare vocal lip sync{selectedVocalTracks.length ? ` (${selectedVocalTracks.length})` : ""}</button>
+              <button type="button" onClick={() => { setVocalSelectionMode(false); setSelectedVocalTracks([]); }}>Cancel selection</button></> : <button type="button" onClick={() => setVocalSelectionMode(true)}>Prepare lip sync</button>}<small>Processes in the background · keep listening</small>
             </div>
             <div className="track-table" role="table" aria-label="Local music library">
               <div className="track-row track-table-header" role="row"><span>#</span><span>Track</span><span>Status</span><span>Time</span><span /></div>
               {filteredTracks.map((track, index) => {
+                const jobKey = vocalJobKey(track);
+                const vocalJob = libraryVocals.jobs[jobKey];
                 const active = track.id === session.currentTrackId;
                 const unavailable = track.availability === "reconnect" || track.availability === "missing";
                 return (
                   <div className={`track-row ${active ? "is-active" : ""} ${unavailable ? "is-unavailable" : ""}`} role="row" key={track.id} onDoubleClick={() => void startTrack(track.id, true, 0)}>
                     <button className="track-index" type="button" aria-label={`Play ${trackDisplayName(track.name)}`} onClick={() => void startTrack(track.id, true, 0)}>{active && isPlaying ? <AudioLines size={14} /> : String(index + 1).padStart(2, "0")}</button>
-                    <span className="track-title"><label className="vocal-track-select"><input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} /><strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
+                    <span className="track-title"><label className="vocal-track-select">{vocalSelectionMode && <input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} />}<strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
                     <span className="track-states">
                       <span className={`track-availability availability-${track.availability} ${track.persistence === "cached" ? "is-cached" : ""}`}>{track.persistence === "cached" ? "On device" : track.availability === "available" ? "Available" : track.availability === "session" ? "This session" : track.availability === "missing" ? "Missing" : "Reconnect"}</span>
-                      {(libraryVocals.jobs[track.id] || (track.vocalAnalysis?.version === 2 || track.vocalAnalysis?.version === 3)) && <span className="track-vocal-job" role="status">
-                        {libraryVocals.jobs[track.id]?.status === "working" || libraryVocals.jobs[track.id]?.status === "queued" ? <><span>{libraryVocals.jobs[track.id].phase} · {Math.round(libraryVocals.jobs[track.id].progress * 100)}%</span><progress aria-label={`Vocal preparation for ${trackDisplayName(track.name)}`} max={1} value={libraryVocals.jobs[track.id].progress} /><button type="button" aria-label={`Cancel vocal preparation for ${trackDisplayName(track.name)}`} onClick={() => libraryVocals.cancel(track.id)}>Cancel</button></> : libraryVocals.jobs[track.id]?.status === "error" ? <><span>{libraryVocals.jobs[track.id].error}</span><button type="button" onClick={() => libraryVocals.prepare([track])}>Retry</button></> : "Vocals ready"}
+                      {((vocalJob && vocalJob.status !== "idle") || (track.vocalAnalysis?.version === 2 || track.vocalAnalysis?.version === 3)) && <span className="track-vocal-job" role="status">
+                        {vocalJob?.status === "working" || vocalJob?.status === "queued" ? <><span>{vocalJob.phase} · {Math.round(vocalJob.progress * 100)}%</span><progress aria-label={`Vocal preparation for ${trackDisplayName(track.name)}`} max={1} value={vocalJob.progress} /><button type="button" aria-label={`Cancel vocal preparation for ${trackDisplayName(track.name)}`} onClick={() => libraryVocals.cancel(jobKey)}>Cancel</button></> : vocalJob?.status === "error" ? <><span>{vocalJob.error}</span><button type="button" onClick={() => libraryVocals.prepare([track])}>Retry</button></> : "Vocals ready"}
                       </span>}
                       <span className="track-feature-icons">
                         {(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <span className="has-lyrics" role="img" aria-label={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"} title={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"}><FileText size={13} /></span>}
@@ -1820,7 +1828,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
           <aside className="persistent-stage-panel">
             <div className="vocal-lip-sync" role="group" aria-label="Vocal lip sync">
-              {vocalLipSync.state.status === "working" ? <>
+              {(vocalLipSync.state.status === "working" || vocalLipSync.state.status === "queued") ? <>
                 <span role="status">{vocalLipSync.state.phase} · {Math.round(vocalLipSync.state.progress * 100)}%</span>
                 <progress aria-label="Vocal preparation progress" value={vocalLipSync.state.progress} max={1} />
                 <small>Preparing in the background · keep listening</small>

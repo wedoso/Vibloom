@@ -14,10 +14,10 @@ test("jaw follows acoustic onsets and energy, independent of delayed or consonan
   const labels = new Uint8Array(100).fill(8); labels.fill(2, 14, 25);
   const {open, form} = buildVocalCurves(rms, labels);
   assert.equal(open[9], 0);
-  assert.ok(open[10] > .9, "jaw opens on voice onset, not 80 ms later with the label");
-  assert.equal(form[10], 1, "stable vowel aligns to the nearby acoustic onset");
+  assert.ok(open[10] > .4, "jaw opens on voice onset, not 80 ms later with the label");
+  assert.ok(form[10] > .15 && form[14] === 1, "stable vowel transition starts at acoustic onset");
   assert.ok(open[35] < open[20] * .5, "syllable energy dip survives gain normalization");
-  assert.equal(open[80], 0);
+  assert.equal(open[82], 0);
   assert.deepEqual(open, buildVocalCurves(rms, new Uint8Array(100).fill(13)).open, "consonants cannot repeatedly attenuate the jaw");
 });
 
@@ -26,11 +26,11 @@ test("brief classification excursions merge, stable vowels hold, real silence re
   labels[3] = 8; labels[6] = 4; labels.fill(4, 20, 24); labels.fill(1, 24, 28);
   rms.fill(0, 40, 50);
   const {form} = buildVocalCurves(rms, labels);
-  assert.ok(Array.from(form.slice(0, 20)).every((v) => v === 1), "20 ms chatter is merged");
-  assert.equal(form[20], -1);
+  assert.ok(Array.from(form.slice(4, 20)).every((v) => v === 1), "20 ms chatter is merged");
+  assert.ok(form[20] < 1 && form[20] > -1);
   assert.equal(form[25], -1, "next vowel cannot interrupt the 120 ms hold");
-  assert.equal(form[26], .5, "a stable next vowel is delayed, not discarded");
-  assert.equal(form[32], 1);
+  assert.ok(form[26] > -1 && form[30] === .5, "stable next vowel eases after the hold");
+  assert.equal(form[36], 1);
   assert.ok(Number.isNaN(form[45]));
   assert.equal(form[50], 1, "a continuous vowel label recovers after an energy-gated gap");
   // A fresh occurrence of the same vowel after silence still selects its shape.
@@ -63,4 +63,28 @@ test("legacy 40 ms advance is undone; seek and volume sample stabilized data det
   for (const time of [-1, NaN, Infinity, 2, 10]) assert.equal(sampleVocalCurves(current, time, 1).open, 0);
   assert.equal(sampleVocalCurves(current, .8, 0).open, 0);
   assert.equal(sampleVocalCurves(buildVocalCurves(new Float32Array(), new Uint8Array()), 0, 1).open, 0);
+});
+
+test("offline attack/release and cubic sampling are bounded, continuous and settle sustained vowels", () => {
+  const rms = new Float32Array(80); rms.fill(.2, 10, 40);
+  const labels = new Uint8Array(80).fill(2); labels.fill(4,25);
+  const curves = buildVocalCurves(rms,labels);
+  assert.ok(curves.open[10] < curves.open[11] && curves.open[11] < curves.open[12]);
+  assert.ok(curves.open[40] > curves.open[41] && curves.open[41] > curves.open[42]);
+  assert.equal(curves.open[42],0);
+  assert.ok(curves.form[25] < curves.form[24] && curves.form[25] > curves.form[29]);
+  for(let i=0;i<79;i++) for(let f=0;f<1;f+=.1) {
+    const value=sampleVocalCurves(curves,(i+f)/50,1).open;
+    assert.ok(value >= Math.min(curves.open[i],curves.open[i+1]) - 1e-6 && value <= Math.max(curves.open[i],curves.open[i+1]) + 1e-6);
+  }
+});
+
+test("only persistent FF or CH contributes consonant shape without changing jaw energy", () => {
+  const rms=voice(), vowels=new Uint8Array(100).fill(2), short=vowels.slice(), stable=vowels.slice();
+  short.fill(9,30,33); stable.fill(9,30,42);
+  const a=buildVocalCurves(rms,vowels), b=buildVocalCurves(rms,short), c=buildVocalCurves(rms,stable);
+  assert.deepEqual(a.open,c.open);
+  assert.deepEqual(a.form,b.form);
+  assert.ok(c.form[37] < a.form[37] && c.form[37] >= .5);
+  assert.equal(c.form[50],a.form[50]);
 });

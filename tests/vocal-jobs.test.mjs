@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import test from 'node:test';
+import ts from 'typescript';
+let source=await readFile(new URL('../src/audio/vocals/jobStore.ts',import.meta.url),'utf8');
+source=source.replace('import { analyzeVocals, type VocalProgress } from "./analyzeVocals";', 'type VocalProgress = {phase:string;progress:number}; const analyzeVocals: any = null;');
+const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {VocalJobStore,vocalJobKey}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+test('Library and Player share one task, live progress, cancellation, retry and source identity',async()=>{
+ let calls=0,finish,progress,signal,saves=0;
+ const store=new VocalJobStore((_source,s,p)=>{calls++;signal=s;progress=p;return new Promise(resolve=>{finish=resolve;});});
+ let library=0,player=0;
+ const a=store.subscribe(()=>library++),b=store.subscribe(()=>player++);
+ const track={id:'song',fingerprint:'file-a',comparison:{name:'B',size:10,lastModified:1}};
+ const key=vocalJobKey(track);
+ store.prepare(key,{},()=>saves++);store.prepare(key,{},()=>saves++);
+ assert.equal(calls,1);assert.equal(store.getSnapshot()[key].status,'queued');
+ progress({phase:'Separating vocals',progress:.42});
+ assert.equal(store.getSnapshot()[key].progress,.42);assert.equal(library,player);
+ store.cancel(key);assert.ok(signal.aborted);assert.equal(store.getSnapshot()[key].status,"idle");
+ finish({rms:Float32Array.of(.1),visemes:Uint8Array.of(2)});await flush();assert.equal(saves,0);
+ store.prepare(key,{},()=>saves++);assert.equal(calls,2);
+ finish({rms:Float32Array.of(.1),visemes:Uint8Array.of(2)});await flush();
+ assert.equal(saves,1);assert.equal(store.getSnapshot()[key].status,'ready');
+ store.prepare(key,{},()=>saves++);assert.equal(calls,2);
+ assert.notEqual(key,vocalJobKey(track,1));
+ assert.notEqual(vocalJobKey(track,1),vocalJobKey({...track,comparison:{...track.comparison,lastModified:2}},1));
+ a();b();store.dispose();
+});
+test('failure is shared and retryable without poisoning another source',async()=>{
+ const store=new VocalJobStore(async()=>{throw new Error('fixture failure');});
+ store.prepare('A',{},()=>{});await flush();
+ assert.equal(store.getSnapshot().A.status,'error');assert.equal(store.getSnapshot().A.error,'fixture failure');
+ store.cancel('A');assert.equal(store.getSnapshot().A.status,"idle");
+});

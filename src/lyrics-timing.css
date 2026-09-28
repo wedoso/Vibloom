@@ -1,6 +1,6 @@
 .modal-backdrop.lyric-timing-backdrop { z-index: 100; padding: 20px; }
 .lyric-timing-editor { width: min(720px, 100%); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; gap: 16px; padding: 26px; overflow: auto; border: 1px solid var(--library-line); border-radius: 22px; background: #faf7f1; color: var(--library-ink); box-shadow: 0 28px 100px #29221c30; font-family: var(--library-sans); }
-.lyric-timing-editor header, .lyric-timing-editor footer, .lyric-timing-transport, .lyric-timing-actions, .lyric-timing-progress { display: flex; align-items: center; gap: 10px; }
+.lyric-timing-editor header, .lyric-timing-editor footer, .lyric-timing-actions, .lyric-timing-progress { display: flex; align-items: center; gap: 10px; }
 .lyric-timing-editor header, .lyric-timing-progress { justify-content: space-between; }
 .lyric-timing-editor header small { color: var(--library-accent); font-size: 10px; letter-spacing: .15em; font-weight: 700; }
 .lyric-timing-editor h2 { margin: 5px 0; font-size: 24px; }
@@ -10,8 +10,7 @@
 .lyric-timing-editor button:disabled { opacity: .4; cursor: not-allowed; }
 .lyric-timing-editor button:focus-visible, .lyric-timing-editor input:focus-visible { outline: 2px solid var(--library-accent); outline-offset: 2px; }
 .lyric-timing-editor kbd { padding: 2px 5px; border: 1px solid #65544526; border-radius: 4px; }
-.lyric-timing-transport { flex-wrap: wrap; }
-.lyric-timing-transport input { flex: 1; min-width: 80px; accent-color: var(--library-accent); }
+.lyric-timing-transport input { accent-color: var(--library-accent); }
 .lyric-timing-transport output, .lyric-timing-transport > span { font-size: 12px; font-variant-numeric: tabular-nums; }
 .lyric-timing-progress { font-size: 11px; }
 .lyric-timing-progress > span { opacity: .6; }
@@ -35,6 +34,16 @@
 .lyric-time-input input { width: 155px; padding: 8px; border: 1px solid #65544540; border-radius: 7px; background: white; color: inherit; font: inherit; font-size: 13px; }
 .lyric-timing-adjust > small { font-size: 11px; line-height: 1.5; }
 .lyric-timing-lines { flex-shrink: 0; }
-/* Stable transport geometry while hundredths change and the slider is dragged. */
-.lyric-timing-transport output, .lyric-timing-transport > span { flex: 0 0 8ch; font-family: ui-monospace, monospace; white-space: nowrap; }
+/* Fixed precision-independent timestamp slots. */
+.lyric-timing-transport output, .lyric-timing-transport > span { font-family: ui-monospace, monospace; white-space: nowrap; }
 .lyric-timing-transport input[type="range"] { min-width: 0; transition: none; }
+/* Content, precision changes and scrollbars cannot resize the transport columns. */
+.lyric-timing-editor, .lyric-timing-lines { scrollbar-gutter: stable; }
+.lyric-timing-transport { display: grid; grid-template-columns: 42px 46px 10ch minmax(0, 1fr) 10ch; flex: none; width: 100%; gap: 10px; }
+.lyric-timing-transport output, .lyric-timing-transport > span { width: 10ch; overflow: hidden; }
+.lyric-timing-transport input[type="range"] { width: 100%; margin: 0; padding: 0; }
+@media (max-width: 600px) {
+  .lyric-timing-transport { grid-template-columns: 38px 42px minmax(0, 1fr) 10ch; gap: 6px; }
+  .lyric-timing-transport input[type="range"] { grid-column: 1 / -1; grid-row: 2; }
+  .lyric-timing-transport output { justify-self: end; }
+}
