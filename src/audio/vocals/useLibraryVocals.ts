@@ -20,7 +20,7 @@ export function useLibraryVocals(resolve: (track: LibraryTrack) => Promise<File 
   const prepare = (tracks: LibraryTrack[]) => {
     for (const track of tracks) {
       if (controllers.current.has(track.id)) continue;
-      if (track.vocalAnalysis?.version === 2) {
+      if (track.vocalAnalysis?.version === 2 || track.vocalAnalysis?.version === 3) {
         setJobs((current) => ({ ...current, [track.id]: { status: "ready", phase: "Vocals ready", progress: 1 } }));
         continue;
       }
@@ -41,7 +41,7 @@ export function useLibraryVocals(resolve: (track: LibraryTrack) => Promise<File 
             return new OfflineAudioContext(2, 1, 44100).decodeAudioData(bytes);
           }, controller.signal, (progress) => update({ status: "working", ...progress }));
           controller.signal.throwIfAborted();
-          callbacks.current.save(track, { version: 2, rms: Array.from(frames.rms, (v) => Math.round(Math.min(1, v) * 10000) / 10000), visemes: Array.from(frames.visemes) });
+          callbacks.current.save(track, { version: 3, rms: Array.from(frames.rms, (v) => Math.round(Math.min(1, v) * 10000) / 10000), visemes: Array.from(frames.visemes) });
           update({ status: "ready", phase: "Vocals ready", progress: 1 });
         } catch (error) {
           update({ status: "error", phase: "", progress: 0, error: error instanceof Error ? error.message : "Analysis failed. Retry." });

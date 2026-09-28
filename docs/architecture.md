@@ -113,7 +113,7 @@ and the projection onto the two mouth parameters available in these Live2D rigs.
 Library selection / decoded A or B → shared job queue → worker
   → HTDemucs vocals → HeadAudio visemes + short-time RMS → saved 50 Hz frames
 Playback's shared AudioContext time + selected source + volume
-  → sample saved frames → Cubism mouth openness and form
+  → stabilized energy / vowel curves → Cubism mouth openness and form
 ```
 
 Library can queue multiple songs without selecting them for playback. Only one
@@ -132,15 +132,24 @@ ONNX GPU device or CPU fallback. FFT/resampling and viseme classification still
 use the CPU; this is not a claim of full GPU utilization. No audio is uploaded.
 
 RMS gating rejects separator leakage below 0.006 or 1% of mixture power.
-HeadAudio's 32 ms feature window and six 16 ms votes introduce causal delay;
-offline preparation assigns predictions approximately 56 ms earlier than their
-arrival. Window context is discarded consistently for both RMS and visemes.
-Local linear intensity preserves short dips instead of compressing every syllable
-into a sustained opening. Voiced bilabials can close the mouth at nonzero RMS.
-The bridge uses 12 ms attack / 18 ms release, with 25 ms mouth-form smoothing.
+HeadAudio's 32 ms feature window and six 16 ms votes introduce variable causal
+latency. Preserve its feature timestamps instead of applying a fixed advance.
+Jaw timing follows the 50 Hz vocal energy directly; stable vowel boundaries snap
+to a nearby energy rise (up to 120 ms earlier / 20 ms later). Window context is
+discarded consistently for both RMS and visemes.
+
+`articulation.ts` median-filters energy, bridges gate holes up to 40 ms and uses a
+slow two-second gain reference. Jaw opening has no viseme aperture multiplier or
+final 0.8 attenuation. It merges brief label excursions, accepts vowels of at least
+80 ms and holds their shapes for at least 120 ms between changes within a phrase.
+A PP label needs both 80 ms persistence and a 60 ms energy valley to force closure.
+The final bridge retains 12 ms attack / 18 ms release and 25 ms form smoothing;
+stabilization happens before rendering, independently of display frame rate.
 It sets real Core parameters after motions/physics and leaves other channels alone.
 
-Version 2 timing stores RMS and viseme IDs. Version 1 amplitude-only results remain
+Version 3 stores unadvanced RMS/viseme frames. Version 2's fixed 40 ms viseme
+advance is undone when loading; both use the new curves without separating audio
+again. Version 1 amplitude-only results remain
 readable library metadata but are reprocessed on request. Each A/B source retains
 its own timing; seeking samples the shared clock directly. Silence, zero volume,
 pause, disabled singing, absent analysis and ended sources close the mouth.
@@ -248,3 +257,13 @@ npm run check
 ```
 
 The checks cover the portable build, multilingual/offset/UTF-16 LRC parsing, synchronized audio clock, immediate pause signaling, Live2D parameter ownership, beat scheduling, camera separation, stage-light/shadow invariants, responsive collision rules, and the landing/player transition fallback.
+
+## Lyrics timing playhead
+
+The memoized editor receives a stable clock getter and callbacks, not per-frame
+React time. Its uncontrolled range reads AudioContext time through a DOM ref on
+each animation frame; the time label and background React UI update at 10 Hz.
+Pointer scrubbing pauses playback, gives the thumb exclusive local ownership and
+commits once on release/cancel/lost capture. Keyboard seeking commits directly.
+The desktop smoke test measures live frame/React commit counts and audio source
+restarts as well as export, draft persistence and LRC adjustment.

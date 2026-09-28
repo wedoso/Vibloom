@@ -975,13 +975,18 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
       return;
     }
-    const tick = () => {
+    let lastUiTime = -Infinity;
+    const tick = (now: number) => {
       if (!playingRef.current) return;
       const reference = getTimelineTime();
       vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : SILENT_VOCAL_POSE;
       const maxDuration = audioEngine.getMaxDuration();
       const nextTime = Math.min(reference, maxDuration);
-      setCurrentTime(nextTime);
+      // The timing editor owns its visual playhead; background UI needs only 10 Hz.
+      if (!timingTrackId || now - lastUiTime >= 100) {
+        setCurrentTime(nextTime);
+        lastUiTime = now;
+      }
       sessionRef.current = { ...sessionRef.current, currentTime: nextTime };
       if (Math.abs(nextTime - lastCheckpointRef.current) >= 5) {
         lastCheckpointRef.current = nextTime;
@@ -1216,7 +1221,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setTimingTrackId(trackId);
   }
 
-  function saveTimedLyrics(download: boolean) {
+  const saveTimedLyrics = useCallback((download: boolean) => {
     if (!timingTrack?.lyricTiming) return;
     try {
       const source = serializeLrc(timingTrack.lyricTiming, timingTrack.lyricMetadata);
@@ -1238,7 +1243,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not export lyrics.");
     }
-  }
+  }, [timingTrack, patchTracks]);
 
   function removeTrackLyrics(trackId: string) {
     const target = tracksRef.current.find((track) => track.id === trackId);
@@ -1646,6 +1651,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [compareSlot.status, getTimelineTime, seekTo, setFocusWithTransition, toggleFocusMode, timingTrackId]);
 
+  const changeTimedLyrics = useCallback((lyricTiming: LyricTimingLine[]) => {
+    patchTracks((current) => current.map((track) => track.id === timingTrackId ? { ...track, lyricTiming } : track));
+  }, [timingTrackId, patchTracks]);
+  const closeTimingEditor = useCallback(() => setTimingTrackId(""), []);
+  const toggleTimingPlayback = useCallback(() => { void shortcutTogglePlayRef.current(); }, []);
+
   return (
     <main data-companion={session.companionId} className={`library-app ${tracks.length ? "has-library" : "is-empty"} ${focusMode ? "is-library-focus" : ""}`}>
       <div className="scene-curtain" aria-hidden="true">
@@ -1787,7 +1798,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                     <span className="track-title"><label className="vocal-track-select"><input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} /><strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
                     <span className="track-states">
                       <span className={`track-availability availability-${track.availability} ${track.persistence === "cached" ? "is-cached" : ""}`}>{track.persistence === "cached" ? "On device" : track.availability === "available" ? "Available" : track.availability === "session" ? "This session" : track.availability === "missing" ? "Missing" : "Reconnect"}</span>
-                      {(libraryVocals.jobs[track.id] || track.vocalAnalysis?.version === 2) && <span className="track-vocal-job" role="status">
+                      {(libraryVocals.jobs[track.id] || (track.vocalAnalysis?.version === 2 || track.vocalAnalysis?.version === 3)) && <span className="track-vocal-job" role="status">
                         {libraryVocals.jobs[track.id]?.status === "working" || libraryVocals.jobs[track.id]?.status === "queued" ? <><span>{libraryVocals.jobs[track.id].phase} · {Math.round(libraryVocals.jobs[track.id].progress * 100)}%</span><progress aria-label={`Vocal preparation for ${trackDisplayName(track.name)}`} max={1} value={libraryVocals.jobs[track.id].progress} /><button type="button" aria-label={`Cancel vocal preparation for ${trackDisplayName(track.name)}`} onClick={() => libraryVocals.cancel(track.id)}>Cancel</button></> : libraryVocals.jobs[track.id]?.status === "error" ? <><span>{libraryVocals.jobs[track.id].error}</span><button type="button" onClick={() => libraryVocals.prepare([track])}>Retry</button></> : "Vocals ready"}
                       </span>}
                       <span className="track-feature-icons">
@@ -1842,9 +1853,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
       {message && <div className="library-status" role="status">{message}</div>}
 
-      {timingTrack?.lyricTiming && <LyricsTimingEditor key={timingTrack.id} name={trackDisplayName(timingTrack.name)} lines={timingTrack.lyricTiming} currentTime={currentTime} duration={timelineDuration} isPlaying={isPlaying} getTime={getTimelineTime}
-        onChange={(lyricTiming) => patchTracks((current) => current.map((track) => track.id === timingTrack.id ? { ...track, lyricTiming } : track))}
-        onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} onSeek={(time) => { void seekTo(time); }} onTogglePlay={() => { void togglePlay(); }} onSave={saveTimedLyrics} onClose={() => setTimingTrackId("")} />}
+      {timingTrack?.lyricTiming && <LyricsTimingEditor key={timingTrack.id} name={trackDisplayName(timingTrack.name)} lines={timingTrack.lyricTiming} duration={timelineDuration} isPlaying={isPlaying} getTime={getTimelineTime}
+        onChange={changeTimedLyrics}
+        onScrubStart={beginWaveformScrub} onScrubEnd={finishWaveformScrub} onSeek={seekTo} onTogglePlay={toggleTimingPlayback} onSave={saveTimedLyrics} onClose={closeTimingEditor} />}
       {(importing || importSummary) && <div className="modal-backdrop"><section className="import-summary" role="dialog" aria-modal="true" aria-labelledby="import-title"><button className="sheet-close" type="button" aria-label="Close import summary" onClick={() => { if (!importing) setImportSummary(null); }}><X size={20} /></button><p>LOCAL INDEX</p><h2 id="import-title">{importing ? "Reading your music…" : "Import complete"}</h2>{importing ? <div className="import-loader"><span /><small>Indexing audio and matching lyrics without decoding every track.</small></div> : importSummary && <><div className="import-stats"><div><strong>{importSummary.accepted}</strong><span>New tracks</span></div><div><strong>{importSummary.lyrics}</strong><span>Lyrics matched</span></div><div><strong>{importSummary.duplicates}</strong><span>Reconnected / duplicate</span></div><div><strong>{importSummary.ignored}</strong><span>Ignored</span></div></div>{importSummary.errors.length > 0 && <div className="import-errors">{importSummary.errors.map((error) => <span key={error}>{error}</span>)}</div>}<button className="primary-action" type="button" onClick={() => setImportSummary(null)}>Open library</button></>}</section></div>}
 
       <div className={`side-sheet-backdrop ${queueOpen ? "is-open" : ""}`} onClick={() => setQueueOpen(false)}><aside className="side-sheet queue-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" type="button" aria-label="Close queue" onClick={() => setQueueOpen(false)}><X size={20} /></button><p>UP NEXT</p><h2>Current queue</h2><span>{session.queue.length} tracks · {session.shuffle ? "shuffle" : "in order"}</span><div className="queue-list">{session.queue.map((trackId, index) => { const track = tracks.find((candidate) => candidate.id === trackId); if (!track) return null; return <div className={trackId === session.currentTrackId ? "is-active" : ""} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", trackId)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveQueueTrack(event.dataTransfer.getData("text/plain"), trackId)} key={trackId}><span>{String(index + 1).padStart(2, "0")}</span><button type="button" onClick={() => void startTrack(trackId, true, 0)}><strong>{trackDisplayName(track.name)}</strong><small>{track.sourceLabel}</small></button><span className="queue-move"><button type="button" aria-label="Move up" onClick={() => reorderQueue(trackId, -1)}><ArrowUp size={13} /></button><button type="button" aria-label="Move down" onClick={() => reorderQueue(trackId, 1)}><ArrowDown size={13} /></button></span><button type="button" aria-label="Remove from queue" onClick={() => patchSession((current) => ({ ...current, queue: current.queue.filter((id) => id !== trackId) }))}><X size={14} /></button></div>; })}</div><button className="destructive-text-button" type="button" onClick={() => setConfirmAction("queue")}><Trash2 size={14} /> Clear queue only</button></aside></div>

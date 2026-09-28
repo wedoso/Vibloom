@@ -135,6 +135,7 @@ function createMainWindow() {
     backgroundColor: "#f8f3eb",
     show: false,
     title: "Vibloom",
+    icon: path.join(import.meta.dirname, "../dist/vibloom-icon.png"),
     webPreferences: {
       preload: path.join(import.meta.dirname, "preload.cjs"),
       contextIsolation: true,

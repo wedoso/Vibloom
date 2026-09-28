@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Download, Pause, Play, Rewind, Undo2, X } from "lucide-react";
 import { formatLrcTime, type LyricTimingLine, shiftLyricTiming, validateLyricTiming } from "./lrc";
 import "./lyrics-timing.css";
@@ -6,14 +6,12 @@ import "./lyrics-timing.css";
 type Props = {
   name: string;
   lines: LyricTimingLine[];
-  currentTime: number;
   duration: number;
   isPlaying: boolean;
   getTime: () => number;
   onChange: (lines: LyricTimingLine[]) => void;
   onSeek: (time: number) => void;
   onScrubStart: () => void;
-  onScrub: (time: number) => void;
   onScrubEnd: (time: number) => void;
   onTogglePlay: () => void;
   onSave: (download: boolean) => void;
@@ -28,15 +26,61 @@ function TimeInput({ label, initial, action, onApply }: { label: string; initial
   </form>;
 }
 
-export default function LyricsTimingEditor({ name, lines, currentTime, duration, isPlaying, getTime, onChange, onSeek, onScrubStart, onScrub, onScrubEnd, onTogglePlay, onSave, onClose }: Props) {
+/** The visual playhead belongs to the audio clock, or exclusively to the
+ * pointer during a drag. Neither path schedules a React render. */
+const TimingPlayhead = memo(function TimingPlayhead({ duration, getTime, onSeek, onScrubStart, onScrubEnd }: Pick<Props, "duration" | "getTime" | "onSeek" | "onScrubStart" | "onScrubEnd">) {
+  const slider = useRef<HTMLInputElement>(null);
+  const output = useRef<HTMLOutputElement>(null);
+  const scrubbing = useRef(false);
+  const scrubTime = useRef(0);
+  useEffect(() => {
+    let frame = 0, lastText = -Infinity;
+    const tick = (now: number) => {
+      if (!scrubbing.current) {
+        const time = Math.max(0, Math.min(duration, getTime()));
+        if (slider.current) slider.current.value = String(time);
+        if (output.current && now - lastText >= 100) { output.current.textContent = formatLrcTime(time); lastText = now; }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (scrubbing.current) { scrubbing.current = false; onScrubEnd(scrubTime.current); }
+    };
+  }, [duration, getTime, onScrubEnd]);
+  const finish = () => {
+    if (!scrubbing.current) return;
+    scrubbing.current = false;
+    onScrubEnd(scrubTime.current);
+  };
+  return <>
+    <output ref={output}>{formatLrcTime(0)}</output>
+    <input ref={slider} type="range" aria-label="Timestamp playback position" min={0} max={Math.max(duration, .01)} step={.001} defaultValue={0}
+      onPointerDown={(event) => {
+        scrubbing.current = true;
+        scrubTime.current = Number(event.currentTarget.value);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onScrubStart();
+      }}
+      onChange={(event) => {
+        const time = Number(event.currentTarget.value);
+        scrubTime.current = time;
+        if (output.current) output.current.textContent = formatLrcTime(time);
+        if (!scrubbing.current) onSeek(time);
+      }}
+      onPointerUp={finish} onLostPointerCapture={finish} onPointerCancel={finish} />
+    <span>{formatLrcTime(duration)}</span>
+  </>;
+});
+
+const LyricsTimingEditor = memo(function LyricsTimingEditor({ name, lines, duration, isPlaying, getTime, onChange, onSeek, onScrubStart, onScrubEnd, onTogglePlay, onSave, onClose }: Props) {
   const [selected, setSelected] = useState(() => {
     const next = lines.findIndex((line) => line.time === null);
     return next < 0 ? 0 : next;
   });
   const [history, setHistory] = useState<Array<{ lines: LyricTimingLine[]; selected: number }>>([]);
   const [editError, setEditError] = useState("");
-  const scrubbing = useRef(false);
-  const scrubTime = useRef(currentTime);
   const selectedLine = lines[selected];
   const dialogRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -110,13 +154,7 @@ export default function LyricsTimingEditor({ name, lines, currentTime, duration,
         <div className="lyric-timing-transport">
           <button type="button" aria-label="Rewind 5 seconds" onClick={() => onSeek(Math.max(0, getTime() - 5))}><Rewind size={18} /></button>
           <button type="button" aria-label={isPlaying ? "Pause timing playback" : "Play timing playback"} onClick={onTogglePlay}>{isPlaying ? <Pause size={20} /> : <Play size={20} />}</button>
-          <output>{formatLrcTime(currentTime)}</output>
-          <input type="range" aria-label="Timestamp playback position" min={0} max={Math.max(duration, 0.01)} step={0.001} value={Math.min(currentTime, duration)} onPointerDown={(event) => { scrubbing.current = true; scrubTime.current = currentTime; event.currentTarget.setPointerCapture(event.pointerId); onScrubStart(); }}
-            onChange={(event) => { const time = Number(event.target.value); scrubTime.current = time; if (scrubbing.current) onScrub(time); else onSeek(time); }}
-            onPointerUp={() => { if (scrubbing.current) { scrubbing.current = false; onScrubEnd(scrubTime.current); } }}
-            onLostPointerCapture={() => { if (scrubbing.current) { scrubbing.current = false; onScrubEnd(scrubTime.current); } }}
-            onPointerCancel={() => { if (scrubbing.current) { scrubbing.current = false; onScrubEnd(scrubTime.current); } }} />
-          <span>{formatLrcTime(duration)}</span>
+          <TimingPlayhead duration={duration} getTime={getTime} onSeek={onSeek} onScrubStart={onScrubStart} onScrubEnd={onScrubEnd} />
         </div>
         <div className="lyric-timing-progress"><strong>{count} / {lines.length} timed</strong><span>Draft saved with this track</span></div>
         <div className="lyric-timing-lines" aria-label="Lyrics to timestamp">
@@ -146,4 +184,6 @@ export default function LyricsTimingEditor({ name, lines, currentTime, duration,
       </div>
     </div>
   );
-}
+});
+
+export default LyricsTimingEditor;

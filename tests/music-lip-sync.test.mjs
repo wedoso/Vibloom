@@ -23,10 +23,10 @@ test("lip sync follows the vocal level without accumulating authored mouth curve
   for (let i = 0; i < 120; i++) {
     values[0] = 0.95; // Authored motion/expression has already updated this frame.
     sync.update(1, true, 1 / 60);
-    assert.ok(values[0] >= 0 && values[0] <= 0.8);
+    assert.ok(values[0] >= 0 && values[0] <= 1);
     assert.equal(values[1], 0.5);
   }
-  assert.ok(values[0] > 0.79);
+  assert.ok(values[0] > 0.99);
 });
 
 test("pause and absent vocals both close the mouth even if the mix is loud", () => {
@@ -49,7 +49,7 @@ test("lip envelope is frame-rate independent and bounds invalid vocal levels", (
   const { values, sync } = fixture();
   for (const level of [NaN, Infinity, -1, 10]) {
     sync.update(level, true, 1);
-    assert.ok(Number.isFinite(values[0]) && values[0] >= 0 && values[0] <= 0.8);
+    assert.ok(Number.isFinite(values[0]) && values[0] >= 0 && values[0] <= 1);
   }
 });
 
@@ -58,6 +58,6 @@ test("short bilabial closures reach the rig within 60 ms and do not alter other 
   const { values, sync } = fixture();
   sync.update({ open: 1, form: 1 }, true, 1);
   sync.update({ open: 0, form: 0 }, true, .06);
-  assert.ok(values[0] < .03);
+  assert.ok(values[0] < .04);
   assert.equal(values[1], .5);
 });

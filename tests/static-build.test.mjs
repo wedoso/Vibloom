@@ -45,14 +45,14 @@ test("produces a portable static site", async () => {
   const assets = await readdir(new URL("assets/", dist));
 
   assert.match(html, /<title>Vibloom — Live2D Music Player & Listening Room<\/title>/);
-  assert.match(html, /href="\.\/favicon\.svg"/u);
+  assert.match(html, /href="\.\/vibloom-icon\.png"/u);
   assert.match(html, /type="module"/);
   assert.match(html, /\.\/assets\//);
   assert.doesNotMatch(html, /_next|_vinext|server\/index|codex-preview/i);
   assert.ok(assets.some((file) => file.endsWith(".js")));
   assert.ok(assets.some((file) => file.endsWith(".css")));
   await access(new URL("og.png", dist));
-  await access(new URL("favicon.svg", dist));
+  await access(new URL("vibloom-icon.png", dist));
   await access(new URL("live2d/live2dcubismcore.min.js", dist));
   await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.model3.json", dist));
   await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.moc3", dist));

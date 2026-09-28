@@ -1463,10 +1463,12 @@
   background: var(--library-ink);
 }
 
-.brand-mark > svg {
-  width: 26px;
-  height: 26px;
-  color: #fffaf3;
+.brand-mark > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
 }
 
 .brand-mark-center { fill: var(--library-accent); }

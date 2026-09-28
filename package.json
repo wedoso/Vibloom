@@ -1,6 +1,6 @@
 {
   "name": "vibloom",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "A private local music player with synchronized A/B comparison and a Live2D companion.",
   "author": "Vibloom contributors",
   "license": "MIT",
@@ -90,7 +90,7 @@
       "strictVerify": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "icon": "build/icon.png",
+      "icon": "public/vibloom-icon.png",
       "target": [
         "dmg",
         "zip"
@@ -98,7 +98,7 @@
     },
     "win": {
       "electronUpdaterCompatibility": ">=2.16",
-      "icon": "build/icon.png",
+      "icon": "public/vibloom-icon.png",
       "target": [
         "nsis"
       ]

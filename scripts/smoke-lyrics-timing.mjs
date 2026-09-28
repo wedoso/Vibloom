@@ -19,9 +19,23 @@ async function smoke() {
   try {
     await app.whenReady();
     await mkdir(output, { recursive: true });
-    protocol.handle("vibloom", (request) => {
+    protocol.handle("vibloom", async (request) => {
+      if (new URL(request.url).pathname === "/timing-probe.js") return new Response(`
+        window.__reactCommits = 0;
+        window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+          supportsFiber: true, inject: () => 1,
+          onCommitFiberRoot: () => window.__reactCommits++, onCommitFiberUnmount: () => {}
+        };
+        window.__sourceStarts = 0;
+        const start = AudioBufferSourceNode.prototype.start;
+        AudioBufferSourceNode.prototype.start = function(...args) {
+          if (this.context instanceof AudioContext) { window.__sourceStarts++; window.__audioClock = this.context; }
+          return start.apply(this, args);
+        };
+      `, { headers: { "Content-Type": "text/javascript" } });
       const file = path.resolve(root, "dist", `.${new URL(request.url).pathname}`);
       if (!file.startsWith(`${path.join(root, "dist")}${path.sep}`)) return new Response("Not found", { status: 404 });
+      if (file.endsWith("index.html")) return new Response((await readFile(file, "utf8")).replace('<head>', '<head><script src="./timing-probe.js"></script>'), { headers: { "Content-Type": "text/html" } });
       return net.fetch(pathToFileURL(file).href);
     });
     window = new BrowserWindow({ width: 1280, height: 900, show: process.env.CI === "true", webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
@@ -67,6 +81,22 @@ async function smoke() {
     await waitFor(`document.querySelectorAll('.lyric-timing-lines button').length === 3`, "TXT editor opens");
     assert.equal(await run(`document.querySelector('.lyric-timing-download').disabled`), true);
     await click('[aria-label="Play timing playback"]');
+    await delay(250);
+    const playback = await run(`new Promise(resolve => {
+      const samples = [], commits = window.__reactCommits, started = performance.now();
+      const tick = () => {
+        samples.push({ value: Number(document.querySelector('[aria-label="Timestamp playback position"]').value), clock: window.__audioClock.currentTime });
+        if (performance.now() - started >= 1500) resolve({ samples, commits: window.__reactCommits - commits, seconds: (performance.now() - started) / 1000 });
+        else requestAnimationFrame(tick);
+      }; requestAnimationFrame(tick);
+    })`);
+    assert.ok(playback.commits > 0 && playback.commits / playback.seconds < 20, `React UI updates below 20 Hz: ${playback.commits} commits / ${playback.seconds}s`);
+    const first = playback.samples[0];
+    assert.ok(playback.samples.length > 20, "visual playhead continues at animation frame rate");
+    assert.ok(playback.samples.every((s, i, all) => i === 0 || s.value >= all[i - 1].value), "continuous playback never moves the thumb backward");
+    assert.ok(playback.samples.every(s => Math.abs((s.value - first.value) - (s.clock - first.clock)) < .06), "thumb follows AudioContext within one display frame, independently of React updates");
+    console.log(`PASS continuous timing playhead: ${playback.samples.length} frames, ${playback.commits} React commits in ${playback.seconds.toFixed(2)}s`);
+    const startsBeforeDrag = await run("window.__sourceStarts");
     const slider = await run(`(() => { const r = document.querySelector('[aria-label="Timestamp playback position"]').getBoundingClientRect(); return {x: r.x, y: Math.round(r.y + r.height / 2), width: r.width}; })()`);
     window.webContents.sendInputEvent({type: 'mouseDown', x: Math.round(slider.x + slider.width * .25), y: slider.y, button: 'left', clickCount: 1});
     window.webContents.sendInputEvent({type: 'mouseMove', x: Math.round(slider.x + slider.width * .7), y: slider.y, button: 'left'});
@@ -75,8 +105,10 @@ async function smoke() {
     const dragFrames = await run(`new Promise(resolve => { const samples = []; const tick = () => { const el = document.querySelector('[aria-label="Timestamp playback position"]'); const r = el.getBoundingClientRect(); samples.push({value: Number(el.value), x:r.x, width:r.width}); if(samples.length === 12) resolve(samples); else requestAnimationFrame(tick); }; tick(); })`);
     assert.ok(Math.max(...dragFrames.map(s => s.value)) - Math.min(...dragFrames.map(s => s.value)) < .001, `playback cannot fight the dragged thumb: ${JSON.stringify(dragFrames)}`);
     assert.ok(Math.max(...dragFrames.map(s => s.width)) - Math.min(...dragFrames.map(s => s.width)) < .1, "timestamp updates do not resize the timeline");
+    assert.equal(await run("window.__sourceStarts"), startsBeforeDrag, "drag preview never restarts the audio source");
     window.webContents.sendInputEvent({type: 'mouseUp', x: Math.round(slider.x + slider.width * .7), y: slider.y, button: 'left', clickCount: 1});
     await waitFor(`Boolean(document.querySelector('[aria-label="Pause timing playback"]'))`, "scrub resumes playback once");
+    assert.equal(await run("window.__sourceStarts"), startsBeforeDrag + 1, "release commits exactly one audio restart");
     await click('[aria-label="Pause timing playback"]');
     console.log("PASS timing slider physical drag, stable thumb and layout, pause/resume");
 
@@ -157,7 +189,7 @@ async function smoke() {
     await button("Undo");
     assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:01.125");
     await button("Seek to line");
-    assert.equal(await run(`Number(document.querySelector('[aria-label="Timestamp playback position"]').value)`), 1.125);
+    await waitFor(`Number(document.querySelector('[aria-label="Timestamp playback position"]').value) === 1.125`, "seek-to-line reaches visual playhead on next frame");
     const lrcDownload = new Promise((resolve, reject) => {
       window.webContents.session.once("will-download", (_event, item) => {
         item.setSavePath(path.join(output, item.getFilename()));

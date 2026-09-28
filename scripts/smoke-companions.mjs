@@ -44,7 +44,10 @@ async function smoke() {
     const ready = (id) => waitFor(`document.querySelector('.live2d-stage[data-companion="${id}"][data-status="ready"]') && document.querySelectorAll('canvas.live2d-canvas').length === 1 && document.querySelector('canvas.live2d-canvas').style.visibility !== 'hidden'`, `${id} rendered`);
     const select = (id) => run(`document.querySelector('[aria-label="Music companion"]').value = ${JSON.stringify(id)}; document.querySelector('[aria-label="Music companion"]').dispatchEvent(new Event('change', { bubbles: true }));`);
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
-    const capture = async (name) => writeFile(path.join(output, `${name}.png`), (await window.webContents.capturePage()).toPNG());
+    const capture = async (name) => {
+      await waitFor(`getComputedStyle(document.querySelector('.live2d-host')).opacity === '1'`, "companion fade complete for screenshot");
+      await writeFile(path.join(output, `${name}.png`), (await window.webContents.capturePage()).toPNG());
+    };
     const position = () => run(`Number(document.querySelector('[aria-label="Playback position"]').value)`);
     const playing = () => run(`Boolean(document.querySelector('button[aria-label="Pause"]'))`);
     const theme = () => run(`(() => {
