@@ -25,8 +25,8 @@ export class MusicLipSync {
   /** Call from beforeModelUpdate, after authored motions, expressions and physics. */
   update(vocalLevel: number | VocalPose, playing: boolean, dt: number) {
     const level = playing ? typeof vocalLevel === "number" ? vocalLevel : vocalLevel.open : 0;
-    const target = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) * 0.8 : 0;
-    // Keep 20 ms consonant closures responsive while removing frame steps.
+    const target = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+    // Follow the stabilized acoustic envelope without adding another amplitude scale.
     const seconds = Number.isFinite(dt) ? Math.max(0, dt) : 0;
     const response = target > this.openness ? 0.012 : 0.018;
     this.openness += (target - this.openness) * (1 - Math.exp(-seconds / response));

@@ -4,18 +4,18 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-test("keeps the web, favicon, and desktop brand mark inside the shared SVG bounds", async () => {
-  const [component, favicon, desktopIcon] = await Promise.all([
+test("shares the supplied PNG between application branding and desktop packages", async () => {
+  const [component, manifest, image] = await Promise.all([
     readFile(new URL("src/BrandMark.tsx", root), "utf8"),
-    readFile(new URL("public/favicon.svg", root), "utf8"),
-    readFile(new URL("build/icon.svg", root), "utf8"),
+    readFile(new URL("package.json", root), "utf8"),
+    readFile(new URL("public/vibloom-icon.png", root)),
   ]);
-  const petalPath = /<path d="(M15\.35[^"]+)"/u;
-  const paths = [component, favicon, desktopIcon].map((source) => source.match(petalPath)?.[1]);
-  assert.ok(paths.every(Boolean));
-  assert.equal(new Set(paths).size, 1);
-  assert.match(paths[0], /M16\.65 16\.8[^Z]+-2-1\.1-2\.9-3\.7-2\.9-6\.4/u);
-  assert.doesNotMatch(paths[0], /M16\.65 16\.8[^Z]+-2 1\.1-2\.9 3\.7-2\.9 6\.4/u);
+  assert.match(component, /vibloom-icon\.png/u);
+  const { build } = JSON.parse(manifest);
+  assert.equal(build.mac.icon, "public/vibloom-icon.png");
+  assert.equal(build.win.icon, build.mac.icon);
+  assert.equal(image.subarray(1, 4).toString(), "PNG");
+  assert.ok(image.readUInt32BE(16) >= 1024 && image.readUInt32BE(20) >= 1024);
 });
 
 test("ships the local library as the primary application", async () => {

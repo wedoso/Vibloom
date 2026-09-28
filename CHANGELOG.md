@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.5.1](https://github.com/wedoso/Vibloom/compare/v1.5.0...v1.5.1) (2026-09-27)
+
+- Stabilize vocal lip sync: drive opening from vocal energy, hold meaningful vowel shapes, reject brief false closures, and replace fixed viseme latency compensation with acoustic onset alignment. Existing analyses are reused.
+- Animate the TXT/LRC editor playhead directly from the audio clock, with local drag previews and one seek on release.
+- Use the new Vibloom icon across desktop packages, the app, browser tabs, and project documentation.
+
 ## [1.5.0](https://github.com/wedoso/Vibloom/compare/v1.4.0...v1.5.0) (2026-09-27)
 
 - Estimate syllable mouth shapes from separated vocals with HeadAudio; preserve short closures, reduce response latency, and report WebGPU/CPU processing.

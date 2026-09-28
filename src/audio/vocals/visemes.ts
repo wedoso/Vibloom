@@ -6,8 +6,8 @@ import { VOCAL_FRAME_RATE, VOCAL_SAMPLE_RATE } from "./envelope";
 let prototypes: Promise<{ model: unknown[] }> | undefined;
 
 /** Run the upstream MFCC/prototype classifier offline on the isolated voice.
- * Its 32 ms window and six 16 ms votes have a ~56 ms causal delay. Because
- * preparation is offline we align the prediction to the source, not arrival time.
+ * Preserve the upstream feature timestamps. Jaw onset comes directly from RMS;
+ * stable vowel boundaries are aligned to nearby acoustic rises after analysis.
  * The bundled speech model estimates visemes; it is not a singing transcript.
  */
 export async function vocalVisemes(left: Float32Array, right: Float32Array) {
@@ -17,7 +17,7 @@ export async function vocalVisemes(left: Float32Array, right: Float32Array) {
   const processor = new Processor({ sampleRate: VOCAL_SAMPLE_RATE, parameterData: { silMode: 0, vadGateActiveDb: -55, vadGateInactiveDb: -60 } }, {
     port: { postMessage: (event) => {
       if (event.event === "viseme" || event.event === "ended") events.push({
-        time: Math.max(0, event.t - (event.event === "viseme" ? 0.04 : 0.056)),
+        time: Math.max(0, event.t),
         viseme: event.viseme ?? 14,
       });
     } },
