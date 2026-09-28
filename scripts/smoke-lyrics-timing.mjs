@@ -112,7 +112,14 @@ async function smoke() {
     await click('[aria-label="Pause timing playback"]');
     console.log("PASS timing slider physical drag, stable thumb and layout, pause/resume");
 
-    await seek(0); await key("Space", " "); await delay(250); await key("KeyT", "t");
+    await seek(0); await key("Space", " "); await delay(250);
+    const stampGeometry = await run(`new Promise(resolve => {
+      const samples = [], slider = document.querySelector('[aria-label="Timestamp playback position"]');
+      const record = () => { const r = slider.getBoundingClientRect(); samples.push({x:r.x,width:r.width}); };
+      record(); document.querySelector('.lyric-timing-editor').dispatchEvent(new KeyboardEvent('keydown', {code:'KeyT',key:'t',bubbles:true}));
+      const tick = () => { record(); if (samples.length >= 20) resolve(samples); else requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+    })`);
+    for (const dimension of ['x','width']) assert.ok(Math.max(...stampGeometry.map(r=>r[dimension])) - Math.min(...stampGeometry.map(r=>r[dimension])) < .1, `stamping cannot change slider ${dimension}`);
     assert.notEqual(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:00.00", "stamp reads live audio clock");
     await key("Space", " "); await key("KeyZ", "z");
     await seek(0); await key("KeyT", "t");

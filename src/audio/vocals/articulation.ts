@@ -104,6 +104,34 @@ export function buildVocalCurves(rms: Float32Array, visemes: Uint8Array, version
     }
     if (low >= 0 && run.end - low >= 3) open.fill(0, low, run.end);
   }
+  // Only sustained, visually distinct consonants contribute a restrained shape.
+  // They never own jaw amplitude and cannot interrupt a stable vowel segment.
+  for (const run of runs) {
+    if (![9, 13].includes(run.value) || run.end - run.start < 6) continue;
+    const target = run.value === 9 ? .55 : -.35; // FF contact / CH rounding.
+    for (let i = run.start + 2; i < run.end - 2; i++) if (open[i] > 0) form[i] = target;
+  }
+  return smoothVocalCurves({ open, form });
+}
+
+/** Bake asymmetric attack/release into the saved-time domain. Forward filtering
+ * starts at the acoustic onset; finite tails reach exact silence in 40 ms.
+ * Shape changes use a 100 ms smoothstep, keeping both endpoint velocities zero. */
+export function smoothVocalCurves(input: VocalCurves): VocalCurves {
+  const open = new Float32Array(input.open.length), form = input.form.slice();
+  let from = .15, target = .15, elapsed = 5;
+  for (let i = 0; i < open.length; i++) {
+    const desired = input.open[i];
+    const previous = input.open[i - 1] ?? 0, older = input.open[i - 2] ?? 0;
+    // Finite kernels taper all the way to zero without truncating an exponential
+    // tail. Faster opening, softer closing; no lookahead into preceding silence.
+    open[i] = desired >= previous ? .55 * desired + .3 * previous + .15 * older : .35 * desired + .4 * previous + .25 * older;
+    const next = input.form[i];
+    if (!Number.isFinite(next)) { form[i] = NaN; continue; }
+    if (next !== target) { from = i > 0 && Number.isFinite(form[i - 1]) ? form[i - 1] : target; target = next; elapsed = 0; }
+    const t = Math.min(1, ++elapsed / 5), ease = t * t * (3 - 2 * t);
+    form[i] = from + (target - from) * ease;
+  }
   return { open, form };
 }
 
@@ -111,7 +139,19 @@ export function sampleVocalCurves(curves: VocalCurves, time: number, volume: num
   if (!Number.isFinite(time) || time < 0 || !Number.isFinite(volume) || volume <= 0) return SILENT_VOCAL_POSE;
   const position = time * VOCAL_FRAME_RATE, index = Math.floor(position), fraction = position - index;
   if (index >= curves.open.length) return SILENT_VOCAL_POSE;
-  const open = curves.open[index] + ((curves.open[index + 1] ?? 0) - curves.open[index]) * fraction;
+  const open = interpolateCurve(curves.open, index, fraction);
   const a = curves.form[index], b = curves.form[index + 1];
-  return { open: open * Math.min(1, volume / .3), form: Number.isFinite(a) ? Number.isFinite(b) ? a + (b - a) * fraction : a : null };
+  return { open: open * Math.min(1, volume / .3), form: Number.isFinite(a) ? Number.isFinite(b) ? interpolateCurve(curves.form, index, fraction) : a : null };
+}
+
+/** Monotone cubic interpolation joins frame slopes without overshooting peaks
+ * or creating extra openings between silent samples. */
+function interpolateCurve(values: Float32Array, index: number, t: number) {
+  const a = values[index], b = Number.isFinite(values[index + 1]) ? values[index + 1] : a;
+  const before = Number.isFinite(values[index - 1]) ? values[index - 1] : a;
+  const after = Number.isFinite(values[index + 2]) ? values[index + 2] : b;
+  const slope = (x: number, y: number) => x * y > 0 ? 2 * x * y / (x + y) : 0;
+  const m0 = slope(a - before, b - a), m1 = slope(b - a, after - b);
+  return (2 * t ** 3 - 3 * t ** 2 + 1) * a + (t ** 3 - 2 * t ** 2 + t) * m0
+    + (-2 * t ** 3 + 3 * t ** 2) * b + (t ** 3 - t ** 2) * m1;
 }

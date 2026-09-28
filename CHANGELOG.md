@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.5.2](https://github.com/wedoso/Vibloom/compare/v1.5.1...v1.5.2) (2026-09-27)
+
+- Smooth singing jaw curves and vowel transitions; add restrained, persistent consonant shapes without increasing short-label chatter.
+- Keep the lyric timing transport fixed while stamping lines, changing timestamp precision, or showing scrollbars.
+- Enter Library lip-sync selection only when requested. Share per-source preparation jobs, live progress, cancellation, errors and results with Player, without duplicate analysis.
+
 ## [1.5.1](https://github.com/wedoso/Vibloom/compare/v1.5.0...v1.5.1) (2026-09-27)
 
 - Stabilize vocal lip sync: drive opening from vocal energy, hold meaningful vowel shapes, reject brief false closures, and replace fixed viseme latency compensation with acoustic onset alignment. Existing analyses are reused.
