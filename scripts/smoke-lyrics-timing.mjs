@@ -113,6 +113,9 @@ async function smoke() {
     console.log("PASS timing slider physical drag, stable thumb and layout, pause/resume");
 
     await seek(0); await key("Space", " "); await delay(250);
+    const centers = await run(`Array.from(document.querySelector('.lyric-timing-transport').children, item => { const r=item.getBoundingClientRect(); return r.y+r.height/2; })`);
+    assert.equal(centers.length, 5);
+    assert.ok(Math.max(...centers) - Math.min(...centers) < 1, "all five transport items share a vertical center");
     const stampGeometry = await run(`new Promise(resolve => {
       const samples = [], slider = document.querySelector('[aria-label="Timestamp playback position"]');
       const record = () => { const r = slider.getBoundingClientRect(); samples.push({x:r.x,width:r.width}); };

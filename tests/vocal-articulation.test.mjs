@@ -41,9 +41,9 @@ test("brief classification excursions merge, stable vowels hold, real silence re
 test("only sustained PP plus an acoustic valley closes voiced audio; short gate holes bridge", () => {
   const rms = voice(), labels = new Uint8Array(100).fill(2);
   labels.fill(5, 10, 20); // Sustained vowel misclassified as PP: no valley.
-  labels.fill(5, 30, 35); rms.fill(.04, 30, 35); // Actual closure.
+  labels.fill(5, 30, 35); rms.fill(.015, 30, 35); // Deep, sustained bilabial valley.
   labels.fill(5, 60, 62); rms.fill(.04, 60, 62); // Too short to force closure.
-  rms.fill(0, 70, 72); rms.fill(0, 80, 85);
+  rms.fill(0, 70, 72); rms.fill(0, 80, 85); labels.fill(14,80,85);
   const {open} = buildVocalCurves(rms, labels);
   assert.ok(open[15] > .9);
   assert.equal(open[32], 0);
@@ -87,4 +87,39 @@ test("only persistent FF or CH contributes consonant shape without changing jaw 
   assert.deepEqual(a.form,b.form);
   assert.ok(c.form[37] < a.form[37] && c.form[37] >= .5);
   assert.equal(c.form[50],a.form[50]);
+});
+
+
+test("continuing vowels bridge short gate dips, but confirmed silence and PP still close", () => {
+  for (const frames of [3, 5, 7]) {
+    const rms=voice(), labels=new Uint8Array(100).fill(3); rms.fill(0,30,30+frames);
+    const curves=buildVocalCurves(rms,labels);
+    assert.ok(curves.open.slice(30,30+frames+2).every(v=>v>.5), "vowel stays open through a bounded dropout");
+    labels.fill(14,30,30+frames);
+    assert.equal(buildVocalCurves(rms,labels).open[32],0,"silence label corroborates silence");
+    labels.fill(5,30,30+frames);
+    assert.equal(buildVocalCurves(rms,labels).open[32],0,"PP cannot be bridged as a vowel");
+  }
+  const rms=voice(), labels=new Uint8Array(100).fill(3); rms.fill(0,30,40);
+  assert.equal(buildVocalCurves(rms,labels).open[32],0,"long silence closes even with a stale vowel label");
+  rms.fill(.07,30,35); rms.fill(.2,35,40); labels.fill(5,30,35);
+  assert.ok(buildVocalCurves(rms,labels).open[32]>.25,"a moderate valley plus false PP cannot force closure");
+});
+
+test("vowel identity survives the generic axis and eases independently of consonant form", () => {
+  const labels=new Uint8Array(100).fill(3); labels.fill(4,30,60);labels.fill(9,65,80);
+  const curves=buildVocalCurves(voice(),labels);
+  assert.deepEqual(sampleVocalCurves(curves,.4,1).vowels,[0,0,0,1,0]);
+  const blend=sampleVocalCurves(curves,.64,1).vowels;
+  assert.ok(blend[3]>0 && blend[4]>0);
+  assert.ok(Math.abs(blend.reduce((a,b)=>a+b,0)-1)<1e-6);
+  assert.deepEqual(sampleVocalCurves(curves,1.45,1).vowels,[0,0,0,1,0]);
+});
+
+
+test("brief near-gate vowel energy retains an aperture floor without lifting long quiet passages",()=>{
+  const rms=voice(), labels=new Uint8Array(100).fill(4);rms.fill(.006,30,36);
+  assert.ok(buildVocalCurves(rms,labels).open.slice(32,36).every(v=>v>=.25));
+  rms.fill(.006,30,60);
+  assert.ok(buildVocalCurves(rms,labels).open[40]<.15);
 });

@@ -39,7 +39,7 @@
 .lyric-timing-transport input[type="range"] { min-width: 0; transition: none; }
 /* Content, precision changes and scrollbars cannot resize the transport columns. */
 .lyric-timing-editor, .lyric-timing-lines { scrollbar-gutter: stable; }
-.lyric-timing-transport { display: grid; grid-template-columns: 42px 46px 10ch minmax(0, 1fr) 10ch; flex: none; width: 100%; gap: 10px; }
+.lyric-timing-transport { display: grid; align-items: center; grid-template-columns: 42px 46px 10ch minmax(0, 1fr) 10ch; flex: none; width: 100%; gap: 10px; }
 .lyric-timing-transport output, .lyric-timing-transport > span { width: 10ch; overflow: hidden; }
 .lyric-timing-transport input[type="range"] { width: 100%; margin: 0; padding: 0; }
 @media (max-width: 600px) {

@@ -692,7 +692,7 @@ export default function Live2DStage({
         let poseHistoryAt = performance.now() / 1000;
         const core = internalModel.coreModel;
         internalModel.lipSync = false;
-        const musicLipSync = new MusicLipSync(core, internalModel.motionManager.lipSyncIds);
+        const musicLipSync = new MusicLipSync(core, internalModel.motionManager.lipSyncIds, companionId);
         let lipSyncUpdatedAt = performance.now();
         const applyMusicLipSync = () => {
           const now = performance.now();
@@ -1649,7 +1649,7 @@ export default function Live2DStage({
         console.warn("Live2D cleanup completed with a renderer warning", error);
       }
     };
-  }, [companion, featuresRef, vocalLevelRef, loadAttempt]);
+  }, [companion, companionId, featuresRef, vocalLevelRef, loadAttempt]);
 
   const listeningLabel = variant === "welcome"
     ? "Waiting for a track"

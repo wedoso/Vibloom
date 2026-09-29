@@ -148,7 +148,12 @@ discarded consistently for both RMS and visemes.
 slow two-second gain reference. Jaw opening has no viseme aperture multiplier or
 final 0.8 attenuation. It merges brief label excursions, accepts vowels of at least
 80 ms and holds their shapes for at least 120 ms between changes within a phrase.
-A PP label needs both 80 ms persistence and a 60 ms energy valley to force closure.
+A continuing vowel with audible, matching 80 ms shoulders bridges gate holes
+up to 140 ms and keeps at least 0.25 aperture through brief near-gate dips.
+Silence/PP labels veto the extended hold; longer gaps close. A PP label needs
+80 ms persistence and a coincident 60 ms valley below 12% of both acoustic
+shoulders to force closure. These are temporal/acoustic checks, not calibrated
+classifier confidence.
 Finite offline attack/release kernels taper energy changes without delaying the
 first voiced frame. Vowels use 100 ms smoothstep transitions; sustained FF/CH may
 supply restrained form changes but never control jaw amplitude. Monotone cubic
@@ -166,8 +171,14 @@ pause, disabled singing, absent analysis and ended sources close the mouth.
 
 These are estimated acoustic mouth shapes, not a phoneme transcript. HeadAudio's
 bundled model was trained on English speech, so sung vowels, other languages and
-background vocals can be misclassified. The models expose only mouth openness
-and form, not fifteen separately authored Oculus visemes; mapping is approximate.
+background vocals can be misclassified. Stable AA/E/I/O/U blend weights remain
+separate from the generic form axis. Hong Xi has a capability-gated profile for
+`Mouthfunnel`, `MouthPuckerWiden`, and `Jawopen`, with authored range scaling and
+neutral restoration. A one-time geometry probe rejects unbound parameters and
+restores all values. **The bundled Hong Xi export declares these three channels
+but none deforms its mesh**, so it currently uses the same generic openness/form
+fallback as Hiyori. A richer, bound rig is required for independent vowel shapes;
+parameter names alone cannot add deformation to an exported model.
 The official [Cubism MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
 requires an additional runtime and model-specific settings absent from these rigs.
 

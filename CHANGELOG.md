@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.5.3](https://github.com/wedoso/Vibloom/compare/v1.5.2...v1.5.3) (2026-09-28)
+
+- Center all five TXT/LRC transport controls vertically without changing playback or scrubbing.
+- Hold sustained vowels through brief energy dips and reject moderate-energy false PP closures; preserve confirmed silence and deep bilabial closures.
+- Preserve independent vowel blends and add capability-tested Hong Xi mouth mapping. The bundled export's advanced channels are unbound, so it safely retains the generic mouth fallback.
+
 ## [1.5.2](https://github.com/wedoso/Vibloom/compare/v1.5.1...v1.5.2) (2026-09-27)
 
 - Smooth singing jaw curves and vowel transitions; add restrained, persistent consonant shapes without increasing short-label chatter.

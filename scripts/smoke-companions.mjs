@@ -58,6 +58,25 @@ async function smoke() {
     })()`);
     await window.loadURL("vibloom://app/index.html");
     await ready("hong-xi");
+    // The supplied export lists ARKit channels but leaves them unbound. Check
+    // actual geometry, so ID presence can never be mistaken for richer vowels.
+    const mouthBindings = await run(`(async () => {
+      const moc = Live2DCubismCore.Moc.fromArrayBuffer(await (await fetch('/live2d/hong-xi/yuql216.moc3')).arrayBuffer());
+      const model = Live2DCubismCore.Model.fromMoc(moc), p = model.parameters, result = {};
+      try {
+        for (const id of ['ParamMouthOpenY','ParamMouthForm','Mouthfunnel','MouthPuckerWiden','Jawopen']) {
+          const index = p.ids.indexOf(id); if (index < 0) throw new Error('Missing mouth parameter: ' + id);
+          p.values.set(p.defaultValues); p.values[p.ids.indexOf('ParamMouthOpenY')] = .7;
+          p.values[index] = p.minimumValues[index]; model.update();
+          const before = model.drawables.vertexPositions.map(v => v.slice());
+          p.values[index] = p.maximumValues[index]; model.update();
+          result[id] = before.some((vertices, i) => vertices.some((v, j) => Math.abs(v - model.drawables.vertexPositions[i][j]) > 1e-6));
+        }
+      } finally { model.release(); moc._release(); }
+      return result;
+    })()`);
+    assert.deepEqual(mouthBindings, {ParamMouthOpenY:true,ParamMouthForm:true,Mouthfunnel:false,MouthPuckerWiden:false,Jawopen:false});
+    console.log('PASS bundled Hong Xi geometry confirms generic fallback for unbound advanced mouth channels');
     assert.equal(await run(`document.querySelector('[aria-label="Music companion"]').value`), "hong-xi", "fresh libraries start with Hong Xi");
     await select("hiyori");
     await ready("hiyori");
