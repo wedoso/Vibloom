@@ -28,5 +28,10 @@ export function sampleVocalEnvelope(frames: Float32Array | null, time: number, v
   return rms > 0 ? Math.max(0, Math.min(1, (20 * Math.log10(rms) + 45) / 35)) : 0;
 }
 
-export type VocalPose = { open: number; form: number | null };
+export type VocalPose = {
+  open: number;
+  form: number | null;
+  /** Stable AA/E/I/O/U weights, independent of the generic form axis. */
+  vowels?: readonly number[];
+};
 export const SILENT_VOCAL_POSE: VocalPose = { open: 0, form: null };

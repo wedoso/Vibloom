@@ -61,3 +61,46 @@ test("short bilabial closures reach the rig within 60 ms and do not alter other 
   assert.ok(values[0] < .04);
   assert.equal(values[1], .5);
 });
+
+
+function richFixture(bound = true) {
+  const ids=["ParamMouthOpenY","ParamMouthForm","Mouthfunnel","MouthPuckerWiden","Jawopen","smile"], values=[0,0,0,0,0,.5];
+  const vertices=new Float32Array(3);
+  const model={
+    getParameterIndex:id=>ids.includes(id)?ids.indexOf(id):ids.length,
+    getParameterCount:()=>ids.length,
+    getParameterMinimumValue:i=>i===1||i===3?-1:0,
+    getParameterMaximumValue:()=>1,
+    getParameterDefaultValue:i=>i===5?.5:0,
+    getParameterValueByIndex:i=>values[i],
+    setParameterValueByIndex:(i,v)=>{values[i]=v},
+    getDrawableCount:()=>1, getDrawableVertices:()=>vertices,
+    update:()=>{if(bound)vertices.set(values.slice(2,5))},
+  };
+  return {values,sync:new MusicLipSync(model,[ids[0]],"hong-xi")};
+}
+
+test("bound Hong Xi channels distinguish vowels and return to neutral on pause",()=>{
+  const {values,sync}=richFixture();
+  assert.deepEqual(values,[0,0,0,0,0,.5],"capability probe restores every parameter");
+  const shapes=[];
+  for(let vowel=0;vowel<5;vowel++) {
+    sync.update({open:.8,form:0,vowels:Array.from({length:5},(_,i)=>Number(i===vowel))},true,1);
+    shapes.push(values.slice(2,5));
+    assert.ok(Math.abs(values[4]-.8)<1e-6,"jaw amplitude follows energy for every vowel");
+    assert.equal(values[0],0,"only one jaw channel drives aperture");
+    assert.equal(values[5],.5);
+  }
+  assert.ok(shapes[2][1]>0 && shapes[3][1]<0 && shapes[4][1]<shapes[3][1]);
+  assert.ok(shapes[3][0]>0 && shapes[4][0]>shapes[3][0]);
+  sync.update({open:1,form:0,vowels:[1,0,0,0,0]},false,1);
+  assert.deepEqual(values.slice(2,5),[0,0,0]);
+});
+
+test("unbound declared channels retain generic fallback; legacy poses do too",()=>{
+  const {values,sync}=richFixture(false);
+  sync.update({open:.8,form:-.8,vowels:[0,0,0,1,0]},true,1);
+  assert.ok(values[0]>.79);assert.deepEqual(values.slice(2,5),[0,0,0]);
+  const rich=richFixture();rich.sync.update({open:.8,form:.5},true,1);
+  assert.ok(rich.values[0]>.79); assert.deepEqual(rich.values.slice(2,5),[0,0,0]);
+});
