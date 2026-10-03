@@ -76,7 +76,7 @@ async function smoke() {
       return result;
     })()`);
     assert.deepEqual(mouthBindings, {ParamMouthOpenY:true,ParamMouthForm:true,Mouthfunnel:false,MouthPuckerWiden:false,Jawopen:false});
-    console.log('PASS bundled Hong Xi geometry confirms generic fallback for unbound advanced mouth channels');
+    console.log('PASS bundled Hong Xi geometry confirms the two-axis rig and unbound advanced channels');
     assert.equal(await run(`document.querySelector('[aria-label="Music companion"]').value`), "hong-xi", "fresh libraries start with Hong Xi");
     await select("hiyori");
     await ready("hiyori");
@@ -107,7 +107,7 @@ async function smoke() {
     await ready("hong-xi");
     const hongXiTheme = await theme();
     assert.notEqual(hongXiTheme.background, hiyoriTheme.background);
-    assert.notEqual(hongXiTheme.heading, hiyoriTheme.heading);
+    assert.equal(hongXiTheme.heading, hiyoriTheme.heading, "model themes share heading typography");
     await select("hiyori"); await ready("hiyori");
     assert.deepEqual(await theme(), hiyoriTheme, "returning to Hiyori restores the original theme");
     await select("hong-xi"); await ready("hong-xi");

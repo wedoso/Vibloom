@@ -176,9 +176,18 @@ separate from the generic form axis. Hong Xi has a capability-gated profile for
 `Mouthfunnel`, `MouthPuckerWiden`, and `Jawopen`, with authored range scaling and
 neutral restoration. A one-time geometry probe rejects unbound parameters and
 restores all values. **The bundled Hong Xi export declares these three channels
-but none deforms its mesh**, so it currently uses the same generic openness/form
-fallback as Hiyori. A richer, bound rig is required for independent vowel shapes;
-parameter names alone cannot add deformation to an exported model.
+but none deforms its mesh**. Its existing `ParamMouthForm` / `ParamMouthOpenY`
+grid does produce different mouth shapes. For this two-axis rig, stable vowel
+blends select calibrated form and aperture gains together: AA (-.15, 1),
+E (.35, .75), I (.95, .45), O (-.9, 1.05), U (-1, .6). The second value scales
+vocal energy, with a smooth transition and a maximum opening of 1; it never adds
+an opening floor. Restrained consonant form accents remain as a bounded offset
+around the selected vowel. This separates shallow, wide I from E and smaller, narrow U
+from rounder O. Legacy poses without vowel weights retain generic form/opening;
+Hiyori and bound advanced rigs retain their existing mappings. These remain
+approximations within the authored grid, not independently rigged vowel shapes.
+`tests/hong-xi-mouth.test.mjs` exercises the actual shipped `.moc3`, checking
+distinct mouth geometry, untouched expression parameters, blends and closures.
 The official [Cubism MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
 requires an additional runtime and model-specific settings absent from these rigs.
 
@@ -218,6 +227,7 @@ The paused state is intentionally quiet, not a frozen bitmap. Natural secondary 
 
 ## Stage visuals and camera
 
+- Both companion themes use the same typography, component sizes, corner shapes and layout rules. Hong Xi's scoped stylesheet changes the room's palette and surface textures; model-independent welcome and transition copy prevents name lengths from reflowing controls. `desktop:smoke:layout` compares actual CSS-pixel bounds before, during and after model switches at 1440×1000, 1024×768 and 390×844, covering welcome, solo/A/B playback, camera presets, Focus, Library and overlays.
 - One edge-clean solid circle sits behind Hiyori. Phrase energy controls its slow breathing range. Gated low-frequency accents climb through three accumulated size tiers: roughly 8%, 16%, and 24%, plus a small 4% exact-hit accent. After 580 ms without a qualifying hit, the accumulated tier releases slowly. Opacity stays nearly constant, so the response is legible without flashing.
 - The circle fill has no gradient, blur halo, duplicate floor light, or shadow relationship. Player mode applies only a boundary-relative alpha mask so an oversized circle dissolves before neighboring controls clip it.
 - The single neutral contact shadow is a Pixi graphic inside Hiyori's camera rig. Its center is offset above the model texture's transparent lower padding so its soft core overlaps the visible soles. It shares the model's position and scale, so wide/close transitions cannot separate the two.

@@ -1,12 +1,11 @@
 /* Hong Xi's powder-blue knit, navy plaid and silver headphones.
-   Keep every override inside the model scope so Hiyori retains her warm room. */
+   Model themes share typography and layout; only the room's palette changes. */
 .library-app[data-companion="hong-xi"] {
   --library-ink: #24334c;
   --library-muted: #60718a;
   --library-line: rgb(52 78 113 / .15);
   --library-paper: rgb(249 252 255 / .92);
   --library-accent: #486b99;
-  --library-serif: var(--font-ui);
   --hx-a-rgb: 65 107 151;
   --hx-b-rgb: 132 96 145;
   --hx-surface: #f9fcff;
@@ -28,20 +27,12 @@
     linear-gradient(135deg, #f5f8fc, #edf3fa 52%, #e4ecf7);
 
   .library-header { background: rgb(247 250 254 / .92); }
-  .brand-mark { border-radius: 12px; transform: none; background: var(--library-ink); }
+  .brand-mark { background: var(--library-ink); }
   .brand-mark-center { fill: #c6ae77; }
   .brand-mark > svg { color: var(--hx-surface); }
-  .brand-copy strong { font-family: var(--library-sans); font-weight: 750; letter-spacing: -.045em; }
-  .console-heading h1,
-  .library-welcome h1 { font-family: var(--library-sans); font-weight: 650; line-height: 1.06; letter-spacing: -.045em; }
   .console-heading h1 em,
   .library-welcome h1 em,
-  .library-list-heading h1 em { font-style: normal; font-weight: inherit; color: var(--library-accent); }
-  .library-list-heading h1,
-  .side-sheet h2,
-  .import-summary h2,
-  .confirm-dialog h2,
-  .update-dialog h2 { font-weight: 600; letter-spacing: -.035em; }
+  .library-list-heading h1 em { color: var(--library-accent); }
 
   .workspace-rail { background-color: #eaf0f8; background-image: var(--hx-plaid); }
   .workspace-rail > button.is-active { color: var(--hx-surface); background: var(--library-ink); box-shadow: 0 4px 12px rgb(36 51 76 / .14); }
@@ -77,7 +68,7 @@
   .precision-waveform.waveform-source-a { --waveform-rgb: var(--hx-a-rgb); }
   .waveform-card.version-b,
   .precision-waveform.waveform-source-b { --waveform-rgb: var(--hx-b-rgb); }
-  .waveform-card { border-radius: 16px; background: var(--library-paper); box-shadow: var(--hx-shadow); }
+  .waveform-card { background: var(--library-paper); box-shadow: var(--hx-shadow); }
   .waveform-card.is-active { box-shadow: 0 0 0 2px rgb(var(--waveform-rgb) / .1), var(--hx-shadow); }
   .waveform-card .source-selector { color: rgb(var(--waveform-rgb)); border-color: rgb(var(--waveform-rgb) / .25); background: rgb(var(--waveform-rgb) / .06); }
   .waveform-card.is-active .source-selector { color: #fff; background: rgb(var(--waveform-rgb)); }
@@ -103,7 +94,7 @@
   .live2d-stage.light-b { --stage-light-rgb: var(--hx-b-rgb); }
   .stage-music-disc { border: 1px solid rgb(var(--stage-light-rgb) / .18); }
   .stage-topline { color: var(--library-muted); border-color: var(--library-line); }
-  .camera-capsule { color: var(--library-muted); border-color: var(--library-line); border-radius: 14px; background: var(--library-paper); box-shadow: var(--hx-shadow); }
+  .camera-capsule { color: var(--library-muted); border-color: var(--library-line); background: var(--library-paper); box-shadow: var(--hx-shadow); }
   .camera-capsule button:hover { color: var(--library-ink); background: var(--hx-hover); }
   .camera-capsule button.is-active { color: var(--hx-surface); background: var(--library-ink); }
   .camera-capsule > i { background: var(--library-line); }
@@ -178,8 +169,7 @@
   /* Scope transition colors as well, without changing their timing or motion. */
   .scene-curtain-disc { background: #dce7f5; }
   .scene-curtain-copy { color: var(--library-ink); }
-  .scene-curtain-copy strong { font-family: var(--library-sans); letter-spacing: -.045em; }
-  .scene-curtain-copy strong em { font-style: normal; color: var(--library-accent); }
+  .scene-curtain-copy strong em { color: var(--library-accent); }
   .scene-curtain-copy small,
   .scene-curtain-copy i { color: var(--library-muted); }
   html[data-scene-transition="focus-enter"] & {

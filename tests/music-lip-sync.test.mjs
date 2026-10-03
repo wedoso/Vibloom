@@ -97,7 +97,7 @@ test("bound Hong Xi channels distinguish vowels and return to neutral on pause",
   assert.deepEqual(values.slice(2,5),[0,0,0]);
 });
 
-test("unbound declared channels retain generic fallback; legacy poses do too",()=>{
+test("unbound declared channels retain the two-axis mouth; legacy poses stay generic",()=>{
   const {values,sync}=richFixture(false);
   sync.update({open:.8,form:-.8,vowels:[0,0,0,1,0]},true,1);
   assert.ok(values[0]>.79);assert.deepEqual(values.slice(2,5),[0,0,0]);

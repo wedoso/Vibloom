@@ -21,6 +21,18 @@ const HONG_XI_CHANNELS = [
   { id: "Jawopen", weights: [1, 1, 1, 1, 1], jaw: true },
 ];
 
+// Calibrated against the bundled Hong Xi export's actual two-axis mouth grid.
+// AA/E/I/O/U: I exposes teeth with a shallow, wide opening; O is round and
+// open; U uses the narrow form with a smaller aperture. Energy still owns
+// every onset/closure: these gains never add an opening floor in silence.
+const HONG_XI_VOWELS = [
+  { form: -.15, aperture: 1, genericForm: .15 },
+  { form: .35, aperture: .75, genericForm: .5 },
+  { form: .95, aperture: .45, genericForm: 1 },
+  { form: -.9, aperture: 1.05, genericForm: -.8 },
+  { form: -1, aperture: .6, genericForm: -1 },
+];
+
 /** Verify a parameter changes geometry. Some exported rigs contain unbound
  * ARKit IDs. Probe once at load, restoring every parameter before rendering. */
 function deforms(model: LipSyncModel, index: number, min: number, max: number) {
@@ -47,7 +59,10 @@ export class MusicLipSync {
   private readonly channels: MouthChannel[] = [];
   private openness = 0;
   private form = 0;
+  private apertureScale = 1;
   private readonly formIndex: number;
+  private readonly openIndex: number;
+  private readonly calibratedMouth: boolean;
 
   constructor(
     private readonly model: LipSyncModel,
@@ -65,6 +80,10 @@ export class MusicLipSync {
     }
     // Cubism synthesizes indexes for unknown IDs. Only animate real channels.
     this.formIndex = model.getParameterIndex("ParamMouthForm");
+    this.openIndex = model.getParameterIndex("ParamMouthOpenY");
+    this.calibratedMouth = profile === "hong-xi" && this.channels.length === 0
+      && this.formIndex >= 0 && this.formIndex < model.getParameterCount()
+      && this.openIndex >= 0 && this.openIndex < model.getParameterCount();
     this.indexes = [...new Set(parameterIds.map((id) => model.getParameterIndex(id)))]
       .filter((index) => index >= 0 && index < model.getParameterCount());
   }
@@ -78,12 +97,26 @@ export class MusicLipSync {
     const response = target > this.openness ? 0.012 : 0.018;
     this.openness += (target - this.openness) * (1 - Math.exp(-seconds / response));
     if (this.openness < 0.001) this.openness = 0;
-    if (playing && typeof vocalLevel !== "number" && vocalLevel.form !== null && this.formIndex >= 0 && this.formIndex < this.model.getParameterCount()) {
-      this.form += (vocalLevel.form - this.form) * (1 - Math.exp(-seconds / .025));
-      this.model.setParameterValueByIndex(this.formIndex, this.form);
-    }
     const vowels = playing && typeof vocalLevel !== "number" ? vocalLevel.vowels : undefined;
     const validVowels = vowels?.length === 5 && vowels.every(v => Number.isFinite(v) && v >= 0 && v <= 1);
+    const vowelWeight = validVowels ? vowels.reduce((sum, value) => sum + value, 0) : 0;
+    const calibrated = this.calibratedMouth && vowelWeight > 1e-6;
+    const desiredScale = calibrated
+      ? HONG_XI_VOWELS.reduce((sum, pose, i) => sum + pose.aperture * vowels![i], 0) / vowelWeight : 1;
+    this.apertureScale += (desiredScale - this.apertureScale) * (1 - Math.exp(-seconds / .025));
+    let desiredForm = calibrated
+      ? HONG_XI_VOWELS.reduce((sum, pose, i) => sum + pose.form * vowels![i], 0) / vowelWeight
+      : playing && typeof vocalLevel !== "number" ? vocalLevel.form : null;
+    if (calibrated && typeof vocalLevel !== "number" && vocalLevel.form !== null && Number.isFinite(vocalLevel.form)) {
+      // The generic form also carries restrained FF/CH accents. Preserve that
+      // residual around the calibrated vowel, without letting it erase the pose.
+      const genericForm = HONG_XI_VOWELS.reduce((sum, pose, i) => sum + pose.genericForm * vowels![i], 0) / vowelWeight;
+      desiredForm = Math.max(-1, Math.min(1, desiredForm! + Math.max(-.2, Math.min(.2, vocalLevel.form - genericForm))));
+    }
+    if (desiredForm !== null && Number.isFinite(desiredForm) && this.formIndex >= 0 && this.formIndex < this.model.getParameterCount()) {
+      this.form += (desiredForm - this.form) * (1 - Math.exp(-seconds / .025));
+      this.model.setParameterValueByIndex(this.formIndex, this.form);
+    }
     for (const channel of this.channels) {
       const blend = validVowels ? Math.max(-1, Math.min(1, channel.weights.reduce((sum, weight, i) => sum + weight * vowels![i], 0))) : 0;
       const amount = channel.jaw ? (validVowels ? this.openness : 0) : blend * Math.min(1, this.openness / .25);
@@ -96,7 +129,9 @@ export class MusicLipSync {
     for (const index of this.indexes) {
       // Set, rather than add: unrelated authored singing curves must not keep
       // the mouth open in silence. Other expression channels keep their owners.
-      this.model.setParameterValueByIndex(index, richJaw && index === this.model.getParameterIndex("ParamMouthOpenY") ? 0 : this.openness);
+      const opening = this.calibratedMouth && index === this.openIndex
+        ? Math.min(1, this.openness * this.apertureScale) : this.openness;
+      this.model.setParameterValueByIndex(index, richJaw && index === this.openIndex ? 0 : opening);
     }
   }
 }

@@ -508,7 +508,6 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const audioVisualRef = useRef({ ...EMPTY_AUDIO_VISUAL });
   const vocalLevelRef = useRef<VocalPose>(SILENT_VOCAL_POSE);
 
-  const companion = COMPANIONS[session.companionId];
   const currentTrack = tracks.find((track) => track.id === session.currentTrackId) ?? null;
   const timingTrack = tracks.find((track) => track.id === timingTrackId) ?? null;
   const filteredTracks = useMemo(() => {
@@ -1669,8 +1668,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         <span className="scene-curtain-disc" />
         <span className="scene-curtain-line scene-curtain-line-one" />
         <span className="scene-curtain-line scene-curtain-line-two" />
-        <span className="scene-curtain-copy scene-curtain-copy-enter"><small>Listening room</small><strong><span>The room is</span><em>listening.</em></strong><i>Your library and {companion.name} are ready</i></span>
-        <span className="scene-curtain-copy scene-curtain-copy-workspace-player"><small>Playback room</small><strong><span>Back to the</span><em>music.</em></strong><i>Controls and {companion.name} ready</i></span>
+        <span className="scene-curtain-copy scene-curtain-copy-enter"><small>Listening room</small><strong><span>The room is</span><em>listening.</em></strong><i>Your library and companion are ready</i></span>
+        <span className="scene-curtain-copy scene-curtain-copy-workspace-player"><small>Playback room</small><strong><span>Back to the</span><em>music.</em></strong><i>Controls and companion ready</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-workspace-library"><small>Your collection</small><strong><span>Open the</span><em>library.</em></strong><i>Queue, lyrics and local tracks</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-focus-enter"><small>Focus mode</small><strong><span>The noise</span><em>falls away.</em></strong><i>One track · One room · One moment</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-focus-exit"><small>Full room</small><strong><span>The session</span><em>returns.</em></strong><i>Controls and comparison restored</i></span>
@@ -1717,7 +1716,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           <div className="library-welcome-copy">
             <p className="eyebrow"><Headphones size={15} /> Your private local music library</p>
             <h1>Bring a folder.<br /><em>Let it bloom.</em></h1>
-            <p>Build a queue from your own music, keep lyrics in sync, and let {companion.name} stay with every track. Nothing is uploaded.</p>
+            <p>Build a queue from your own music, keep lyrics in sync, and let your companion stay with every track. Nothing is uploaded.</p>
             <div className="welcome-import-surface">
               <button className="welcome-import-primary" type="button" onClick={() => setImportOpen((value) => !value)}><Upload size={18} /><span><strong>Import your music</strong><small>Files, albums, lyrics, or a complete folder</small></span><ChevronDown size={16} /></button>
               {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>Audio, LRC, and TXT lyric files</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>Choose a folder</strong><small>Preserve album order and matching lyrics</small></span></button></div>}
