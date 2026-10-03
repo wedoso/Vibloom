@@ -162,7 +162,8 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.match(main, /autoUpdater\.checkForUpdates\(\)/u);
   assert.match(main, /autoUpdater\.downloadUpdate\(\)/u);
   assert.match(main, /autoUpdater\.quitAndInstall/u);
-  assert.match(main, /shell\.openExternal\(RELEASES_URL\)/u);
+  assert.match(main, /Invalid release version/u);
+  assert.match(main, /shell\.openExternal\(version \?/u);
   assert.match(preload, /contextBridge\.exposeInMainWorld\("vibloomUpdates"/u);
   assert.match(preload, /ipcRenderer\.invoke\("updates:check"\)/u);
   assert.doesNotMatch(preload, /require\("node:fs"\)|require\("node:child_process"\)/u);

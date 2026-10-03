@@ -1,6 +1,6 @@
 {
   "name": "vibloom",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "A private local music player with synchronized A/B comparison and a Live2D companion.",
   "author": "Vibloom contributors",
   "license": "MIT",
@@ -27,6 +27,8 @@
     "check": "npm run lint && npm test",
     "audit": "npm audit --omit=dev",
     "desktop:smoke:companions": "npm run build && electron scripts/smoke-companions.mjs",
+    "desktop:smoke:layout": "npm run build && electron scripts/smoke-companion-layout.mjs",
+    "desktop:smoke:updates": "npm run build && electron scripts/smoke-updates.mjs",
     "desktop:smoke:lyrics": "npm run build && electron scripts/smoke-lyrics-timing.mjs",
     "desktop:smoke:media": "npm run build && electron scripts/smoke-media-session.mjs",
     "desktop:smoke:lipsync": "npm run build && electron scripts/smoke-lip-sync.mjs"

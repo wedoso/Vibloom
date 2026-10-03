@@ -2,6 +2,7 @@ import { Check, Download, ExternalLink, LoaderCircle, RefreshCw, RotateCw, X } f
 import { useCallback, useEffect, useState } from "react";
 import { APP_VERSION } from "./appVersion";
 import { isNewerVersion } from "./update/version";
+import ReleaseNotes from "./update/ReleaseNotesPanel";
 
 const RELEASES_URL = "https://github.com/wedoso/Vibloom/releases/latest";
 const LATEST_RELEASE_API = "https://api.github.com/repos/wedoso/Vibloom/releases/latest";
@@ -12,13 +13,14 @@ export type UpdateState = {
   availableVersion?: string;
   progress?: number;
   message?: string;
+  releaseNotes?: string;
 };
 
 type DesktopUpdates = {
   check: () => Promise<void>;
   download: () => Promise<void>;
   install: () => Promise<void>;
-  openReleases: () => Promise<void>;
+  openReleases: (version?: string) => Promise<void>;
   subscribe: (listener: (state: UpdateState) => void) => () => void;
 };
 
@@ -47,24 +49,26 @@ export default function UpdateControl() {
     try {
       const response = await fetch(LATEST_RELEASE_API, { headers: { Accept: "application/vnd.github+json" } });
       if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
-      const release = await response.json() as { tag_name?: string; html_url?: string };
+      const release = await response.json() as { tag_name?: string; body?: string };
       if (!release.tag_name) throw new Error("The latest release has no version tag.");
       setState({
         status: isNewerVersion(release.tag_name, APP_VERSION) ? "available" : "current",
         currentVersion: APP_VERSION,
         availableVersion: release.tag_name.replace(/^v/u, ""),
+        releaseNotes: typeof release.body === "string" ? release.body : undefined,
       });
     } catch (error) {
       setState({ status: "error", currentVersion: APP_VERSION, message: error instanceof Error ? error.message : "Update check failed." });
     }
   }, [desktopUpdates]);
 
-  const openRelease = useCallback(() => {
-    if (desktopUpdates) void desktopUpdates.openReleases();
-    else window.location.assign(RELEASES_URL);
+  const openRelease = useCallback((version?: string) => {
+    if (desktopUpdates) void desktopUpdates.openReleases(version);
+    else window.location.assign(version ? `https://github.com/wedoso/Vibloom/releases/tag/v${encodeURIComponent(version)}` : RELEASES_URL);
   }, [desktopUpdates]);
 
   const busy = state.status === "checking" || state.status === "downloading";
+  const notesVersion = state.availableVersion && isNewerVersion(state.availableVersion, state.currentVersion) ? state.availableVersion : state.currentVersion;
   const title = state.status === "available" ? `Vibloom ${state.availableVersion} is available` : state.status === "downloaded" ? "Update ready to install" : state.status === "current" ? "Vibloom is up to date" : state.status === "error" ? "Could not check for updates" : state.status === "downloading" ? "Downloading update" : state.status === "checking" ? "Checking for updates" : "Check for updates";
 
   return (
@@ -88,12 +92,13 @@ export default function UpdateControl() {
           {state.status === "downloading" && <div className="update-progress"><i><b style={{ width: `${Math.max(2, state.progress ?? 0)}%` }} /></i><span>{Math.round(state.progress ?? 0)}%</span></div>}
           {state.status === "downloaded" && <small>Vibloom will close briefly and reopen on the new version.</small>}
           {state.status === "error" && <small>{state.message || "Please try again or open the Releases page."}</small>}
+          <ReleaseNotes key={notesVersion} version={notesVersion} notes={state.availableVersion === notesVersion ? state.releaseNotes : undefined} onOpenRelease={openRelease} />
           <div className="update-actions">
             {(state.status === "idle" || state.status === "current" || state.status === "error") && <button type="button" onClick={() => void check()} disabled={busy}><RotateCw size={14} /> Check again</button>}
             {state.status === "available" && desktopUpdates && <button className="is-primary" type="button" onClick={() => void desktopUpdates.download()}><Download size={15} /> Download update</button>}
-            {state.status === "available" && !desktopUpdates && <button className="is-primary" type="button" onClick={openRelease}><Download size={15} /> Download latest</button>}
+            {state.status === "available" && !desktopUpdates && <button className="is-primary" type="button" onClick={() => openRelease(state.availableVersion)}><Download size={15} /> Download latest</button>}
             {state.status === "downloaded" && desktopUpdates && <button className="is-primary" type="button" onClick={() => void desktopUpdates.install()}><RotateCw size={15} /> Restart and install</button>}
-            {(state.status === "error" || state.status === "current") && <button type="button" onClick={openRelease}><ExternalLink size={14} /> Releases</button>}
+            {(state.status === "error" || state.status === "current") && <button type="button" onClick={() => openRelease()}><ExternalLink size={14} /> Releases</button>}
           </div>
         </section>
       </div>}

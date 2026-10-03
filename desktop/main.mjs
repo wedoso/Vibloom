@@ -83,7 +83,7 @@ function installUpdateHandlers() {
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
 
-  autoUpdater.on("checking-for-update", () => publishUpdateState({ status: "checking", message: undefined }));
+  autoUpdater.on("checking-for-update", () => publishUpdateState({ status: "checking", availableVersion: undefined, progress: undefined, message: undefined }));
   autoUpdater.on("update-available", (info) => publishUpdateState({ status: "available", availableVersion: info.version, progress: 0, message: undefined }));
   autoUpdater.on("update-not-available", (info) => publishUpdateState({ status: "current", availableVersion: info.version, progress: 100, message: undefined }));
   autoUpdater.on("download-progress", (progress) => publishUpdateState({ status: "downloading", progress: progress.percent, message: undefined }));
@@ -120,9 +120,10 @@ function installUpdateHandlers() {
     isQuitting = true;
     autoUpdater.quitAndInstall(false, true);
   });
-  ipcMain.handle("updates:open-releases", async (event) => {
+  ipcMain.handle("updates:open-releases", async (event, version) => {
     guard(event);
-    await shell.openExternal(RELEASES_URL);
+    if (version !== undefined && (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/u.test(version))) throw new Error("Invalid release version.");
+    await shell.openExternal(version ? `https://github.com/wedoso/Vibloom/releases/tag/v${version}` : RELEASES_URL);
   });
 }
 

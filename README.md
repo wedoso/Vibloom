@@ -54,6 +54,8 @@ npm run desktop:smoke
 npm run desktop:smoke:lyrics
 npm run desktop:smoke:media
 npm run desktop:smoke:companions
+npm run desktop:smoke:layout
+npm run desktop:smoke:updates
 npm run desktop:smoke:lipsync
 ```
 

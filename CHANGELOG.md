@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.6.0](https://github.com/wedoso/Vibloom/compare/v1.5.3...v1.6.0) (2026-10-02)
+
+- Read release notes directly in the update window, including while downloading. See what's new in your installed version even when offline.
+- Switch between Hong Xi and Hiyori with consistent fonts, control positions and shapes. Each companion keeps her own room colors.
+- Improve Hong Xi's singing mouth form and opening so AA/E/I/O/U look more distinct, with smoother transitions and natural closures during silence.
+
 ## [1.5.3](https://github.com/wedoso/Vibloom/compare/v1.5.2...v1.5.3) (2026-09-28)
 
 - Center all five TXT/LRC transport controls vertically without changing playback or scrubbing.
