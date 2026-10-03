@@ -50,7 +50,7 @@ async function smoke() {
       throw new Error(`Timed out: ${label}`);
     };
     const capture = async name => {
-      await waitFor(`getComputedStyle(document.querySelector('.update-dialog')).transform === 'none'`, "update dialog entrance finished");
+      await waitFor(`document.querySelector('.update-dialog').getAnimations().every(animation => animation.playState === 'finished')`, "update dialog entrance finished");
       await writeFile(path.join(output, `${name}.png`), (await window.webContents.capturePage()).toPNG());
     };
     const stubFetch = async mode => run(`(() => {
