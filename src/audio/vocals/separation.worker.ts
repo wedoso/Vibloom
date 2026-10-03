@@ -69,9 +69,16 @@ scope.onmessage = async ({ data }) => {
     } else if (data.type === "separate" && processor) {
       chunkSamples = data.left.length;
       const result = await processor.separate(data.left, data.right);
+      const headStarted = performance.now();
       const visemes = await vocalVisemes(result.vocals.left, result.vocals.right);
+      const headElapsedMs = performance.now() - headStarted;
       const frames = vocalEnvelope(result.vocals.left, result.vocals.right, data.left, data.right);
-      scope.postMessage({ type: "result", frames, visemes }, [frames.buffer, visemes.buffer]);
+      if (data.captureVocals) {
+        const left = result.vocals.left, right = result.vocals.right;
+        scope.postMessage({ type: "result", frames, visemes, left, right, headElapsedMs }, [frames.buffer, visemes.buffer, left.buffer, right.buffer]);
+      } else {
+        scope.postMessage({ type: "result", frames, visemes }, [frames.buffer, visemes.buffer]);
+      }
     }
   } catch (error) {
     scope.postMessage({ type: "error", message: error instanceof Error ? error.message : "Vocal analysis failed." });

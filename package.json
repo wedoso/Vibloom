@@ -11,6 +11,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "lab": "vite --host 127.0.0.1 --port 5184 --strictPort",
+    "lab:build": "cross-env VIBLOOM_LIPSYNC_LAB=1 npm run build",
+    "lab:smoke": "npm run lab:build && electron scripts/smoke-lipsync-comparison.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

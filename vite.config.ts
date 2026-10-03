@@ -12,6 +12,7 @@ export default defineConfig({
   plugins: [react()],
   worker: { format: "es" },
   build: {
+    rollupOptions: process.env.VIBLOOM_LIPSYNC_LAB === "1" ? { input: { app: "index.html", lab: "lipsync-lab.html", model: "lipsync-model.html" } } : undefined,
     outDir: "dist",
     emptyOutDir: true,
     sourcemap: true,
