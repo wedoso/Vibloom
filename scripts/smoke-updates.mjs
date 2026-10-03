@@ -38,7 +38,7 @@ async function smoke() {
       }
       return net.fetch(pathToFileURL(file).href);
     });
-    window = new BrowserWindow({ width: 1100, height: 850, useContentSize: true, show: false,
+    window = new BrowserWindow({ width: 1100, height: 850, useContentSize: true, show: process.env.CI === "true",
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
     window.webContents.on("console-message", event => {
       if (event.level === "error" || event.level === 3) console.error(event.message);
@@ -49,7 +49,10 @@ async function smoke() {
       for (let i = 0; i < 120; i++) { if (await run(condition)) return; await delay(100); }
       throw new Error(`Timed out: ${label}`);
     };
-    const capture = async name => { await delay(350); await writeFile(path.join(output, `${name}.png`), (await window.webContents.capturePage()).toPNG()); };
+    const capture = async name => {
+      await waitFor(`getComputedStyle(document.querySelector('.update-dialog')).transform === 'none'`, "update dialog entrance finished");
+      await writeFile(path.join(output, `${name}.png`), (await window.webContents.capturePage()).toPNG());
+    };
     const stubFetch = async mode => run(`(() => {
       const original = window.__originalFetch ??= window.fetch;
       window.fetch = (url, ...args) => String(url).includes('api.github.com/repos/wedoso/Vibloom/releases/')
