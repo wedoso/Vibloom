@@ -19,10 +19,12 @@ test('Library and Player share one task, live progress, cancellation, retry and 
  progress({phase:'Separating vocals',progress:.42});
  assert.equal(store.getSnapshot()[key].progress,.42);assert.equal(library,player);
  store.cancel(key);assert.ok(signal.aborted);assert.equal(store.getSnapshot()[key].status,"idle");
- finish({rms:Float32Array.of(.1),visemes:Uint8Array.of(2)});await flush();assert.equal(saves,0);
+ finish({rms:Float32Array.of(.1),vowels:Uint8Array.of(0,0,255,0,0)});await flush();assert.equal(saves,0);
  store.prepare(key,{},()=>saves++);assert.equal(calls,2);
- finish({rms:Float32Array.of(.1),visemes:Uint8Array.of(2)});await flush();
+ finish({rms:Float32Array.of(.1),vowels:Uint8Array.of(0,0,255,0,0)});await flush();
  assert.equal(saves,1);assert.equal(store.getSnapshot()[key].status,'ready');
+ assert.equal(store.getSnapshot()[key].analysis.version,4);
+ assert.deepEqual(store.getSnapshot()[key].analysis.vowels,[0,0,255,0,0]);
  store.prepare(key,{},()=>saves++);assert.equal(calls,2);
  assert.notEqual(key,vocalJobKey(track,1));
  assert.notEqual(vocalJobKey(track,1),vocalJobKey({...track,comparison:{...track.comparison,lastModified:2}},1));

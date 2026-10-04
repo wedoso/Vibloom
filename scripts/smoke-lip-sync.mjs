@@ -168,7 +168,7 @@ async function smoke() {
     // does not mean runAnalysis has constructed its worker yet (especially CPU CI).
     await waitFor(`window.__workerStarts > ${workersBeforeSubmission}`, "Library analysis worker starts after decoding");
     const sharedWorkers = await run("window.__workerStarts");
-    assert.equal(sharedWorkers, workersBeforeSubmission + 1, "one worker starts for the submitted source");
+    assert.equal(sharedWorkers, workersBeforeSubmission + 2, "one separation and one MotionSync worker start for the submitted source");
     await click('[aria-label="Actions for Voice A"]');
     await run(`[...document.querySelectorAll('.track-popover button')].find(b=>b.textContent==='Prepare vocal lip sync').click()`);
     assert.equal(await run("window.__workerStarts"), sharedWorkers, "duplicate menu submission is deduplicated");
@@ -218,7 +218,7 @@ async function smoke() {
       await delay(1700);
       const articulation = await run("({open: window.__mouthProbe.samples, form: window.__mouthProbe.forms})");
       assert.ok(Math.max(...articulation.open) - Math.min(...articulation.open) > .15, `${id}: syllabic mouth movement`);
-      assert.ok(Math.max(...articulation.form) - Math.min(...articulation.form) > .15, `${id}: visemes change actual Cubism mouth shape`);
+      assert.ok(Math.max(...articulation.form) - Math.min(...articulation.form) > .15, `${id}: MotionSync weights change actual Cubism mouth shape`);
       await capture(`${id}-singing`);
       const beforeToggle = await run("window.__sourceStarts");
       await click('.vocal-lip-sync button');
@@ -295,6 +295,53 @@ async function smoke() {
     await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Vocal lip sync · On' || document.querySelector('.vocal-lip-sync [role="alert"]')`, "saved B timing");
     assert.equal(await run(`document.querySelector('.vocal-lip-sync [role="alert"]')?.textContent ?? ''`), "");
     console.log("PASS saved A/B analysis is reused after app reload without another worker");
+    // Prove old discrete caches cannot silently select the removed classifier.
+    await click('.transport-ab-switch .source-a');
+    await delay(500);
+    const beforeMigration = await run(`new Promise((resolve, reject) => {
+      const open = indexedDB.open('vibloom-library', 1);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result, tx = db.transaction('state', 'readwrite'), store = tx.objectStore('state');
+        const request = store.get('library'); let original;
+        request.onsuccess = () => {
+          const snapshot = request.result, track = snapshot.tracks.find(t => t.id === snapshot.session.currentTrackId);
+          if (track.vocalAnalysis?.version !== 4 || track.comparison?.vocalAnalysis?.version !== 4) { tx.abort(); return; }
+          original = { id: track.id, name: track.name, lyrics: track.lyrics, comparison: track.comparison };
+          track.vocalAnalysis = { version: 3, rms: track.vocalAnalysis.rms, visemes: track.vocalAnalysis.rms.map(() => 2) };
+          store.put(snapshot, 'library');
+        };
+        tx.oncomplete = () => { db.close(); resolve(original); };
+        tx.onabort = () => { db.close(); reject(new Error('Missing version 4 persisted caches')); };
+      };
+    })`);
+    await window.loadURL('vibloom://app/index.html');
+    await ready('hiyori');
+    await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Prepare vocal lip sync' && !document.querySelector('.vocal-lip-sync button').disabled`, 'legacy cache needs preparation');
+    await click('button[title="Library"]');
+    await waitFor(`document.querySelector('.track-row.is-active .track-vocal-job')?.textContent === 'Reprepare lip sync'`, 'Library marks legacy cache');
+    await click('button[title="Player"]');
+    await click('.vocal-lip-sync button');
+    await waitFor(`document.querySelector('.vocal-lip-sync button')?.textContent === 'Start singing' || document.querySelector('.vocal-lip-sync [role="alert"]')`, 'legacy source analyzed');
+    assert.equal(await run(`document.querySelector('.vocal-lip-sync [role="alert"]')?.textContent ?? ''`), '');
+    await delay(500);
+    const afterMigration = await run(`new Promise((resolve, reject) => {
+      const open = indexedDB.open('vibloom-library', 1);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result, tx = db.transaction('state', 'readonly');
+        const request = tx.objectStore('state').get('library');
+        request.onsuccess = () => resolve(request.result.tracks.find(t => t.id === request.result.session.currentTrackId));
+        tx.oncomplete = () => db.close();
+      };
+    })`);
+    assert.equal(afterMigration.vocalAnalysis.version, 4);
+    assert.equal(afterMigration.vocalAnalysis.vowels.length, afterMigration.vocalAnalysis.rms.length * 5);
+    assert.equal(afterMigration.id, beforeMigration.id);
+    assert.equal(afterMigration.name, beforeMigration.name);
+    assert.deepEqual(afterMigration.lyrics, beforeMigration.lyrics);
+    assert.deepEqual(afterMigration.comparison, beforeMigration.comparison, 'B cache is not replaced when re-preparing A');
+    console.log('PASS legacy cache re-preparation, version 4 persistence and retained track/lyrics/B cache');
     assert.deepEqual(errors, [], "no renderer errors");
     console.log(`PASS track end; screenshots: ${output}`);
   } catch (error) {

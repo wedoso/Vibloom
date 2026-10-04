@@ -2,7 +2,6 @@ import * as ort from "onnxruntime-web/webgpu";
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
 import wasmModuleUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url";
 import { DemucsProcessor } from "demucs-web";
-import { vocalVisemes } from "./visemes";
 import { vocalEnvelope } from "./envelope";
 
 // Pin weights independently of changes to the upstream repository's main branch.
@@ -69,9 +68,10 @@ scope.onmessage = async ({ data }) => {
     } else if (data.type === "separate" && processor) {
       chunkSamples = data.left.length;
       const result = await processor.separate(data.left, data.right);
-      const visemes = await vocalVisemes(result.vocals.left, result.vocals.right);
       const frames = vocalEnvelope(result.vocals.left, result.vocals.right, data.left, data.right);
-      scope.postMessage({ type: "result", frames, visemes }, [frames.buffer, visemes.buffer]);
+      const mono = new Float32Array(result.vocals.left.length);
+      for (let i = 0; i < mono.length; i++) mono[i] = (result.vocals.left[i] + result.vocals.right[i]) / 2;
+      scope.postMessage({ type: "result", frames, mono }, [frames.buffer, mono.buffer]);
     }
   } catch (error) {
     scope.postMessage({ type: "error", message: error instanceof Error ? error.message : "Vocal analysis failed." });

@@ -4,9 +4,13 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "coverage/**", "outputs/**", "public/live2d/**/*.js"] },
+  { ignores: ["dist/**", "coverage/**", "outputs/**", "work/**", "public/live2d/**/live2dcubism*.js"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ["public/live2d/motionsync/motionsync.worker.js"],
+    languageOptions: { globals: { ...globals.worker, Live2DCubismMotionSyncCore: "readonly" } },
+  },
   {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {

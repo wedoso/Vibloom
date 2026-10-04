@@ -12,10 +12,12 @@ test("bundled and published notes select only the requested version", async () =
   const changelog = await readFile(new URL("../CHANGELOG.md", import.meta.url), "utf8");
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   const notes = changelogNotes(changelog, version);
-  assert.ok(notes.includes("release notes"));
-  assert.ok(notes.includes("mouth form"));
+  assert.ok(notes.length > 0, "the installed version has bundled release notes");
   assert.ok(releaseNotesForTag(changelog, `v${version}`).startsWith(notes));
-  assert.ok(!notes.includes("## [1.5.3]"));
+  assert.doesNotMatch(notes, /^## \[/mu, "adjacent releases are excluded");
+  const fixture = "## [2.0.0] (2026-10-03)\n\n- New engine\n\n## [1.0.0] (2026-09-01)\n\n- Original engine\n";
+  assert.equal(changelogNotes(fixture, "2.0.0"), "- New engine");
+  assert.equal(changelogNotes(fixture, "1.0.0"), "- Original engine");
   assert.equal(changelogNotes(changelog, "9.9.9"), "");
   assert.throws(() => releaseNotesForTag(changelog, "v9.9.9"), /No changelog entry/u);
   assert.throws(() => releaseNotesForTag(changelog, "v1.6.0/../../file"), /stable/u);
