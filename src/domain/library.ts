@@ -5,7 +5,18 @@ export type TrackAvailability = "available" | "reconnect" | "missing" | "session
 export type TrackPersistence = "indexed" | "cached";
 export type RepeatMode = "off" | "all" | "one";
 
-export type VocalAnalysis = { version: 1; rms: number[] } | { version: 2 | 3; rms: number[]; visemes: number[] };
+export type MotionVocalAnalysis = { version: 4; rms: number[]; vowels: number[] };
+export type VocalAnalysis = { version: 1; rms: number[] } | { version: 2 | 3; rms: number[]; visemes: number[] } | MotionVocalAnalysis;
+
+/** Old classifier caches remain metadata until explicitly re-prepared. Never
+ * interpret their discrete labels as MotionSync's frame-major byte weights. */
+export function isCurrentVocalAnalysis(analysis: VocalAnalysis | undefined, duration?: number): analysis is MotionVocalAnalysis {
+  return analysis?.version === 4 && Array.isArray(analysis.rms) && Array.isArray(analysis.vowels)
+    && (duration === undefined || analysis.rms.length === Math.ceil(duration * 50))
+    && analysis.vowels.length === analysis.rms.length * 5
+    && analysis.rms.every(value => Number.isFinite(value) && value >= 0 && value <= 1)
+    && analysis.vowels.every(value => Number.isInteger(value) && value >= 0 && value <= 255);
+}
 
 export type TrackComparison = {
   vocalAnalysis?: VocalAnalysis;

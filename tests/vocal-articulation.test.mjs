@@ -3,123 +3,74 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 
-const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64")}`;
+const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64")}`;
 const envelope = moduleUrl(await readFile(new URL("../src/audio/vocals/envelope.ts", import.meta.url), "utf8"));
 const source = (await readFile(new URL("../src/audio/vocals/articulation.ts", import.meta.url), "utf8")).replace('"./envelope"', JSON.stringify(envelope));
 const { buildVocalCurves, sampleVocalCurves } = await import(moduleUrl(source));
+const { isCurrentVocalAnalysis, migrateLibrarySnapshot } = await import(moduleUrl(await readFile(new URL("../src/domain/library.ts", import.meta.url), "utf8")));
+const weights = (n, channel) => Uint8Array.from({ length: n * 5 }, (_, i) => i % 5 === channel ? 255 : 0);
+const voice = (n = 100) => new Float32Array(n).fill(.2);
 
-const voice = (length = 100) => new Float32Array(length).fill(.2);
-test("jaw follows acoustic onsets and energy, independent of delayed or consonant-heavy labels", () => {
+test("jaw follows acoustic onset, dips and silence independently of MotionSync shape weights", () => {
   const rms = voice(); rms.fill(0, 0, 10); rms.fill(.05, 30, 40); rms.fill(0, 80);
-  const labels = new Uint8Array(100).fill(8); labels.fill(2, 14, 25);
-  const {open, form} = buildVocalCurves(rms, labels);
-  assert.equal(open[9], 0);
-  assert.ok(open[10] > .4, "jaw opens on voice onset, not 80 ms later with the label");
-  assert.ok(form[10] > .15 && form[14] === 1, "stable vowel transition starts at acoustic onset");
-  assert.ok(open[35] < open[20] * .5, "syllable energy dip survives gain normalization");
-  assert.equal(open[82], 0);
-  assert.deepEqual(open, buildVocalCurves(rms, new Uint8Array(100).fill(13)).open, "consonants cannot repeatedly attenuate the jaw");
+  const curves = buildVocalCurves(rms, weights(100, 2));
+  assert.equal(curves.open[9], 0);
+  assert.ok(curves.open[10] > .4, "no added classifier onset delay");
+  assert.ok(curves.open[35] < curves.open[20] * .5);
+  assert.equal(curves.open[82], 0);
+  for (const shape of [weights(100, 4), new Uint8Array(500)]) assert.deepEqual(curves.open, buildVocalCurves(rms, shape).open);
 });
 
-test("brief classification excursions merge, stable vowels hold, real silence resets shape", () => {
-  const rms = voice(); const labels = new Uint8Array(100).fill(2);
-  labels[3] = 8; labels[6] = 4; labels.fill(4, 20, 24); labels.fill(1, 24, 28);
-  rms.fill(0, 40, 50);
-  const {form} = buildVocalCurves(rms, labels);
-  assert.ok(Array.from(form.slice(4, 20)).every((v) => v === 1), "20 ms chatter is merged");
-  assert.ok(form[20] < 1 && form[20] > -1);
-  assert.equal(form[25], -1, "next vowel cannot interrupt the 120 ms hold");
-  assert.ok(form[26] > -1 && form[30] === .5, "stable next vowel eases after the hold");
-  assert.equal(form[36], 1);
-  assert.ok(Number.isNaN(form[45]));
-  assert.equal(form[50], 1, "a continuous vowel label recovers after an energy-gated gap");
-  // A fresh occurrence of the same vowel after silence still selects its shape.
-  labels.fill(14, 40, 50);
-  assert.equal(buildVocalCurves(rms, labels).form[50], 1);
+test("continuous O/U blends retain identity without discrete winner holds", () => {
+  const data = weights(100, 3);
+  for (let i = 30; i < 60; i++) { data[i * 5 + 3] = 128; data[i * 5 + 4] = 127; }
+  for (let i = 60; i < 100; i++) { data[i * 5 + 3] = 0; data[i * 5 + 4] = 255; }
+  const curves = buildVocalCurves(voice(), data);
+  assert.deepEqual(sampleVocalCurves(curves, .4, 1).vowels, [0, 0, 0, 1, 0]);
+  const blend = sampleVocalCurves(curves, .8, 1).vowels;
+  assert.ok(Math.abs(blend[3] - 128 / 255) < 1e-6 && Math.abs(blend[4] - 127 / 255) < 1e-6);
+  assert.deepEqual(sampleVocalCurves(curves, 1.5, 1).vowels, [0, 0, 0, 0, 1]);
+  assert.ok(curves.form[60] < curves.form[59] && curves.form[60] > curves.form[64]);
 });
 
-test("only sustained PP plus an acoustic valley closes voiced audio; short gate holes bridge", () => {
-  const rms = voice(), labels = new Uint8Array(100).fill(2);
-  labels.fill(5, 10, 20); // Sustained vowel misclassified as PP: no valley.
-  labels.fill(5, 30, 35); rms.fill(.015, 30, 35); // Deep, sustained bilabial valley.
-  labels.fill(5, 60, 62); rms.fill(.04, 60, 62); // Too short to force closure.
-  rms.fill(0, 70, 72); rms.fill(0, 80, 85); labels.fill(14,80,85);
-  const {open} = buildVocalCurves(rms, labels);
-  assert.ok(open[15] > .9);
-  assert.equal(open[32], 0);
-  assert.ok(open[61] > 0);
-  assert.ok(open[71] > 0, "40 ms gate dropout bridged");
-  assert.equal(open[82], 0, "100 ms silence retained");
+test("short gate holes bridge; meaningful silence and quiet valleys remain closed or shallow", () => {
+  const rms = voice(); rms.fill(0, 30, 32); rms.fill(0, 50, 55); rms.fill(.006, 70, 85);
+  const curves = buildVocalCurves(rms, weights(100, 4));
+  assert.ok(curves.open[31] > .5);
+  assert.equal(curves.open[52], 0);
+  assert.ok(Number.isNaN(curves.form[52]));
+  assert.ok(curves.open[80] < .15, "no invented sustained-vowel aperture floor");
 });
 
-test("legacy 40 ms advance is undone; seek and volume sample stabilized data deterministically", () => {
-  const rms = voice(), raw = new Uint8Array(100).fill(2); raw.fill(4, 30, 60);
-  const advanced = Uint8Array.from(raw, (_, i) => raw[Math.min(raw.length - 1, i + 2)]);
-  const current = buildVocalCurves(rms, raw), legacy = buildVocalCurves(rms, advanced, 2);
-  assert.deepEqual(legacy, current);
-  assert.deepEqual(sampleVocalCurves(legacy, .8, 1), sampleVocalCurves(current, .8, 1));
-  assert.ok(sampleVocalCurves(current, .8, 1).open > .9);
-  assert.ok(sampleVocalCurves(current, .8, .1).open < .4);
-  for (const time of [-1, NaN, Infinity, 2, 10]) assert.equal(sampleVocalCurves(current, time, 1).open, 0);
-  assert.equal(sampleVocalCurves(current, .8, 0).open, 0);
-  assert.equal(sampleVocalCurves(buildVocalCurves(new Float32Array(), new Uint8Array()), 0, 1).open, 0);
-});
-
-test("offline attack/release and cubic sampling are bounded, continuous and settle sustained vowels", () => {
+test("seek, volume and cubic sampling stay deterministic, bounded and settle to silence", () => {
   const rms = new Float32Array(80); rms.fill(.2, 10, 40);
-  const labels = new Uint8Array(80).fill(2); labels.fill(4,25);
-  const curves = buildVocalCurves(rms,labels);
+  const curves = buildVocalCurves(rms, weights(80, 2));
   assert.ok(curves.open[10] < curves.open[11] && curves.open[11] < curves.open[12]);
   assert.ok(curves.open[40] > curves.open[41] && curves.open[41] > curves.open[42]);
-  assert.equal(curves.open[42],0);
-  assert.ok(curves.form[25] < curves.form[24] && curves.form[25] > curves.form[29]);
-  for(let i=0;i<79;i++) for(let f=0;f<1;f+=.1) {
-    const value=sampleVocalCurves(curves,(i+f)/50,1).open;
-    assert.ok(value >= Math.min(curves.open[i],curves.open[i+1]) - 1e-6 && value <= Math.max(curves.open[i],curves.open[i+1]) + 1e-6);
+  assert.equal(curves.open[42], 0);
+  for (let i = 0; i < 79; i++) for (let f = 0; f < 1; f += .1) {
+    const value = sampleVocalCurves(curves, (i + f) / 50, 1).open;
+    assert.ok(value >= Math.min(curves.open[i], curves.open[i + 1]) - 1e-6 && value <= Math.max(curves.open[i], curves.open[i + 1]) + 1e-6);
   }
+  assert.deepEqual(sampleVocalCurves(curves, .4, 1), sampleVocalCurves(curves, .4, 1));
+  assert.ok(sampleVocalCurves(curves, .4, .1).open < .4);
+  for (const time of [-1, NaN, Infinity, 2, 10]) assert.equal(sampleVocalCurves(curves, time, 1).open, 0);
+  assert.equal(sampleVocalCurves(curves, .4, 0).open, 0);
+  assert.equal(sampleVocalCurves(buildVocalCurves(new Float32Array(), new Uint8Array()), 0, 1).open, 0);
+  assert.throws(() => buildVocalCurves(voice(), new Uint8Array(100)));
 });
 
-test("only persistent FF or CH contributes consonant shape without changing jaw energy", () => {
-  const rms=voice(), vowels=new Uint8Array(100).fill(2), short=vowels.slice(), stable=vowels.slice();
-  short.fill(9,30,33); stable.fill(9,30,42);
-  const a=buildVocalCurves(rms,vowels), b=buildVocalCurves(rms,short), c=buildVocalCurves(rms,stable);
-  assert.deepEqual(a.open,c.open);
-  assert.deepEqual(a.form,b.form);
-  assert.ok(c.form[37] < a.form[37] && c.form[37] >= .5);
-  assert.equal(c.form[50],a.form[50]);
-});
-
-
-test("continuing vowels bridge short gate dips, but confirmed silence and PP still close", () => {
-  for (const frames of [3, 5, 7]) {
-    const rms=voice(), labels=new Uint8Array(100).fill(3); rms.fill(0,30,30+frames);
-    const curves=buildVocalCurves(rms,labels);
-    assert.ok(curves.open.slice(30,30+frames+2).every(v=>v>.5), "vowel stays open through a bounded dropout");
-    labels.fill(14,30,30+frames);
-    assert.equal(buildVocalCurves(rms,labels).open[32],0,"silence label corroborates silence");
-    labels.fill(5,30,30+frames);
-    assert.equal(buildVocalCurves(rms,labels).open[32],0,"PP cannot be bridged as a vowel");
+test("only complete version 4 caches are reused; legacy metadata survives migration", () => {
+  const valid = { version: 4, rms: [.1, .2], vowels: [0, 0, 255, 0, 0, 128, 127, 0, 0, 0] };
+  assert.ok(isCurrentVocalAnalysis(valid, .04));
+  for (const invalid of [undefined, { ...valid, version: 3 }, { ...valid, rms: [NaN, .2] }, { ...valid, vowels: [255] }, { ...valid, vowels: valid.vowels.map(() => 256) }, { ...valid, vowels: valid.vowels.map(() => .5) }]) assert.equal(isCurrentVocalAnalysis(invalid), false);
+  assert.equal(isCurrentVocalAnalysis(valid, 1), false);
+  for (const version of [1, 2, 3]) {
+    const old = { version, rms: [.1], visemes: [2] };
+    const migrated = migrateLibrarySnapshot({ version: 2, tracks: [{ id: "A", lyrics: [{ text: "歌" }], vocalAnalysis: old, comparison: { vocalAnalysis: old } }], session: {} });
+    assert.deepEqual(migrated.tracks[0].vocalAnalysis, old);
+    assert.deepEqual(migrated.tracks[0].comparison.vocalAnalysis, old);
+    assert.equal(migrated.tracks[0].lyrics[0].text, "歌");
+    assert.equal(isCurrentVocalAnalysis(old), false);
   }
-  const rms=voice(), labels=new Uint8Array(100).fill(3); rms.fill(0,30,40);
-  assert.equal(buildVocalCurves(rms,labels).open[32],0,"long silence closes even with a stale vowel label");
-  rms.fill(.07,30,35); rms.fill(.2,35,40); labels.fill(5,30,35);
-  assert.ok(buildVocalCurves(rms,labels).open[32]>.25,"a moderate valley plus false PP cannot force closure");
-});
-
-test("vowel identity survives the generic axis and eases independently of consonant form", () => {
-  const labels=new Uint8Array(100).fill(3); labels.fill(4,30,60);labels.fill(9,65,80);
-  const curves=buildVocalCurves(voice(),labels);
-  assert.deepEqual(sampleVocalCurves(curves,.4,1).vowels,[0,0,0,1,0]);
-  const blend=sampleVocalCurves(curves,.64,1).vowels;
-  assert.ok(blend[3]>0 && blend[4]>0);
-  assert.ok(Math.abs(blend.reduce((a,b)=>a+b,0)-1)<1e-6);
-  assert.deepEqual(sampleVocalCurves(curves,1.45,1).vowels,[0,0,0,1,0]);
-});
-
-
-test("brief near-gate vowel energy retains an aperture floor without lifting long quiet passages",()=>{
-  const rms=voice(), labels=new Uint8Array(100).fill(4);rms.fill(.006,30,36);
-  assert.ok(buildVocalCurves(rms,labels).open.slice(32,36).every(v=>v>=.25));
-  rms.fill(.006,30,60);
-  assert.ok(buildVocalCurves(rms,labels).open[40]<.15);
 });

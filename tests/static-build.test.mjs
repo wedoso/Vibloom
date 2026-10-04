@@ -54,6 +54,12 @@ test("produces a portable static site", async () => {
   await access(new URL("og.png", dist));
   await access(new URL("vibloom-icon.png", dist));
   await access(new URL("live2d/live2dcubismcore.min.js", dist));
+  await access(new URL("live2d/motionsync/motionsync.worker.js", dist));
+  await access(new URL("live2d/motionsync/live2dcubismmotionsynccore.min.js", dist));
+  await assert.rejects(access(new URL("lipsync-lab.html", dist)));
+  await assert.rejects(access(new URL("lipsync-model.html", dist)));
+  await assert.rejects(access(new URL("lipsync-lab/", dist)));
+  assert.ok(!assets.some(file => file.startsWith("model-en-mixed")), "old classifier model is removed");
   await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.model3.json", dist));
   await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.moc3", dist));
   await access(new URL("live2d/hiyori-pro/hiyori_pro_t11.pose3.json", dist));

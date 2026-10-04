@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { buildVocalCurves, sampleVocalCurves } from "./articulation";
 import { SILENT_VOCAL_POSE } from "./envelope";
-import type { VocalAnalysis } from "../../domain/library";
+import { isCurrentVocalAnalysis, type VocalAnalysis } from "../../domain/library";
 import { VocalJobStore } from "./jobStore";
 
 export function useVocalLipSync(store: VocalJobStore, key: string, buffer: AudioBuffer | null, saved: VocalAnalysis | undefined, save: (buffer: AudioBuffer, analysis: VocalAnalysis) => void) {
@@ -10,10 +10,8 @@ export function useVocalLipSync(store: VocalJobStore, key: string, buffer: Audio
   const job = jobs[key];
   const analysis = job?.analysis ?? saved;
   const curves = useMemo(() => {
-    if (!buffer || (analysis?.version !== 2 && analysis?.version !== 3)) return null;
-    if (!Array.isArray(analysis.rms) || !Array.isArray(analysis.visemes) || analysis.rms.length !== Math.ceil(buffer.duration * 50) || analysis.visemes.length !== analysis.rms.length
-      || !analysis.rms.every(v => Number.isFinite(v) && v >= 0 && v <= 1) || !analysis.visemes.every(v => Number.isInteger(v) && v >= 0 && v <= 14)) return null;
-    return buildVocalCurves(Float32Array.from(analysis.rms), Uint8Array.from(analysis.visemes), analysis.version);
+    if (!buffer || !isCurrentVocalAnalysis(analysis, buffer.duration)) return null;
+    return buildVocalCurves(Float32Array.from(analysis.rms), Uint8Array.from(analysis.vowels));
   }, [analysis, buffer]);
   useEffect(() => {
     // Preserve singing intent across A/B switches while sharing any task that

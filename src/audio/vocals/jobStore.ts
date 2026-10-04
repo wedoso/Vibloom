@@ -29,7 +29,7 @@ export class VocalJobStore {
       if (!controller.signal.aborted) this.publish(key, { ...progress, status: progress.phase.startsWith("Queued") ? "queued" : "working" });
     }).then((frames) => {
       if (controller.signal.aborted) return;
-      const analysis: VocalAnalysis = { version: 3, rms: Array.from(frames.rms, (v) => Math.round(Math.min(1, v) * 10000) / 10000), visemes: Array.from(frames.visemes) };
+      const analysis: VocalAnalysis = { version: 4, rms: Array.from(frames.rms, (v) => Math.round(Math.min(1, v) * 10000) / 10000), vowels: Array.from(frames.vowels) };
       save(analysis);
       this.publish(key, { status: "ready", phase: "Vocals ready", progress: 1, analysis });
     }).catch((error) => {

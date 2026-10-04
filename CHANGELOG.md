@@ -2,6 +2,11 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## Unreleased
+
+- Drive vocal mouth shapes with Live2D MotionSync, retaining continuous vowel blends and local vocal separation.
+- Reprepare older lip-sync results with the new engine; songs, lyrics and playback settings are preserved.
+
 ## [1.6.0](https://github.com/wedoso/Vibloom/compare/v1.5.3...v1.6.0) (2026-10-02)
 
 - Read release notes directly in the update window, including while downloading. See what's new in your installed version even when offline.

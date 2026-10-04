@@ -104,14 +104,17 @@ When pause lands partway through an authored gesture or synthesized transition, 
 
 [HTDemucs](https://github.com/facebookresearch/demucs) via
 [`demucs-web` 1.0.2](https://github.com/timcsy/demucs-web) and ONNX Runtime Web
-1.24.3 isolates vocals. [`HeadAudio` 0.1.0](https://github.com/met4citizen/HeadAudio)
-([MIT notice](../public/licenses/HeadAudio.txt)) then supplies its MFCC processor and bundled Gaussian-prototype viseme
-model. Both algorithms run in the worker; the app supplies timing, persistence,
+1.24.3 isolates vocals. The official
+[Cubism MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
+R2 / CRI Core 5.0.4 then supplies continuous A/E/I/O/U strengths. The runtime is
+bundled unchanged under its [Live2D license](../public/live2d/motionsync/LICENSE.md).
+Separation and classification use separate workers in the same queued job; both
+terminate on completion or cancellation. The app supplies timing, persistence,
 and the projection onto the two mouth parameters available in these Live2D rigs.
 
 ```text
 Library selection / decoded A or B → shared job queue → worker
-  → HTDemucs vocals → HeadAudio visemes + short-time RMS → saved 50 Hz frames
+  → HTDemucs vocals → MotionSync vowel weights + short-time RMS → saved 50 Hz frames
 Playback's shared AudioContext time + selected source + volume
   → stabilized energy / vowel curves → Cubism mouth openness and form
 ```
@@ -138,40 +141,39 @@ ONNX GPU device or CPU fallback. FFT/resampling and viseme classification still
 use the CPU; this is not a claim of full GPU utilization. No audio is uploaded.
 
 RMS gating rejects separator leakage below 0.006 or 1% of mixture power.
-HeadAudio's 32 ms feature window and six 16 ms votes introduce variable causal
-latency. Preserve its feature timestamps instead of applying a fixed advance.
-Jaw timing follows the 50 Hz vocal energy directly; stable vowel boundaries snap
-to a nearby energy rise (up to 120 ms earlier / 20 ms later). Window context is
-discarded consistently for both RMS and visemes.
+MotionSync consumes the identical 44.1 kHz mono downmix of the separated stereo
+stem. Native contexts use neutral scales of 1, blend ratio 1 and smoothing 60,
+matching the default settings selected in the local comparison. No experimental
+controls or alternate classifier remain in the application. Core analyzes one
+native window at a time with bounded heap usage; the last partial window is
+zero-padded without extending the playable timeline. Native consumed-sample
+counts determine timestamps. Causal zero-order sampling writes normalized vowel
+weights directly at 50 Hz, avoiding a growing native-rate event list. Window
+context is discarded consistently for both RMS and weights.
 
 `articulation.ts` median-filters energy, bridges gate holes up to 40 ms and uses a
-slow two-second gain reference. Jaw opening has no viseme aperture multiplier or
-final 0.8 attenuation. It merges brief label excursions, accepts vowels of at least
-80 ms and holds their shapes for at least 120 ms between changes within a phrase.
-A continuing vowel with audible, matching 80 ms shoulders bridges gate holes
-up to 140 ms and keeps at least 0.25 aperture through brief near-gate dips.
-Silence/PP labels veto the extended hold; longer gaps close. A PP label needs
-80 ms persistence and a coincident 60 ms valley below 12% of both acoustic
-shoulders to force closure. These are temporal/acoustic checks, not calibrated
-classifier confidence.
-Finite offline attack/release kernels taper energy changes without delaying the
-first voiced frame. Vowels use 100 ms smoothstep transitions; sustained FF/CH may
-supply restrained form changes but never control jaw amplitude. Monotone cubic
-sampling joins frame slopes without overshoot. The final bridge retains 12 ms
-attack / 18 ms release and 25 ms form smoothing;
-stabilization happens before rendering, independently of display frame rate.
-It sets real Core parameters after motions/physics and leaves other channels alone.
+slow two-second gain reference. Shape weights never suppress or invent jaw
+opening. Finite offline attack/release kernels taper energy changes without
+delaying the first voiced frame. Continuous vowel blends retain the selected
+comparison's 100 ms visual transitions; there are no discrete vowel winner holds
+or old speech-label closure heuristics. Monotone cubic sampling joins frame
+slopes without overshoot. The final bridge retains 12 ms attack / 18 ms release
+and 25 ms form smoothing, independently of display frame rate. It sets real Core
+parameters after motions/physics and leaves other channels alone.
 
-Version 3 stores unadvanced RMS/viseme frames. Version 2's fixed 40 ms viseme
-advance is undone when loading; both use the new curves without separating audio
-again. Version 1 amplitude-only results remain
-readable library metadata but are reprocessed on request. Each A/B source retains
-its own timing; seeking samples the shared clock directly. Silence, zero volume,
-pause, disabled singing, absent analysis and ended sources close the mouth.
+Version 4 stores RMS and five frame-major byte weights (A/E/I/O/U, 0–255).
+Quantizing normalized weights bounds per-channel error to half a byte step;
+playback renormalizes the saved weights before blending. Each A/B source has its
+own cache. Versions 1–3 remain readable library metadata, with files and lyrics
+preserved, but are never treated as MotionSync results. Re-preparing or enabling
+singing without a current cache runs the new analysis once; Library shows
+**Reprepare lip sync** for old caches. Complete version 4 results are reused after
+reload, while incomplete or invalid caches are rejected. Seeking samples the
+shared clock directly. Silence, zero volume, pause, disabled singing, absent
+analysis and ended sources close the mouth.
 
-These are estimated acoustic mouth shapes, not a phoneme transcript. HeadAudio's
-bundled model was trained on English speech, so sung vowels, other languages and
-background vocals can be misclassified. Stable AA/E/I/O/U blend weights remain
+These are estimated acoustic vowel shapes, not a Mandarin phoneme transcript or
+a measured accuracy improvement on singing. Stable AA/E/I/O/U blend weights remain
 separate from the generic form axis. Hong Xi has a capability-gated profile for
 `Mouthfunnel`, `MouthPuckerWiden`, and `Jawopen`, with authored range scaling and
 neutral restoration. A one-time geometry probe rejects unbound parameters and
@@ -188,8 +190,8 @@ Hiyori and bound advanced rigs retain their existing mappings. These remain
 approximations within the authored grid, not independently rigged vowel shapes.
 `tests/hong-xi-mouth.test.mjs` exercises the actual shipped `.moc3`, checking
 distinct mouth geometry, untouched expression parameters, blends and closures.
-The official [Cubism MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
-requires an additional runtime and model-specific settings absent from these rigs.
+MotionSync strengths are projected through the existing rig bridge, so these
+models do not require additional `.motionsync3.json` files.
 
 `npm run desktop:smoke:lipsync` runs real separation on a public speech fixture
 mixed with synthetic instruments. It checks actual Core openness/form changes,

@@ -63,4 +63,4 @@ See [desktop builds and releases](docs/desktop.md), [player behavior](docs/libra
 
 ## License
 
-Source code: [MIT](LICENSE). Hiyori and the Cubism runtime retain their applicable Live2D terms; see [Hiyori's notice](public/live2d/hiyori/LICENSE-HIYORI.txt). Hong Xi artwork is not covered by the source-code license; no separate redistribution license was included with its supplied export.
+Source code: [MIT](LICENSE). Hiyori and the Cubism runtime retain their applicable Live2D terms; see [Hiyori's notice](public/live2d/hiyori/LICENSE-HIYORI.txt) and the [MotionSync runtime license](public/live2d/motionsync/LICENSE.md). Hong Xi artwork is not covered by the source-code license; no separate redistribution license was included with its supplied export.

@@ -1,12 +1,12 @@
 import { useSyncExternalStore } from "react";
-import type { LibraryTrack, VocalAnalysis } from "../../domain/library";
+import { isCurrentVocalAnalysis, type LibraryTrack, type VocalAnalysis } from "../../domain/library";
 import { VocalJobStore, vocalJobKey } from "./jobStore";
 
 export function useLibraryVocals(store: VocalJobStore, resolve: (track: LibraryTrack) => Promise<File | null>, save: (track: LibraryTrack, analysis: VocalAnalysis) => void) {
   const jobs = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const prepare = (tracks: LibraryTrack[]) => {
     for (const track of tracks) {
-      if (track.vocalAnalysis?.version === 2 || track.vocalAnalysis?.version === 3) continue;
+      if (isCurrentVocalAnalysis(track.vocalAnalysis, track.duration || undefined)) continue;
       store.prepare(vocalJobKey(track), async () => {
         const file = await resolve(track);
         if (!file) throw new Error("Reconnect this audio file and retry.");
