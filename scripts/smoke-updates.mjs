@@ -1,11 +1,18 @@
 import { app, BrowserWindow, net, protocol } from "electron";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { releaseNotesForTag } from "./write-release-notes.mjs";
+
 const root = fileURLToPath(new URL("../", import.meta.url));
+const { version: installedVersion } = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+const installedNotes = releaseNotesForTag(await readFile(path.join(root, "CHANGELOG.md"), "utf8"), `v${installedVersion}`);
+const installedBullet = installedNotes.split("\n").find(line => line.startsWith("- "))?.slice(2)
+  .replace(/\[([^\]]+)\]\([^)]*\)/gu, "$1").replace(/\*\*|`/gu, "");
+assert.ok(installedBullet, "installed release has a feature bullet");
 const profile = await mkdtemp(path.join(tmpdir(), "vibloom-updates-"));
 const output = path.join(root, "outputs/update-smoke");
 app.setPath("userData", profile);
@@ -28,8 +35,8 @@ async function smoke() {
           window.__desktopVersion = '2.0.0';
           window.vibloomUpdates = {
             subscribe: listener => { window.__desktopEmit = listener; return () => {}; },
-            check: async () => window.__desktopEmit({status:'available',currentVersion:'1.6.0',availableVersion:window.__desktopVersion}),
-            download: async () => window.__desktopEmit({status:'downloading',currentVersion:'1.6.0',availableVersion:window.__desktopVersion,progress:42}),
+            check: async () => window.__desktopEmit({status:'available',currentVersion:${JSON.stringify(installedVersion)},availableVersion:window.__desktopVersion}),
+            download: async () => window.__desktopEmit({status:'downloading',currentVersion:${JSON.stringify(installedVersion)},availableVersion:window.__desktopVersion,progress:42}),
             install: async () => { window.__installed = true; },
             openReleases: async version => { window.__openedVersion = version; }
           };
@@ -64,12 +71,12 @@ async function smoke() {
     await waitFor(`document.querySelector('.brand-version') && document.querySelector('.live2d-stage[data-status="ready"]')`, "web ready");
     await stubFetch("current"); await click('.brand-version');
     await waitFor(`document.querySelector('.update-orb.is-current')`, "current version");
-    assert.ok(await run(`document.querySelector('.update-notes').textContent.includes('mouth form')`), "installed changelog bundled");
+    assert.ok(await run(`document.querySelector('.update-notes').textContent.includes(${JSON.stringify(installedBullet)})`), "installed changelog bundled");
     await capture("current-hong-xi");
     await click('[aria-label="Close update window"]');
     await stubFetch("failure"); await click('.brand-version');
     await waitFor(`document.querySelector('.update-orb.is-error')`, "offline version check");
-    assert.ok(await run(`document.querySelector('.update-notes').textContent.includes('mouth form')`), "offline installed notes remain readable");
+    assert.ok(await run(`document.querySelector('.update-notes').textContent.includes(${JSON.stringify(installedBullet)})`), "offline installed notes remain readable");
     await click('[aria-label="Close update window"]');
     await stubFetch("available"); await click('.brand-version');
     await waitFor(`document.querySelector('.update-orb.is-available') && document.querySelector('.update-notes li')`, "web new release");
@@ -99,7 +106,7 @@ async function smoke() {
     await click('.update-actions .is-primary');
     await waitFor(`document.querySelector('.update-orb.is-downloading')`, "desktop download");
     assert.ok(await run(`document.querySelector('.update-notes').textContent.includes('In-app release notes')`));
-    await run(`window.__desktopEmit({status:'downloaded',currentVersion:'1.6.0',availableVersion:'2.0.0'})`);
+    await run(`window.__desktopEmit({status:'downloaded',currentVersion:${JSON.stringify(installedVersion)},availableVersion:'2.0.0'})`);
     await waitFor(`document.querySelector('.update-orb.is-downloaded')`, "desktop downloaded");
     assert.ok(await run(`document.querySelector('.update-notes').textContent.includes('In-app release notes')`));
     await capture("desktop-downloaded"); await click('.update-actions .is-primary');
