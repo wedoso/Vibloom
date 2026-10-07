@@ -1786,7 +1786,6 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
               {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>Audio, LRC, and TXT lyric files</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>Choose a folder</strong><small>Preserve album order and matching lyrics</small></span></button></div>}
               <p>Drop files here anytime · everything stays on this device</p>
             </div>
-            {restored && albumCollections}
           </div>
           <div className="library-welcome-stage">
             <Live2DStage companionId={session.companionId} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="welcome" trackLabel="Waiting for your library" activeSource={0} isComparing={false} isPlaying={false} focusMode={false} />

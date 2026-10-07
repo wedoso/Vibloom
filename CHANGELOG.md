@@ -2,6 +2,11 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.8.1](https://github.com/wedoso/Vibloom/compare/v1.8.0...v1.8.1) (2026-10-07)
+
+- Keep All songs / Albums and New album inside the Library after music is imported. The empty homepage retains its original Import your music entry.
+- Clarify that the Hong Xi (红奚) Live2D model and associated assets are excluded from the MIT source-code license and require prior permission for commercial use; bundle the usage notice with the model.
+
 ## [1.8.0](https://github.com/wedoso/Vibloom/compare/v1.7.0...v1.8.0) (2026-10-07)
 
 - Drop audio files, TXT/LRC lyrics, or nested folders into the Library. The import hint appears over the visible song list only while dragging, without shifting the layout; matching lyrics load with their songs.

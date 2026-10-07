@@ -65,7 +65,11 @@ async function smoke() {
       document.querySelector(${JSON.stringify(target)}).dispatchEvent(new DragEvent('drop', {bubbles:true, cancelable:true, dataTransfer: transfer}));
     })()`);
     await window.loadURL("vibloom://app/index.html");
-    await waitFor(`document.querySelector('.album-collections')`, "library storage restored");
+    await waitFor(`document.querySelector('.companion-selector select')?.disabled === false`, "library storage restored");
+    assert.equal(await run(`document.querySelector('.album-collections')`), null, "empty homepage has no collection navigation");
+    assert.equal(await run(`document.querySelectorAll('.welcome-import-primary').length`), 1, "empty homepage retains one import entry");
+    await delay(150);
+    await writeFile(path.join(output, "welcome.png"), (await window.webContents.capturePage()).toPNG());
     console.log("Library ready");
     await run(`(() => {
       const rate = 8000, samples = rate * 10, bytes = new ArrayBuffer(44 + samples * 2), view = new DataView(bytes);
@@ -80,10 +84,6 @@ async function smoke() {
         let batch = 0; return {readEntries: success => setTimeout(() => success(batches[batch++] || []), 0)};
       } });
     })()`);
-    // Empty albums can be created before importing music.
-    await button("New album"); await inputValue('[aria-label="Album name"]', "First collection"); await button("Create album");
-    await waitFor(`document.querySelector('.album-active-caption')?.textContent.includes('First collection')`, "empty album created");
-    console.log("Empty album ready");
     await run(`(() => {
       const entry = window.__directory('Collection', [
         [window.__directory('A', [[window.__fileEntry(window.__audioFile('Same.wav', 1)), window.__fileEntry(new File(['[00:00.00]Album A\\n[00:02.00]Next A'], 'Same.lrc'))]])],
@@ -101,9 +101,13 @@ async function smoke() {
     await waitFor(`document.querySelector('.open-library-button') && !document.documentElement.classList.contains('is-scene-transitioning')`, "player ready");
     await click('.open-library-button');
     await waitFor(`document.querySelectorAll('.track-title').length === 2`, "loaded library opens");
-    assert.ok(await run(`document.querySelector('.library-album-heading').textContent.includes('2 tracks')`));
+    assert.ok(await run(`document.querySelector('.album-navigation') !== null`), "collection navigation appears in the loaded Library");
     assert.equal(await run(`document.querySelectorAll('[aria-label="Synced lyrics attached"]').length`), 1);
     assert.equal(await run(`document.querySelectorAll('[aria-label="TXT lyrics attached"]').length`), 1);
+    // Empty collections are still available within the loaded Library.
+    await button("New album"); await inputValue('[aria-label="Album name"]', "First collection"); await button("Create album");
+    await waitFor(`document.querySelector('.library-album-heading')?.textContent.includes('First collection')`, "empty album created");
+    assert.equal((await rows()).length, 0, "new collection can start empty");
     await selectAlbum("All songs");
     await waitFor(`!document.documentElement.classList.contains('is-scene-transitioning')`, "list transition finished");
     assert.equal(await run(`document.querySelector('.library-drop-hint')`), null, "no permanent uploader in the Library");

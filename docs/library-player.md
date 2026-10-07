@@ -37,6 +37,7 @@ Private browsing or unavailable storage falls back to session-only playback with
 - Accept drag and drop for one or many files. When Chrome or Safari exposes directory entries, recursively read a dropped folder and preserve its relative paths; Firefox keeps the visible folder-picker fallback when directory drag data is unavailable.
 - When a stored library exists but sources are unavailable, offer Continue last session and Reconnect music.
 - Do not render an empty navigation rail, empty track table, or duplicate uploader.
+- Keep All songs / Albums and New album inside the populated Library; the empty homepage shows only the existing Import your music entry.
 
 ### Loaded player
 

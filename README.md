@@ -66,4 +66,10 @@ See [desktop builds and releases](docs/desktop.md), [player behavior](docs/libra
 
 ## License
 
-Source code: [MIT](LICENSE). Hiyori and the Cubism runtime retain their applicable Live2D terms; see [Hiyori's notice](public/live2d/hiyori/LICENSE-HIYORI.txt) and the [MotionSync runtime license](public/live2d/motionsync/LICENSE.md). Hong Xi artwork is not covered by the source-code license; no separate redistribution license was included with its supplied export.
+Source code: [MIT](LICENSE). Hiyori and the Cubism runtime retain their applicable Live2D terms; see [Hiyori's notice](public/live2d/hiyori/LICENSE-HIYORI.txt) and the [MotionSync runtime license](public/live2d/motionsync/LICENSE.md).
+
+### Hong Xi Live2D model — commercial use requires permission
+
+The Hong Xi (红奚) Live2D model and its associated artwork, textures, expressions, and model assets are **not covered by the MIT source-code license**. **Commercial use requires prior permission from the rights holder.** Including these assets in this repository or in Vibloom does not grant permission to sell them, include them in a commercial product or service, or otherwise use them commercially. See the [model's usage notice](public/live2d/hong-xi/NOTICE.md).
+
+Hong Xi（红奚）Live2D 模型及其相关立绘、纹理、表情和模型素材不适用本项目的 MIT 源码许可证。**未经权利人事先授权，不得用于任何商业用途**，包括出售模型或素材、集成到商业产品或服务，以及其他商业使用。本仓库及应用中提供这些素材，不代表授予商业使用许可。
