@@ -10,9 +10,10 @@ A private music player for the web, macOS, and Windows, with synchronized A/B co
 
 ## Features
 
-- **Local library:** import audio files or folders, search, reorder the queue, shuffle, repeat, and resume your last position. Music is cached by default; manage local copies in **Storage**.
+- **Local library:** choose or drag in audio files and nested folders, search, reorder the queue, shuffle, repeat, and resume your last position. Music is cached by default; manage local copies in **Storage**.
+- **Virtual albums:** create collections with your own cover images. Select existing songs, drag library songs onto an album, or import new music directly into it. Albums and covers are saved locally.
 - **A/B comparison:** add a second version, switch instantly on one shared audio clock, and compare waveforms. Both versions can be kept on-device.
-- **[Lyrics](docs/assets/lyrics-timing.png):** attach and adjust LRC files, or timestamp plain TXT lyrics and download an LRC file. Same-named lyric files match automatically during import.
+- **[Lyrics](docs/assets/lyrics-timing.png):** edit TXT/LRC text, insert or delete lines, and timestamp lyrics. Download TXT or synced LRC files. Same-named lyric files match during import or a later lyric-only drop; ambiguous matches require manual attachment.
 - **Headset controls:** system play/pause and seek commands share the player's transport, preserving position and A/B synchronization. AirPods ear detection depends on device settings and OS/browser support; physical AirPods testing is still pending.
 - **Live2D companions:** switch smoothly between Hong Xi and Hiyori; both respond to **Say hello**. Enjoy gestures, gaze, camera controls, and Focus mode. **[Prepare vocal lip sync](docs/assets/vocal-preparation.png)** from Player or enter **[Prepare lip sync](docs/assets/library-selection.png)** in **[Library](docs/assets/library.png)** to select songs; both views share background progress, then **Start singing**. Mouth opening follows vocal energy, with sustained, estimated vowel shapes; detail depends on the model’s mouth rig. First use downloads a 172 MiB model; results stay on-device.
 - **Desktop updates:** click the version beside the logo to check for updates. On macOS, closing the window keeps music playing; `Command-Q` quits.
@@ -23,7 +24,8 @@ A private music player for the web, macOS, and Windows, with synchronized A/B co
 
 1. Choose **Import your music**, then select files or a folder. Include matching `.lrc` or `.txt` files if available.
 2. Play a song, arrange **Queue**, or add Version B to compare a second mix.
-3. For TXT lyrics, choose **Timestamp lyrics**. Press `T` as each line starts, `Space` to play/pause, and `Z` to undo. Select a line to correct it; drafts are saved with the track. For existing LRC, choose **Edit timing** to set a line’s time, nudge by 0.1 seconds, or shift all lines earlier/later. Finish with **Save & download .lrc**.
+3. In **Library**, choose **New album**, name it, choose a cover, and select songs. Open **Albums** to browse covers. Drag a song over the **Albums** tab to reveal its cards, then drop onto a card to add it. Imports into the selected album join it automatically.
+4. For TXT lyrics, choose **Timestamp lyrics**; for LRC, choose **Edit timing**. Select a line to edit its text or insert/delete rows. Press `T` to timestamp and advance, or `S` to overwrite the selected time without advancing. `Command/Ctrl + Enter` also overwrites while typing. Outside text fields, `Space` plays/pauses and `Z` undoes. Drafts are saved with the track; export with **Download .txt** or **Save & download .lrc**.
 
 | Shortcut | Action |
 | --- | --- |
@@ -52,6 +54,7 @@ npm run check           # Lint, tests, and production build
 ```bash
 npm run desktop:smoke
 npm run desktop:smoke:lyrics
+npm run desktop:smoke:library
 npm run desktop:smoke:media
 npm run desktop:smoke:companions
 npm run desktop:smoke:layout

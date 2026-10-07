@@ -2,6 +2,13 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.8.0](https://github.com/wedoso/Vibloom/compare/v1.7.0...v1.8.0) (2026-10-07)
+
+- Drop audio files, TXT/LRC lyrics, or nested folders into the Library. The import hint appears over the visible song list only while dragging, without shifting the layout; matching lyrics load with their songs.
+- Organize music into virtual albums with your own cover images. Browse album sleeves, choose songs, and import or drag music into a collection. Albums and covers stay on-device.
+- Edit TXT/LRC text, insert and delete lyric lines, and overwrite a selected line with the current playback time. Use `S` or `Command/Ctrl + Enter` to overwrite, and `T` to stamp and advance; export TXT or synced LRC.
+- Restore the Library's editorial layout and introduce a two-pane lyric editor, with responsive layouts, saved drafts, undo, and preserved LRC metadata and translations.
+
 ## [1.7.0](https://github.com/wedoso/Vibloom/compare/v1.6.0...v1.7.0) (2026-10-03)
 
 - Drive vocal mouth shapes with Live2D MotionSync, retaining continuous vowel blends and local vocal separation.

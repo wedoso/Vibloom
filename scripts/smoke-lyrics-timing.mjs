@@ -176,7 +176,7 @@ async function smoke() {
     assert.equal(await run(`document.querySelector('.transport-track strong').textContent`), "Timing test", "end of song stays on edited track");
     assert.ok(await run(`document.querySelector('[aria-label="Play timing playback"]')`), "playback stopped");
     await window.setSize(440, 760); await delay(200);
-    assert.ok(await run(`document.querySelector('.lyric-timing-editor').getBoundingClientRect().right <= innerWidth`));
+    assert.ok(await run(`(() => {const r=document.querySelector('.lyric-timing-editor').getBoundingClientRect();const f=document.querySelector('.lyric-timing-editor footer').getBoundingClientRect();return r.right <= innerWidth && r.bottom <= innerHeight && f.bottom <= innerHeight;})()`), 'lyric editor and save controls fit narrow windows');
     await writeFile(path.join(output, "editor-narrow.png"), (await window.webContents.capturePage()).toPNG());
     await click('[aria-label="Close timestamp editor"]');
     await run(`document.querySelector('[aria-label="Actions for Timing test"]').click()`);
@@ -229,8 +229,76 @@ async function smoke() {
     await waitFor(`document.querySelector('.lyric-timing-lines time')?.textContent === '00:01.125'`, "LRC edits persist");
     await button("Save synced lyrics");
     await waitFor(`!document.querySelector('.lyric-timing-editor')`, "saved LRC");
+    // Text, row structure and selected-line overwrite all use the same draft.
+    await button("Edit timing");
+    await waitFor(`document.querySelector('.lyric-timing-editor')`, "text editor opens");
+    const lyricText = async (value) => {
+      await run(`(() => { const input = document.querySelector('.lyric-text-edit textarea'); input.focus(); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+      await waitFor(`document.querySelector('.lyric-text-edit textarea').value === ${JSON.stringify(value)}`, "lyric text applied");
+    };
+    await lyricText("修改后的歌词\nTranslation edited");
+    await run(`document.querySelector('.lyric-text-edit textarea').dispatchEvent(new KeyboardEvent('keydown', {code:'KeyT', key:'t', bubbles:true, cancelable:true}))`);
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines time').textContent`), "00:01.125", "typing T does not timestamp a line");
+    await seek(.75);
+    await run(`document.querySelector('.lyric-text-edit textarea').focus(); document.querySelector('.lyric-text-edit textarea').dispatchEvent(new KeyboardEvent('keydown', {code:'Enter', key:'Enter', ctrlKey:true, bubbles:true, cancelable:true}))`);
+    await waitFor(`document.querySelector('.lyric-timing-lines time').textContent === '00:00.75'`, "Ctrl+Enter overwrites selected time");
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines .is-selected > span').textContent`), "1", "overwrite keeps the selected line");
+    await button("Insert after");
+    await waitFor(`document.querySelectorAll('.lyric-timing-lines button').length === 4`, "line inserted");
+    await lyricText("Inserted line");
+    assert.equal(await run(`document.querySelector('.lyric-timing-download').disabled`), true, "inserted lines require a timestamp for LRC");
+    const textDownload = new Promise((resolve, reject) => {
+      window.webContents.session.once("will-download", (_event, item) => {
+        item.setSavePath(path.join(output, item.getFilename()));
+        item.once("done", (_event, state) => state === "completed" ? resolve(item.getSavePath()) : reject(new Error(state)));
+      });
+    });
+    await button("Download .txt");
+    assert.equal(await readFile(await textDownload, "utf8"), "修改后的歌词\nTranslation edited\nInserted line\nNext\n\n", "TXT export includes edited text and untimed inserted lines");
+    await seek(2); await button("Set current time S");
+    assert.equal(await run(`document.querySelector('.lyric-timing-lines .is-selected > span').textContent`), "2");
+    await button("Insert before"); await lyricText("Temporary line"); await button("Delete line");
+    await button("Undo");
+    assert.equal(await run(`document.querySelector('.lyric-text-edit textarea').value`), "Temporary line", "undo restores deleted text and row selection");
+    await button("Delete line");
+    await click('.lyric-timing-lines button:last-child'); await button("Delete line");
+    await button("Undo");
+    assert.equal(await run(`document.querySelectorAll('.lyric-timing-lines button').length`), 4);
+    const editedDownload = new Promise((resolve, reject) => {
+      window.webContents.session.once("will-download", (_event, item) => {
+        item.setSavePath(path.join(output, item.getFilename()));
+        item.once("done", (_event, state) => state === "completed" ? resolve(item.getSavePath()) : reject(new Error(state)));
+      });
+    });
+    await click('.lyric-timing-download');
+    assert.equal(await readFile(await editedDownload, "utf8"), "[ti:Existing song]\n[ar:Artist]\n[00:00.75]修改后的歌词\n[00:00.75]Translation edited\n[00:02.00]Inserted line\n[00:03.60]Next\n[00:06.60]\n");
+    window.setSize(1280, 900); await delay(200);
+    await writeFile(path.join(output, "text-and-row-editor.png"), (await window.webContents.capturePage()).toPNG());
+    await button("Save draft");
+    await delay(500);
+    await window.loadURL("vibloom://app/index.html");
+    await waitFor(`document.querySelector('.open-library-button')`, "text edits restored");
+    await button("Edit timing");
+    await waitFor(`document.querySelector('.lyric-text-edit textarea')?.value === '修改后的歌词\\nTranslation edited'`, "edited text survives reload");
+    assert.equal(await run(`document.querySelectorAll('.lyric-timing-lines button').length`), 4, "inserted rows survive reload");
+    await button("Save draft");
     await button("Remove");
     await waitFor(`document.querySelector('.library-lyrics-empty')?.textContent.includes('No matched lyrics')`, "lyrics removed");
+    await button("Attach .lrc / .txt");
+    await run(`(() => { const input = document.querySelector('input[accept=".lrc,.txt,text/plain"]'); const data = new DataTransfer(); data.items.add(new File(['Rebuild me'], 'rebuild.txt', {type:'text/plain'})); input.files = data.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+    await waitFor(`document.querySelector('.lyrics-plain')`, "plain lyrics attached");
+    await button("Timestamp lyrics");
+    await waitFor(`document.querySelector('.lyric-text-edit textarea')`, "plain editor opens");
+    await button("Delete line"); await button("Save draft");
+    await delay(500);
+    await window.loadURL("vibloom://app/index.html");
+    await waitFor(`document.querySelector('.lyrics-plain')?.textContent.includes('0 lines')`, "empty draft restored");
+    await button("Timestamp lyrics");
+    await waitFor(`document.querySelector('.lyric-empty-lines')`, "empty draft can be reopened");
+    await button("Add line"); await lyricText("Rebuilt lyric"); await seek(0); await button("Set current time S");
+    await button("Save synced lyrics");
+    await waitFor(`document.querySelector('.library-lyrics-list')?.textContent.includes('Rebuilt lyric')`, "empty draft can be rebuilt and saved");
+    console.log("PASS lyric text edits, row insertion/deletion, undo, overwrite without advancing, typing-safe shortcuts, TXT/LRC export, and empty-draft recovery");
     console.log("PASS LRC editing, metadata/translation preservation, TXT import, playback timestamps, undo/reset, persistence, order validation, LRC download, end-of-track isolation, and narrow layout");
   } catch (error) {
     console.error(error);

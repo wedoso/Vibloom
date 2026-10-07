@@ -4,6 +4,7 @@ import {
   ArrowUp,
   AudioLines,
   ChevronDown,
+  ChevronLeft,
   Database,
   FastForward,
   FileAudio,
@@ -58,6 +59,7 @@ import { useVocalLipSync } from "./audio/vocals/useVocalLipSync";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
 import { APP_VERSION } from "./appVersion";
 import {
+  addAlbumTracks,
   comparisonCacheKey,
   createShuffleBag,
   EMPTY_SESSION,
@@ -65,13 +67,18 @@ import {
   LibraryTrack,
   makeTrackFingerprint,
   migrateLibrarySnapshot,
+  matchLyricFile,
   normalizeFileName,
   RepeatMode,
   withoutExtension,
+  TRACK_DRAG_TYPE,
+  type LibraryAlbum,
   type VocalAnalysis,
 } from "./domain/library";
 import { decodeLrc, LyricLine, parseLrc, parseLyricsFile, serializeLrc, type LyricTimingLine } from "./lrc";
 import LyricsTimingEditor from "./LyricsTimingEditor";
+import AlbumCollections from "./AlbumCollections";
+import FileDropRegion from "./FileDropRegion";
 import { browserLibraryPlatform } from "./platform/browserLibraryPlatform";
 import type { LibraryPlatform, StorageState } from "./platform/libraryPlatform";
 import { useMediaSession } from "./platform/useMediaSession";
@@ -334,24 +341,18 @@ async function filesFromDroppedEntry(entry: DroppedFileEntry, parentPath = ""): 
 }
 
 async function filesFromDrop(dataTransfer: DataTransfer) {
-  const entryItems: DroppedFileEntry[] = [];
+  // Capture entries and fallback Files before the first await: browsers clear
+  // the drag data store as soon as the drop handler returns.
+  const entryItems: Array<DroppedFileEntry | File> = [];
   for (const item of Array.from(dataTransfer.items)) {
+    if (item.kind !== "file") continue;
     const entry = (item as unknown as { webkitGetAsEntry?: () => DroppedFileEntry | null }).webkitGetAsEntry?.();
     if (entry) entryItems.push(entry);
+    else { const file = item.getAsFile(); if (file) entryItems.push(file); }
   }
   if (!entryItems.length) return Array.from(dataTransfer.files);
-  const nested = await Promise.all(entryItems.map((entry) => filesFromDroppedEntry(entry)));
+  const nested = await Promise.all(entryItems.map((entry) => entry instanceof File ? [entry] : filesFromDroppedEntry(entry)));
   return nested.flat();
-}
-
-function dirname(value: string) {
-  const separator = value.lastIndexOf("/");
-  return separator >= 0 ? value.slice(0, separator) : "";
-}
-
-function lyricMatchKey(value: string) {
-  const normalized = normalizeFileName(value);
-  return `${dirname(normalized)}/${withoutExtension(normalized.split("/").at(-1) ?? normalized)}`;
 }
 
 function sourceLabelFor(relativePath: string) {
@@ -399,7 +400,7 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
     });
   }, [activeIndex]);
 
-  if (!lines.length && timing?.length) {
+  if (!lines.length && timing !== undefined) {
     return <div className={`library-lyrics-empty lyrics-plain lyrics-variant-${variant}`}>
       <FileText size={18} /><span>TXT lyrics · {timing.length} lines</span>
       <button type="button" onClick={onTiming}>Timestamp lyrics</button>
@@ -445,6 +446,10 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
 
 export default function LibraryApp({ platform = browserLibraryPlatform }: { platform?: LibraryPlatform }) {
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
+  const [albums, setAlbums] = useState<LibraryAlbum[]>([]);
+  const [activeAlbumId, setActiveAlbumId] = useState("");
+  const [browsingAlbums, setBrowsingAlbums] = useState(false);
+  const activeAlbum = albums.find((album) => album.id === activeAlbumId);
   const tracksRef = useRef<LibraryTrack[]>([]);
   const [session, setSession] = useState<LibrarySession>({ ...EMPTY_SESSION });
   const sessionRef = useRef<LibrarySession>({ ...EMPTY_SESSION });
@@ -480,6 +485,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const compareInputRef = useRef<HTMLInputElement>(null);
   const lyricsInputRef = useRef<HTMLInputElement>(null);
   const lyricsTargetTrackIdRef = useRef("");
+  const importAlbumIdRef = useRef("");
+  const importBusyRef = useRef(false);
+  const readingDropRef = useRef(false);
   const focusModeRef = useRef(false);
   const workspaceRef = useRef<Workspace>("player");
   const runtimeFilesRef = useRef(new Map<string, File>());
@@ -512,9 +520,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const timingTrack = tracks.find((track) => track.id === timingTrackId) ?? null;
   const filteredTracks = useMemo(() => {
     const query = normalizeFileName(search);
-    if (!query) return tracks;
-    return tracks.filter((track) => normalizeFileName(`${track.name} ${track.relativePath} ${track.sourceLabel}`).includes(query));
-  }, [search, tracks]);
+    const album = albums.find((candidate) => candidate.id === activeAlbumId);
+    const byId = new Map(tracks.map((track) => [track.id, track]));
+    const collected = album ? album.trackIds.flatMap((id) => { const track = byId.get(id); return track ? [track] : []; }) : tracks;
+    if (!query) return collected;
+    return collected.filter((track) => normalizeFileName(`${track.name} ${track.relativePath} ${track.sourceLabel}`).includes(query));
+  }, [search, tracks, albums, activeAlbumId]);
   const unavailableCount = tracks.filter((track) => track.availability === "reconnect" || track.availability === "missing").length;
   const comparisonReady = compareSlot.status === "ready";
   const comparisonVisible = compareSlot.status !== "empty";
@@ -626,6 +637,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         if (cancelled) return;
         tracksRef.current = restoredTracks;
         setTracks(restoredTracks);
+        setAlbums(snapshot.albums);
         const nextSession = {
           ...EMPTY_SESSION,
           ...snapshot.session,
@@ -664,12 +676,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           availability: track.comparison.persistence === "cached" ? "available" as const : "reconnect" as const,
         } : null,
       }));
-      void platform.repository.save({ version: 2, tracks: serializableTracks, session }).catch(() => {
+      void platform.repository.save({ version: 2, tracks: serializableTracks, albums, session }).catch(() => {
         setMessage("Could not save changes in this mode.");
       });
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [platform, restored, session, tracks]);
+  }, [platform, restored, session, tracks, albums]);
 
   const ensureAudioGraph = useCallback(async (resume = true) => {
     const context = await audioEngine.ensureGraph(resume, sessionRef.current.volume);
@@ -1027,161 +1039,186 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     void audioEngine.close();
   }, [audioEngine]);
 
-  const handleImport = useCallback(async (fileList: FileList | File[]) => {
+  const handleImport = useCallback(async (fileList: FileList | File[], albumId = "") => {
     const files = Array.from(fileList) as FileWithPath[];
-    if (!files.length) return;
-    const enteringFromWelcome = tracksRef.current.length === 0;
-    setImporting(true);
-    setImportSummary(null);
-    setImportOpen(false);
-    const summary: ImportSummary = { accepted: 0, lyrics: 0, duplicates: 0, ignored: 0, errors: [] };
-    const audioFiles = files.filter((file) => file.type.startsWith("audio/") || SUPPORTED_AUDIO.test(file.name));
-    const lyricFiles = files.filter((file) => /\.(lrc|txt)$/iu.test(file.name));
-    summary.ignored = files.length - audioFiles.length - lyricFiles.length;
-    const lyricMap = new Map<string, FileWithPath>();
-    for (const file of lyricFiles) {
-      const key = lyricMatchKey(relativePathOf(file));
-      if (!lyricMap.has(key) || /\.lrc$/iu.test(file.name)) lyricMap.set(key, file);
-    }
-    const existingByFingerprint = new Map(tracksRef.current.map((track) => [track.fingerprint, track]));
-    const imported: LibraryTrack[] = [];
-    let cacheThisImport = sessionRef.current.cacheEnabled;
-    if (cacheThisImport && audioFiles.length) {
-      await platform.storage.requestPersistence().catch(() => false);
-      try {
-        const storage = await platform.storage.readState();
-        const availableBytes = Math.max(0, storage.quota - storage.usage);
-        const requestedBytes = audioFiles.reduce((sum, file) => sum + file.size, 0);
-        if (availableBytes > 0 && requestedBytes > availableBytes * 0.9) {
-          cacheThisImport = false;
-          summary.errors.push("Not enough browser storage to keep every imported track. They remain available for this session.");
+    if (!files.length || importBusyRef.current || !restored) return;
+    importBusyRef.current = true;
+    try {
+      const enteringFromWelcome = tracksRef.current.length === 0;
+      setImporting(true);
+      setImportSummary(null);
+      setImportOpen(false);
+      const summary: ImportSummary = { accepted: 0, lyrics: 0, duplicates: 0, ignored: 0, errors: [] };
+      const audioFiles = files.filter((file) => file.type.startsWith("audio/") || SUPPORTED_AUDIO.test(file.name));
+      const lyricFiles = files.filter((file) => /\.(lrc|txt)$/iu.test(file.name));
+      summary.ignored = files.length - audioFiles.length - lyricFiles.length;
+      const candidates = lyricFiles.map((file) => ({ name: file.name, relativePath: relativePathOf(file), file }));
+      const matchedLyrics = new Set<File>();
+      const existingByFingerprint = new Map(tracksRef.current.map((track) => [track.fingerprint, track]));
+      const peers = new Map(tracksRef.current.map((track) => [track.fingerprint, { name: track.name, relativePath: track.relativePath }]));
+      for (const file of audioFiles) peers.set(makeTrackFingerprint(file), { name: file.name, relativePath: relativePathOf(file) });
+      const matchingPeers = [...peers.values()];
+      const attachImportedLyrics = async (track: LibraryTrack, path = track.relativePath) => {
+        const candidate = matchLyricFile({ name: track.name, relativePath: path }, candidates, matchingPeers);
+        if (!candidate) return track;
+        matchedLyrics.add(candidate.file);
+        if (candidate.file.size > 5 * 1024 * 1024) { summary.errors.push(`${candidate.name} is larger than 5 MB`); return track; }
+        try {
+          const parsed = parseLyricsFile(decodeLrc(await candidate.file.arrayBuffer()), candidate.name);
+          summary.lyrics += 1;
+          return { ...track, ...parsed, lyricMetadata: parsed.lyricMetadata, lyricsFileName: candidate.name };
+        } catch {
+          summary.errors.push(`${candidate.name} could not be parsed`);
+          return track;
         }
-      } catch {
-        // Storage estimates are best-effort; the individual cache write remains authoritative.
+      };
+      const imported: LibraryTrack[] = [];
+      let cacheThisImport = sessionRef.current.cacheEnabled;
+      if (cacheThisImport && audioFiles.length) {
+        await platform.storage.requestPersistence().catch(() => false);
+        try {
+          const storage = await platform.storage.readState();
+          const availableBytes = Math.max(0, storage.quota - storage.usage);
+          const requestedBytes = audioFiles.reduce((sum, file) => sum + file.size, 0);
+          if (availableBytes > 0 && requestedBytes > availableBytes * 0.9) {
+            cacheThisImport = false;
+            summary.errors.push("Not enough browser storage to keep every imported track. They remain available for this session.");
+          }
+        } catch {
+          // Storage estimates are best-effort; the individual cache write remains authoritative.
+        }
       }
-    }
 
-    const sortedAudioFiles = audioFiles.sort((a, b) => relativePathOf(a).localeCompare(relativePathOf(b), undefined, { numeric: true, sensitivity: "base" }));
-    for (const [fileIndex, file] of sortedAudioFiles.entries()) {
-      if (file.size > MAX_FILE_BYTES) {
-        summary.errors.push(`${file.name} is larger than 300 MB`);
-        continue;
-      }
-      const path = relativePathOf(file);
-      const fingerprint = makeTrackFingerprint(file, path);
-      const existing = existingByFingerprint.get(fingerprint);
-      if (existing) {
-        runtimeFilesRef.current.set(existing.id, file);
-        let reconnected = { ...existing, comparison: existing.comparison ?? null, availability: existing.persistence === "cached" ? "available" as const : "session" as const };
-        if (cacheThisImport && existing.persistence !== "cached") {
+      const sortedAudioFiles = audioFiles.sort((a, b) => relativePathOf(a).localeCompare(relativePathOf(b), undefined, { numeric: true, sensitivity: "base" }));
+      for (const [fileIndex, file] of sortedAudioFiles.entries()) {
+        if (file.size > MAX_FILE_BYTES) {
+          summary.errors.push(`${file.name} is larger than 300 MB`);
+          continue;
+        }
+        const path = relativePathOf(file);
+        const fingerprint = makeTrackFingerprint(file, path);
+        const existing = existingByFingerprint.get(fingerprint);
+        if (existing) {
+          runtimeFilesRef.current.set(existing.id, file);
+          let reconnected = { ...existing, comparison: existing.comparison ?? null, availability: existing.persistence === "cached" ? "available" as const : "session" as const };
+          if (cacheThisImport && existing.persistence !== "cached") {
+            try {
+              await platform.audioFiles.put(existing.id, file);
+              reconnected = { ...reconnected, persistence: "cached", availability: "available" };
+            } catch {
+              summary.errors.push(`${file.name} could not be kept for future visits.`);
+            }
+          }
+          imported.push(await attachImportedLyrics(reconnected, path));
+          summary.duplicates += 1;
+          setCacheProgress(Math.round(((fileIndex + 1) / sortedAudioFiles.length) * 100));
+          continue;
+        }
+        const track: LibraryTrack = await attachImportedLyrics({
+          id: fingerprint,
+          fingerprint,
+          name: file.name,
+          relativePath: path,
+          sourceLabel: sourceLabelFor(path),
+          size: file.size,
+          lastModified: file.lastModified,
+          duration: 0,
+          availability: "session",
+          persistence: "indexed",
+          lyricsFileName: "",
+          lyrics: [],
+          comparison: null,
+        });
+        runtimeFilesRef.current.set(track.id, file);
+        if (cacheThisImport) {
           try {
-            await platform.audioFiles.put(existing.id, file);
-            reconnected = { ...reconnected, persistence: "cached", availability: "available" };
+            await platform.audioFiles.put(track.id, file);
+            track.persistence = "cached";
+            track.availability = "available";
           } catch {
             summary.errors.push(`${file.name} could not be kept for future visits.`);
           }
         }
-        imported.push(reconnected);
-        summary.duplicates += 1;
+        imported.push(track);
+        existingByFingerprint.set(fingerprint, track);
+        summary.accepted += 1;
         setCacheProgress(Math.round(((fileIndex + 1) / sortedAudioFiles.length) * 100));
-        continue;
       }
-      let lyrics: LyricLine[] = [];
-      let lyricsFileName = "";
-      let lyricTiming: LyricTimingLine[] | undefined;
-      let lyricMetadata: string[] | undefined;
-      const lyricFile = lyricMap.get(lyricMatchKey(path))
-        ?? [...lyricMap.entries()].find(([key]) => key.endsWith(`/${withoutExtension(normalizeFileName(file.name))}`))?.[1];
-      if (lyricFile) {
-        try {
-          ({ lyrics, lyricTiming, lyricMetadata } = parseLyricsFile(decodeLrc(await lyricFile.arrayBuffer()), lyricFile.name));
-          lyricsFileName = lyricFile.name;
-          if (lyrics.length || lyricTiming?.length) summary.lyrics += 1;
-        } catch {
-          summary.errors.push(`${lyricFile.name} could not be parsed`);
-        }
-      }
-      const track: LibraryTrack = {
-        id: fingerprint,
-        fingerprint,
-        name: file.name,
-        relativePath: path,
-        sourceLabel: sourceLabelFor(path),
-        size: file.size,
-        lastModified: file.lastModified,
-        duration: 0,
-        availability: "session",
-        persistence: "indexed",
-        lyricsFileName,
-        lyrics,
-        lyricTiming,
-        lyricMetadata,
-        comparison: null,
-      };
-      runtimeFilesRef.current.set(track.id, file);
-      if (cacheThisImport) {
-        try {
-          await platform.audioFiles.put(track.id, file);
-          track.persistence = "cached";
-          track.availability = "available";
-        } catch {
-          summary.errors.push(`${file.name} could not be kept for future visits.`);
-        }
-      }
-      imported.push(track);
-      existingByFingerprint.set(fingerprint, track);
-      summary.accepted += 1;
-      setCacheProgress(Math.round(((fileIndex + 1) / sortedAudioFiles.length) * 100));
-    }
 
-    const reconnecting = reconnectModeRef.current;
-    const importedIds = imported.map((track) => track.id);
-    const commitImport = () => {
-      patchTracks((current) => {
-        const byId = new Map(current.map((track) => [track.id, track]));
-        if (reconnecting) {
-          for (const [id, track] of byId) {
-            if ((track.availability === "reconnect" || track.availability === "missing") && !imported.some((candidate) => candidate.id === id)) {
-              byId.set(id, { ...track, availability: "missing" });
+      // A later drop of just TXT/LRC files can attach to already indexed songs.
+      const lyricUpdates: LibraryTrack[] = [];
+      for (const track of tracksRef.current) {
+        if (imported.some((candidate) => candidate.id === track.id)) continue;
+        const updated = await attachImportedLyrics(track);
+        if (updated !== track) lyricUpdates.push(updated);
+      }
+      for (const file of lyricFiles) {
+        if (!matchedLyrics.has(file)) {
+          summary.ignored += 1;
+          summary.errors.push(`${file.name}: no unique matching song. Use Attach lyrics on the intended song.`);
+        }
+      }
+      const reconnecting = reconnectModeRef.current;
+      const importedIds = imported.map((track) => track.id);
+      const commitImport = () => {
+        patchTracks((current) => {
+          const byId = new Map(current.map((track) => [track.id, track]));
+          if (reconnecting) {
+            for (const [id, track] of byId) {
+              if ((track.availability === "reconnect" || track.availability === "missing") && !imported.some((candidate) => candidate.id === id)) {
+                byId.set(id, { ...track, availability: "missing" });
+              }
             }
           }
+          for (const track of imported) byId.set(track.id, track);
+          for (const track of lyricUpdates) {
+            const current = byId.get(track.id);
+            if (current) byId.set(track.id, { ...current, lyrics: track.lyrics, lyricTiming: track.lyricTiming, lyricMetadata: track.lyricMetadata, lyricsFileName: track.lyricsFileName });
+          }
+          return [...byId.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+        });
+        if (importedIds.length) {
+          if (albumId && !reconnecting) setAlbums((current) => current.map((album) => album.id === albumId ? addAlbumTracks(album, importedIds) : album));
+          patchSession((current) => ({
+            ...current,
+            queue: reconnecting ? current.queue.length ? current.queue : importedIds : [...new Set([...current.queue, ...importedIds])],
+            currentTrackId: current.currentTrackId || importedIds[0],
+          }));
         }
-        for (const track of imported) byId.set(track.id, track);
-        return [...byId.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
-      });
+      };
+      if (enteringFromWelcome && importedIds.length) await withSceneTransition(commitImport, "enter");
+      else commitImport();
       if (importedIds.length) {
-        patchSession((current) => ({
-          ...current,
-          queue: reconnecting ? current.queue.length ? current.queue : importedIds : [...new Set([...current.queue, ...importedIds])],
-          currentTrackId: current.currentTrackId || importedIds[0],
-        }));
+        if (reconnecting) setMessage(`${importedIds.length} tracks reconnected without changing the queue.`);
+        else setMessage(`${importedIds.length} tracks indexed. Choose one or press Play all.`);
       }
-    };
-    if (enteringFromWelcome && importedIds.length) await withSceneTransition(commitImport, "enter");
-    else commitImport();
-    if (importedIds.length) {
-      if (reconnecting) setMessage(`${importedIds.length} tracks reconnected without changing the queue.`);
-      else setMessage(`${importedIds.length} tracks indexed. Choose one or press Play all.`);
+      reconnectModeRef.current = false;
+      setCacheProgress(0);
+      await refreshStorageState();
+      setImportSummary(summary);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not import these files. Please try again.");
+    } finally {
+      importBusyRef.current = false;
+      reconnectModeRef.current = false;
+      setImporting(false);
     }
-    reconnectModeRef.current = false;
-    setCacheProgress(0);
-    await refreshStorageState();
-    setImportSummary(summary);
-    setImporting(false);
-  }, [patchSession, patchTracks, platform, refreshStorageState]);
+  }, [patchSession, patchTracks, platform, refreshStorageState, restored]);
 
   function handleFilesInput(event: ChangeEvent<HTMLInputElement>) {
-    void handleImport(event.target.files ?? []);
+    void handleImport(event.target.files ?? [], importAlbumIdRef.current);
     event.target.value = "";
   }
 
   function openFiles(reconnect = false) {
+    importAlbumIdRef.current = reconnect ? "" : activeAlbumId;
     reconnectModeRef.current = reconnect;
     setImportOpen(false);
     filesInputRef.current?.click();
   }
 
   function openFolder(reconnect = false) {
+    importAlbumIdRef.current = reconnect ? "" : activeAlbumId;
     reconnectModeRef.current = reconnect;
     setImportOpen(false);
     folderInputRef.current?.click();
@@ -1221,18 +1258,20 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     if (loadedTrackIdRef.current !== trackId) {
       if (!await startTrack(trackId, false, 0)) return;
     }
-    patchTracks((current) => current.map((track) => track.id === trackId && !track.lyricTiming?.length
+    patchTracks((current) => current.map((track) => track.id === trackId && !track.lyricTiming
       ? { ...track, lyricTiming: track.lyrics.map((line) => ({ ...line })) } : track));
     setTimingTrackId(trackId);
   }
 
-  const saveTimedLyrics = useCallback((download: boolean) => {
+  const saveTimedLyrics = useCallback((download: boolean, format: "lrc" | "txt" = "lrc") => {
     if (!timingTrack?.lyricTiming) return;
     try {
-      const source = serializeLrc(timingTrack.lyricTiming, timingTrack.lyricMetadata);
-      const fileName = `${withoutExtension(timingTrack.lyricsFileName || timingTrack.name)}.lrc`;
-      const lyrics = parseLrc(source).lines;
-      patchTracks((current) => current.map((track) => track.id === timingTrack.id ? { ...track, lyrics, lyricsFileName: fileName } : track));
+      const source = format === "txt" ? timingTrack.lyricTiming.map((line) => line.text).join("\n") + "\n" : serializeLrc(timingTrack.lyricTiming, timingTrack.lyricMetadata);
+      const fileName = `${withoutExtension(timingTrack.lyricsFileName || timingTrack.name)}.${format}`;
+      if (format === "lrc") {
+        const lyrics = parseLrc(source).lines;
+        patchTracks((current) => current.map((track) => track.id === timingTrack.id ? { ...track, lyrics, lyricsFileName: fileName } : track));
+      }
       if (download) {
         const url = URL.createObjectURL(new Blob([source], { type: "text/plain;charset=utf-8" }));
         const link = document.createElement("a");
@@ -1243,7 +1282,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
-      setMessage(download ? "Synced lyrics saved · LRC download started." : "Synced lyrics saved.");
+      setMessage(format === "txt" ? "TXT lyrics download started." : download ? "Synced lyrics saved · LRC download started." : "Synced lyrics saved.");
       if (!download) setTimingTrackId("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not export lyrics.");
@@ -1263,19 +1302,35 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setMessage(`Lyrics removed · ${target ? trackDisplayName(target.name) : "track"}`);
   }
 
-  async function handleDrop(event: DragEvent<HTMLElement>) {
+  async function handleDrop(event: DragEvent<HTMLElement>, albumId = activeAlbumId) {
     event.preventDefault();
+    event.stopPropagation();
     setDragging(false);
+    if (importBusyRef.current || readingDropRef.current || !restored) return;
+    readingDropRef.current = true;
+    reconnectModeRef.current = false;
     try {
+      setImporting(true);
       const files = await filesFromDrop(event.dataTransfer);
       if (!files.length) {
         setMessage("This browser could not read that dropped folder. Use Choose a folder instead.");
         return;
       }
-      await handleImport(files);
+      await handleImport(files, albumId);
     } catch {
       setMessage("That folder could not be read. Check its permission or use Choose a folder.");
+    } finally {
+      readingDropRef.current = false;
+      setImporting(false);
     }
+  }
+
+  function addTrackToAlbum(albumId: string, trackId: string) {
+    if (!tracksRef.current.some((track) => track.id === trackId)) return;
+    setAlbums((current) => current.map((album) => album.id === albumId ? addAlbumTracks(album, [trackId]) : album));
+    setDragging(false);
+    setMenuTrackId("");
+    setMessage("Song added to album.");
   }
 
   const playAll = useCallback(async (shuffle = false) => {
@@ -1496,6 +1551,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     runtimeFilesRef.current.clear();
     tracksRef.current = [];
     setTracks([]);
+    setAlbums([]);
+    setBrowsingAlbums(false);
+    setActiveAlbumId("");
     sessionRef.current = { ...EMPTY_SESSION };
     setSession({ ...EMPTY_SESSION });
     setCurrentTime(0);
@@ -1662,6 +1720,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const closeTimingEditor = useCallback(() => setTimingTrackId(""), []);
   const toggleTimingPlayback = useCallback(() => { void shortcutTogglePlayRef.current(); }, []);
 
+  const albumCollections = <AlbumCollections albums={albums} tracks={tracks} activeId={activeAlbumId} browsing={browsingAlbums} onBrowse={setBrowsingAlbums}
+    onSelect={(id) => { setActiveAlbumId(id); setMenuTrackId(""); }}
+    onSave={(album) => { setAlbums((current) => current.some((candidate) => candidate.id === album.id) ? current.map((candidate) => candidate.id === album.id ? album : candidate) : [...current, album]); setActiveAlbumId(album.id); setBrowsingAlbums(false); }}
+    onDelete={(id) => { setAlbums((current) => current.filter((album) => album.id !== id)); if (activeAlbumId === id) { setActiveAlbumId(""); setBrowsingAlbums(true); } setMessage("Album deleted. Your songs remain in the library."); }}
+    onAddTrack={addTrackToAlbum} onFilesDrop={(event, id) => void handleDrop(event, id)} />;
+
   return (
     <main data-companion={session.companionId} className={`library-app ${tracks.length ? "has-library" : "is-empty"} ${focusMode ? "is-library-focus" : ""}`}>
       <div className="scene-curtain" aria-hidden="true">
@@ -1708,8 +1772,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         <section
           className={`library-welcome ${dragging ? "is-dragging" : ""}`}
           id="library-top"
-          onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
-          onDragOver={(event) => event.preventDefault()}
+          onDragEnter={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
+          onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
           onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
           onDrop={handleDrop}
         >
@@ -1722,6 +1786,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
               {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>Audio, LRC, and TXT lyric files</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>Choose a folder</strong><small>Preserve album order and matching lyrics</small></span></button></div>}
               <p>Drop files here anytime · everything stays on this device</p>
             </div>
+            {restored && albumCollections}
           </div>
           <div className="library-welcome-stage">
             <Live2DStage companionId={session.companionId} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="welcome" trackLabel="Waiting for your library" activeSource={0} isComparing={false} isPlaying={false} focusMode={false} />
@@ -1776,13 +1841,16 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           ) : (
           <div className="library-list-panel">
             {unavailableCount > 0 && <div className="library-reconnect-banner"><FolderOpen size={17} /><span><strong>Some music needs to be reconnected.</strong><small>Your playlists and order are still here.</small></span><button type="button" onClick={() => openFolder(true)}>Reconnect folder</button></div>}
-            <div className="library-list-heading">
-              <div><p>LOCAL LIBRARY</p><h1>Collected <em>manuscripts.</em></h1><span>{filteredTracks.length} of {tracks.length} tracks</span></div>
+            <div className={`library-list-heading ${activeAlbum ? "library-album-heading" : ""}`}>
+              {activeAlbum && <span className="library-album-heading-cover">{activeAlbum.cover ? <img src={activeAlbum.cover} alt={`${activeAlbum.name} cover`} draggable={false} /> : <Music2 size={34} strokeWidth={1.2} />}</span>}
+              <div>{activeAlbum ? <><button type="button" className="album-back" onClick={() => { setActiveAlbumId(""); setBrowsingAlbums(true); }}><ChevronLeft size={12} /> Back to albums</button><h1>{activeAlbum.name}</h1><span>{filteredTracks.length} tracks · Virtual album</span></> : <><p>{browsingAlbums ? "GROUPED COLLECTIONS" : "LOCAL LIBRARY"}</p><h1>{browsingAlbums ? <>Virtual <em>albums.</em></> : <>Collected <em>manuscripts.</em></>}</h1><span>{browsingAlbums ? `${albums.length} collections · ${tracks.length} tracks` : `${filteredTracks.length} of ${tracks.length} tracks`}</span></>}</div>
               <div className="import-menu-wrap">
                 <button className="library-import-button" type="button" onClick={() => setImportOpen((value) => !value)}><Plus size={17} /> Import <ChevronDown size={14} /></button>
                 {importOpen && <div className="import-popover"><button type="button" onClick={() => openFiles()}><FileAudio size={16} /> Add files</button><button type="button" onClick={() => openFolder()}><FolderOpen size={16} /> Add folder</button></div>}
               </div>
             </div>
+            {albumCollections}
+            {!browsingAlbums && <>
             <div className="library-list-toolbar">
               <div><button type="button" onClick={() => void playAll(false)}><Play size={16} fill="currentColor" /> Play all</button><button type="button" onClick={() => void playAll(true)}><Shuffle size={16} /> Shuffle</button></div>
               <label><Search size={15} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your library" /></label>
@@ -1792,6 +1860,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
               <button type="button" disabled={!selectedVocalTracks.length} onClick={() => { libraryVocals.prepare(tracks.filter((track) => selectedVocalTracks.includes(track.id))); setSelectedVocalTracks([]); setVocalSelectionMode(false); }}>Prepare vocal lip sync{selectedVocalTracks.length ? ` (${selectedVocalTracks.length})` : ""}</button>
               <button type="button" onClick={() => { setVocalSelectionMode(false); setSelectedVocalTracks([]); }}>Cancel selection</button></> : <button type="button" onClick={() => setVocalSelectionMode(true)}>Prepare lip sync</button>}<small>Processes in the background · keep listening</small>
             </div>
+            <FileDropRegion albumName={activeAlbum?.name} onFilesDrop={(event) => void handleDrop(event)}>
             <div className="track-table" role="table" aria-label="Local music library">
               <div className="track-row track-table-header" role="row"><span>#</span><span>Track</span><span>Status</span><span>Time</span><span /></div>
               {filteredTracks.map((track, index) => {
@@ -1800,7 +1869,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 const active = track.id === session.currentTrackId;
                 const unavailable = track.availability === "reconnect" || track.availability === "missing";
                 return (
-                  <div className={`track-row ${active ? "is-active" : ""} ${unavailable ? "is-unavailable" : ""}`} role="row" key={track.id} onDoubleClick={() => void startTrack(track.id, true, 0)}>
+                  <div className={`track-row ${active ? "is-active" : ""} ${unavailable ? "is-unavailable" : ""}`} role="row" key={track.id} draggable
+                    onDragStart={(event) => { event.dataTransfer.setData(TRACK_DRAG_TYPE, track.id); event.dataTransfer.effectAllowed = "copyLink"; }}
+                    onDoubleClick={() => void startTrack(track.id, true, 0)}>
                     <button className="track-index" type="button" aria-label={`Play ${trackDisplayName(track.name)}`} onClick={() => void startTrack(track.id, true, 0)}>{active && isPlaying ? <AudioLines size={14} /> : String(index + 1).padStart(2, "0")}</button>
                     <span className="track-title"><label className="vocal-track-select">{vocalSelectionMode && <input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} />}<strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
                     <span className="track-states">
@@ -1815,12 +1886,18 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                     </span>
                     <span className="track-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
                     <span className="track-menu-wrap"><button type="button" aria-label={`Actions for ${trackDisplayName(track.name)}`} onClick={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)}><MoreHorizontal size={18} /></button>
-                      {menuTrackId === track.id && <span className="track-popover"><button type="button" onClick={() => { libraryVocals.prepare([track]); setMenuTrackId(""); }}>Prepare vocal lip sync</button><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => void openTimingEditor(track.id)}>{track.lyrics.length ? "Edit timing" : "Timestamp lyrics"}</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
+                      {menuTrackId === track.id && <span className="track-popover">
+                        {!!albums.length && <label className="track-album-select">Add to album<select aria-label={`Add ${trackDisplayName(track.name)} to album`} value="" onChange={(event) => { if (event.target.value) addTrackToAlbum(event.target.value, track.id); }}><option value="">Choose album…</option>{albums.map((album) => <option value={album.id} key={album.id}>{album.name}</option>)}</select></label>}
+                        {activeAlbumId && <button type="button" onClick={() => { setAlbums((current) => current.map((album) => album.id === activeAlbumId ? { ...album, trackIds: album.trackIds.filter((id) => id !== track.id) } : album)); setMenuTrackId(""); }}>Remove from album</button>}
+                        <button type="button" onClick={() => { libraryVocals.prepare([track]); setMenuTrackId(""); }}>Prepare vocal lip sync</button><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{(track.lyrics.length > 0 || track.lyricTiming !== undefined) && <button type="button" onClick={() => void openTimingEditor(track.id)}>{track.lyrics.length ? "Edit timing" : "Timestamp lyrics"}</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
                     </span>
                   </div>
                 );
               })}
+              {!filteredTracks.length && <p className="library-empty-results">{search ? "No songs match your search." : "This album is empty. Drop music here, or use Edit album to choose songs from your library."}</p>}
             </div>
+            </FileDropRegion>
+            </>}
           </div>
           )}
           </section>

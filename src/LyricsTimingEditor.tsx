@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { Download, Pause, Play, Rewind, Undo2, X } from "lucide-react";
+import { Download, Pause, Play, Plus, Rewind, Timer, Trash2, Undo2, X } from "lucide-react";
 import { formatLrcTime, type LyricTimingLine, shiftLyricTiming, validateLyricTiming } from "./lrc";
 import "./lyrics-timing.css";
 
@@ -14,7 +14,7 @@ type Props = {
   onScrubStart: () => void;
   onScrubEnd: (time: number) => void;
   onTogglePlay: () => void;
-  onSave: (download: boolean) => void;
+  onSave: (download: boolean, format?: "lrc" | "txt") => void;
   onClose: () => void;
 };
 
@@ -84,6 +84,7 @@ const LyricsTimingEditor = memo(function LyricsTimingEditor({ name, lines, durat
   const selectedLine = lines[selected];
   const dialogRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const textUndoStarted = useRef(false);
   const count = lines.filter((line) => line.time !== null).length;
   const validation = validateLyricTiming(lines);
 
@@ -98,16 +99,38 @@ const LyricsTimingEditor = memo(function LyricsTimingEditor({ name, lines, durat
   }, [selected]);
 
   function change(next: LyricTimingLine[], nextSelected: number) {
+    textUndoStarted.current = false;
     setEditError("");
-    setHistory((previous) => [...previous, { lines, selected }]);
+    setHistory((previous) => [...previous.slice(-99), { lines, selected }]);
     onChange(next);
     setSelected(nextSelected);
   }
 
-  function stamp() {
+  function stamp(advance = true) {
     if (selected >= lines.length) return;
     const time = Math.round(Math.max(0, Math.min(duration, getTime())) * 100) / 100;
-    change(lines.map((line, index) => index === selected ? { ...line, time } : line), selected + 1);
+    change(lines.map((line, index) => index === selected ? { ...line, time } : line), advance ? selected + 1 : selected);
+  }
+
+  function editText(text: string) {
+    setEditError("");
+    // One focused text edit is one undo step, regardless of character count.
+    if (!textUndoStarted.current) {
+      setHistory((previous) => [...previous.slice(-99), { lines, selected }]);
+      textUndoStarted.current = true;
+    }
+    onChange(lines.map((line, index) => index === selected ? { ...line, text } : line));
+  }
+
+  function insertLine(after: boolean) {
+    const index = Math.min(lines.length, selected + (after && selectedLine ? 1 : 0));
+    change([...lines.slice(0, index), { text: "", time: null }, ...lines.slice(index)], index);
+  }
+
+  function deleteLine() {
+    if (!selectedLine) return;
+    const next = lines.filter((_, index) => index !== selected);
+    change(next, Math.max(0, Math.min(selected, next.length - 1)));
   }
 
   function setTime(time: number) {
@@ -121,6 +144,7 @@ const LyricsTimingEditor = memo(function LyricsTimingEditor({ name, lines, durat
   }
 
   function undo() {
+    textUndoStarted.current = false;
     setEditError("");
     const previous = history.at(-1);
     if (!previous) return;
@@ -136,51 +160,70 @@ const LyricsTimingEditor = memo(function LyricsTimingEditor({ name, lines, durat
           event.stopPropagation();
           if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
           if (event.key === "Tab") {
-            const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled)") ?? []);
+            const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled)") ?? []);
             const first = focusable[0];
             const last = focusable.at(-1);
             if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last?.focus(); }
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
             return;
           }
-          if ((event.target as HTMLElement).matches("input:not([type=range])")) return;
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.repeat) { event.preventDefault(); stamp(false); return; }
+          if ((event.target as HTMLElement).matches("input:not([type=range]), textarea")) return;
           if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
           if (event.code === "KeyT") { event.preventDefault(); stamp(); }
+          if (event.code === "KeyS") { event.preventDefault(); stamp(false); }
           if (event.code === "Space") { event.preventDefault(); onTogglePlay(); }
           if (event.code === "KeyZ") { event.preventDefault(); undo(); }
         }}>
-        <header><div><small>LYRICS · TIMING EDITOR</small><h2 id="lyric-timing-title">Timestamp lyrics</h2><p>{name}</p></div><button type="button" aria-label="Close timestamp editor" onClick={onClose}><X size={20} /></button></header>
-        <p id="lyric-timing-help">Play the song and press <kbd>T</kbd> when each line starts. Select any line to timestamp it again. <kbd>Space</kbd> plays / pauses; <kbd>Z</kbd> undoes.</p>
+        <header><div><small>LYRICS · TEXT & TIMING</small><h2 id="lyric-timing-title">{name}</h2></div><button type="button" aria-label="Close timestamp editor" onClick={onClose}><X size={20} /></button></header>
+        <p id="lyric-timing-help">Select a line to edit. <kbd>T</kbd> stamps and advances; <kbd>S</kbd> overwrites its time. <kbd>Space</kbd> plays / pauses.</p>
         <div className="lyric-timing-transport">
-          <button type="button" aria-label="Rewind 5 seconds" onClick={() => onSeek(Math.max(0, getTime() - 5))}><Rewind size={18} /></button>
-          <button type="button" aria-label={isPlaying ? "Pause timing playback" : "Play timing playback"} onClick={onTogglePlay}>{isPlaying ? <Pause size={20} /> : <Play size={20} />}</button>
+          <button type="button" aria-label="Rewind 5 seconds" onClick={() => onSeek(Math.max(0, getTime() - 5))}><Rewind size={16} /></button>
+          <button type="button" aria-label={isPlaying ? "Pause timing playback" : "Play timing playback"} onClick={onTogglePlay}>{isPlaying ? <Pause size={17} /> : <Play size={17} />}</button>
           <TimingPlayhead duration={duration} getTime={getTime} onSeek={onSeek} onScrubStart={onScrubStart} onScrubEnd={onScrubEnd} />
         </div>
-        <div className="lyric-timing-progress"><strong>{count} / {lines.length} timed</strong><span>Draft saved with this track</span></div>
-        <div className="lyric-timing-lines" aria-label="Lyrics to timestamp">
-          {lines.map((line, index) => <button type="button" key={index} ref={(node) => { rowRefs.current[index] = node; }} className={selected === index ? "is-selected" : ""} aria-pressed={selected === index} onClick={() => setSelected(index)}>
-            <span>{index + 1}</span><time>{line.time === null ? "--:--.--" : formatLrcTime(line.time)}</time><span>{line.text}</span>
-          </button>)}
-        </div>
-        {selectedLine && <div className="lyric-timing-adjust">
-          <TimeInput key={`${selected}:${selectedLine.time}`} label={`Line ${selected + 1} time (seconds)`} initial={selectedLine.time} action="Set time" onApply={setTime} />
-          <div className="lyric-timing-nudge">
-            <button type="button" disabled={selectedLine.time === null} onClick={() => setTime((selectedLine.time ?? 0) - 0.1)}>−0.1 s</button>
-            <button type="button" disabled={selectedLine.time === null} onClick={() => setTime((selectedLine.time ?? 0) + 0.1)}>+0.1 s</button>
-            <button type="button" disabled={selectedLine.time === null} onClick={() => onSeek(selectedLine.time ?? 0)}>Seek to line</button>
+        <div className="lyric-timing-progress"><strong>{count} / {lines.length} timed</strong><span>Draft saved with this track</span><div><button type="button" disabled={!history.length} onClick={undo}><Undo2 size={13} /> Undo</button><button type="button" disabled={!count} onClick={() => change(lines.map((line) => ({ ...line, time: null })), 0)}>Reset</button></div></div>
+        <div className="lyric-editor-columns">
+          <div className="lyric-timing-lines" aria-label="Lyrics to timestamp">
+            {lines.map((line, index) => <button type="button" key={index} ref={(node) => { rowRefs.current[index] = node; }} className={selected === index ? "is-selected" : ""} aria-pressed={selected === index} onClick={() => setSelected(index)}>
+              <span>{index + 1}</span><time>{line.time === null ? "--:--.--" : formatLrcTime(line.time)}</time><span className={!line.text ? "is-empty-line" : ""}>{line.text || "Empty line"}</span>
+            </button>)}
+            {!lines.length && <p className="lyric-empty-lines">No lyric lines. Add a line to start.</p>}
           </div>
-        </div>}
-        <div className="lyric-timing-adjust">
-          <TimeInput label="All lines offset (seconds)" initial={0} action="Shift all" onApply={shiftAll} />
-          <small>Negative = earlier · Positive = later. Untimed lines stay untimed.</small>
+          <div className="lyric-editor-pane">
+            {selectedLine ? <>
+              <label className="lyric-text-edit">Line {selected + 1} lyrics
+                <textarea aria-label={`Line ${selected + 1} lyrics`} value={selectedLine.text} rows={3}
+                  onFocus={() => { textUndoStarted.current = false; }} onBlur={() => { textUndoStarted.current = false; }}
+                  onChange={(event) => editText(event.target.value)} />
+              </label>
+              <p className="lyric-editor-key-hint"><kbd>⌘ / Ctrl + Enter</kbd> sets the current playback time while typing.</p>
+            </> : <p className="lyric-editor-finished">{lines.length ? "All lines stamped. Select a line to keep editing." : "Start with your first lyric line."}</p>}
+            <div className="lyric-timing-actions">
+              <button className="lyric-timing-overwrite" type="button" disabled={!selectedLine} onClick={() => stamp(false)}><Timer size={17} /> Set current time <kbd>S</kbd></button>
+              <button className="lyric-timing-stamp" type="button" disabled={selected >= lines.length} onClick={() => stamp()}>{selected < lines.length ? `Timestamp line ${selected + 1} · T` : "Select a line to timestamp"}</button>
+            </div>
+            <div className="lyric-line-tools">
+              <button type="button" onClick={() => insertLine(false)}><Plus size={13} /> {selectedLine ? "Insert before" : "Add line"}</button>
+              {selectedLine && <button type="button" onClick={() => insertLine(true)}><Plus size={13} /> Insert after</button>}
+              <button type="button" disabled={!selectedLine} onClick={deleteLine}><Trash2 size={13} /> Delete line</button>
+            </div>
+            {selectedLine && <div className="lyric-timing-adjust">
+              <TimeInput key={`${selected}:${selectedLine.time}`} label={`Line ${selected + 1} time (seconds)`} initial={selectedLine.time} action="Set time" onApply={setTime} />
+              <div className="lyric-timing-nudge">
+                <button type="button" disabled={selectedLine.time === null} onClick={() => setTime((selectedLine.time ?? 0) - 0.1)}>−0.1 s</button>
+                <button type="button" disabled={selectedLine.time === null} onClick={() => setTime((selectedLine.time ?? 0) + 0.1)}>+0.1 s</button>
+                <button type="button" disabled={selectedLine.time === null} onClick={() => onSeek(selectedLine.time ?? 0)}>Seek to line</button>
+              </div>
+            </div>}
+            <div className="lyric-timing-adjust lyric-offset-adjust">
+              <TimeInput label="All lines offset (seconds)" initial={0} action="Shift all" onApply={shiftAll} />
+              <small>Negative = earlier · Positive = later. <kbd>Z</kbd> undoes outside text fields.</small>
+            </div>
+          </div>
         </div>
-        <div className="lyric-timing-actions">
-          <button className="lyric-timing-stamp" type="button" disabled={selected >= lines.length} onClick={stamp}>{selected < lines.length ? `Timestamp line ${selected + 1} · T` : "All lines timed"}</button>
-          <button type="button" disabled={!history.length} onClick={undo}><Undo2 size={16} /> Undo</button>
-          <button type="button" disabled={!count} onClick={() => change(lines.map((line) => ({ ...line, time: null })), 0)}>Reset</button>
-        </div>
-        <p className="lyric-timing-hint" role="status">{editError || validation || "Ready to save and download. Select a line to adjust its timestamp."}</p>
-        <footer><button type="button" disabled={!!validation} onClick={() => onSave(false)}>Save synced lyrics</button><button type="button" className="lyric-timing-download" disabled={!!validation} onClick={() => onSave(true)}><Download size={16} /> Save & download .lrc</button></footer>
+        <p className="lyric-timing-hint" role="status">{editError || validation || "Ready to save. Text and timing changes stay in your draft."}</p>
+        <footer><button type="button" onClick={onClose}>Save draft</button><button type="button" disabled={!lines.length} onClick={() => onSave(true, "txt")}><Download size={14} /> Download .txt</button><button type="button" disabled={!!validation} onClick={() => onSave(false)}>Save synced lyrics</button><button type="button" className="lyric-timing-download" disabled={!!validation} onClick={() => onSave(true)}><Download size={14} /> Save & download .lrc</button></footer>
       </div>
     </div>
   );

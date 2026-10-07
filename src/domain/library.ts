@@ -62,12 +62,28 @@ export type LibrarySession = {
 export type LibrarySnapshot = {
   version: 2;
   tracks: LibraryTrack[];
+  albums: LibraryAlbum[];
   session: LibrarySession;
 };
+
+/** Virtual collections reference existing tracks; they never move source files. */
+export type LibraryAlbum = {
+  id: string;
+  name: string;
+  trackIds: string[];
+  cover?: string;
+};
+
+export const TRACK_DRAG_TYPE = "application/x-vibloom-track";
+
+export function addAlbumTracks(album: LibraryAlbum, trackIds: string[]) {
+  return { ...album, trackIds: [...new Set([...album.trackIds, ...trackIds])] };
+}
 
 export type StoredLibrarySnapshot = {
   version: 1 | 2;
   tracks: LibraryTrack[];
+  albums?: LibraryAlbum[];
   session: Omit<LibrarySession, "cacheEnabled" | "companionId"> & Partial<Pick<LibrarySession, "cacheEnabled" | "companionId">>;
 };
 
@@ -84,9 +100,14 @@ export const EMPTY_SESSION: LibrarySession = {
 };
 
 export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): LibrarySnapshot {
+  const trackIds = new Set(snapshot.tracks.map((track) => track.id));
   return {
     version: 2,
     tracks: snapshot.tracks.map((track) => ({ ...track, comparison: track.comparison ?? null })),
+    albums: (snapshot.albums ?? []).map((album) => ({
+      ...album,
+      trackIds: [...new Set(album.trackIds)].filter((id) => trackIds.has(id)),
+    })),
     session: {
       ...EMPTY_SESSION,
       ...snapshot.session,
@@ -104,6 +125,21 @@ export function normalizeFileName(value: string) {
 
 export function withoutExtension(value: string) {
   return value.replace(/\.[^.]+$/u, "");
+}
+
+/** Prefer lyrics beside the audio; flat imports may match only unambiguous names. */
+export function matchLyricFile<T extends { name: string; relativePath: string }>(
+  track: { name: string; relativePath: string }, files: T[], peers: { name: string; relativePath: string }[],
+): T | undefined {
+  const stem = (name: string) => withoutExtension(normalizeFileName(name));
+  const pathStem = (path: string) => withoutExtension(normalizeFileName(path));
+  const candidates = files.filter((file) => stem(file.name) === stem(track.name));
+  const preferLrc = (matches: T[]) => matches.find((file) => /\.lrc$/iu.test(file.name)) ?? matches[0];
+  const exact = candidates.filter((file) => pathStem(file.relativePath) === pathStem(track.relativePath));
+  if (exact.length) return preferLrc(exact);
+  const directories = new Set(candidates.map((file) => pathStem(file.relativePath)));
+  if (directories.size !== 1 || peers.filter((peer) => stem(peer.name) === stem(track.name)).length !== 1) return;
+  return preferLrc(candidates);
 }
 
 export function makeTrackFingerprint(file: Pick<File, "name" | "size" | "lastModified">, relativePath = "") {

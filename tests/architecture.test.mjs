@@ -28,6 +28,32 @@ test("migrates legacy library snapshots at the domain boundary", async () => {
   assert.equal(migrated.session.volume, 0.5);
   assert.deepEqual(migrated.session.history, []);
   assert.equal(migrated.tracks[0].comparison, null);
+  assert.deepEqual(migrated.albums, []);
+});
+
+test("restores virtual album covers and removes stale or duplicate track references", async () => {
+  const { migrateLibrarySnapshot, addAlbumTracks } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  const album = { id: "album-1", name: "Favorites", cover: "data:image/webp;base64,cover", trackIds: ["a", "a", "missing"] };
+  const snapshot = migrateLibrarySnapshot({ version: 2, tracks: [{ id: "a" }, { id: "b" }], session: {}, albums: [album] });
+  assert.deepEqual(snapshot.albums, [{ ...album, trackIds: ["a"] }]);
+  assert.deepEqual(addAlbumTracks(snapshot.albums[0], ["b", "a", "b"]), { ...album, trackIds: ["a", "b"] });
+  assert.deepEqual(snapshot.albums[0].trackIds, ["a"], "adding album songs leaves the source album unchanged");
+});
+
+test("matches local lyrics without crossing ambiguous folders or losing LRC preference", async () => {
+  const { matchLyricFile } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  const songA = { name: "Song.mp3", relativePath: "Album A/Song.mp3" };
+  const songB = { name: "Song.flac", relativePath: "Album B/Song.flac" };
+  const txtA = { name: "Song.txt", relativePath: "Album A/Song.txt" };
+  const lrcA = { name: "Ｓｏｎｇ.LRC", relativePath: "Album A/Ｓｏｎｇ.LRC" };
+  const lrcB = { name: "Song.lrc", relativePath: "Album B/Song.lrc" };
+  assert.equal(matchLyricFile(songA, [txtA, lrcB, lrcA], [songA, songB]), lrcA);
+  assert.equal(matchLyricFile(songB, [txtA, lrcB, lrcA], [songA, songB]), lrcB);
+  const flat = { name: "song.LRC", relativePath: "song.LRC" };
+  assert.equal(matchLyricFile(songA, [flat], [songA]), flat, "a later lyric-only drop matches the existing song");
+  assert.equal(matchLyricFile(songA, [flat], [songA, songB]), undefined, "one flat lyric cannot identify two same-named songs");
+  assert.equal(matchLyricFile({ ...songA, relativePath: "Other/Song.mp3" }, [lrcA, lrcB], [songA]), undefined, "multiple lyric directories need an exact match");
+  assert.equal(matchLyricFile(songA, [{ name: "Unrelated.txt", relativePath: "Unrelated.txt" }], [songA]), undefined);
 });
 
 test("maps the entire viewport to gaze coordinates around the model", async () => {
