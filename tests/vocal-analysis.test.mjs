@@ -5,7 +5,9 @@ import ts from "typescript";
 
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64")}`;
 const envelope = moduleUrl(await readFile(new URL("../src/audio/vocals/envelope.ts", import.meta.url), "utf8"));
+const processingQueue = moduleUrl(await readFile(new URL("../src/audio/processingQueue.ts", import.meta.url), "utf8"));
 const source = (await readFile(new URL("../src/audio/vocals/analyzeVocals.ts", import.meta.url), "utf8"))
+  .replace('"../processingQueue"', JSON.stringify(processingQueue))
   .replace('"./envelope"', JSON.stringify(envelope))
   .replace('new URL("./separation.worker.ts", import.meta.url)', '"separation.worker.ts"')
   .replace('import.meta.env.BASE_URL', '"./"');

@@ -36,3 +36,7 @@ yarn-error.log*
 /.superdesign/tmp/
 
 /.cache/
+
+# Python comparison tooling
+__pycache__/
+*.pyc

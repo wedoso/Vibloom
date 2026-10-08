@@ -33,6 +33,7 @@ import {
   Trash2,
   Upload,
   Volume2,
+  WandSparkles,
   X,
 } from "lucide-react";
 import {
@@ -50,7 +51,11 @@ import Live2DStage from "./Live2DStage";
 import { COMPANIONS, type CompanionId } from "./live2d/models";
 import BrandMark from "./BrandMark";
 import UpdateControl from "./UpdateControl";
+import RemasterDialog from "./RemasterDialog";
+import ComparisonActions from "./ComparisonActions";
 import { makeWaveformPeaks, readAudioFile } from "./audio/audioFiles";
+import { renderRemaster, type RemasterProgress } from "./audio/remaster/renderRemaster";
+import { REPAIR_PRESETS, REMASTER_ENGINE_VERSION, getRepairPreset } from "./audio/remaster/presets";
 import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
 import { SILENT_VOCAL_POSE, type VocalPose } from "./audio/vocals/envelope";
 import { useLibraryVocals } from "./audio/vocals/useLibraryVocals";
@@ -479,6 +484,24 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const [confirmAction, setConfirmAction] = useState<"cache" | "queue" | "reset" | null>(null);
   const [timingTrackId, setTimingTrackId] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [remasterPreset, setRemasterPreset] = useState("default");
+  const [remasterProgress, setRemasterProgress] = useState<RemasterProgress | null>(null);
+  const [remasterOpen, setRemasterOpen] = useState(false);
+  const [remasterError, setRemasterError] = useState("");
+  const remasterControllerRef = useRef<AbortController | null>(null);
+  const downloadUrlsRef = useRef(new Map<string, number>());
+  useEffect(() => () => {
+    for (const [url, timer] of downloadUrlsRef.current) {
+      window.clearTimeout(timer); URL.revokeObjectURL(url);
+    }
+    downloadUrlsRef.current.clear();
+  }, []);
+  const cancelRemaster = useCallback(() => {
+    remasterControllerRef.current?.abort();
+    remasterControllerRef.current = null;
+    setRemasterProgress(null);
+  }, []);
+  useEffect(() => () => remasterControllerRef.current?.abort(), []);
 
   const filesInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -565,7 +588,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   };
   const [vocalJobs] = useState(() => new VocalJobStore());
   useEffect(() => () => vocalJobs.dispose(), [vocalJobs]);
-  const vocalLipSync = useVocalLipSync(vocalJobs, currentTrack ? vocalJobKey(currentTrack, activeSource) : "", vocalBuffer, savedVocals, saveVocals);
+  const readVocalBuffer = useCallback(() => audioEngine.getBuffer(activeSource), [audioEngine, activeSource]);
+  const vocalLipSync = useVocalLipSync(vocalJobs, currentTrack ? vocalJobKey(currentTrack, activeSource) : "", vocalBuffer?.duration ?? null, readVocalBuffer, savedVocals, saveVocals);
   const sampleVocals = vocalLipSync.sample;
 
   const patchSession = useCallback((patch: Partial<LibrarySession> | ((current: LibrarySession) => LibrarySession)) => {
@@ -624,7 +648,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           const track: LibraryTrack = { ...storedTrack, comparison: storedTrack.comparison ?? null };
           const comparison = track.comparison;
           const restoredComparison = comparison?.persistence === "cached"
-            ? await platform.audioFiles.get(comparisonCacheKey(track.id)).then((file) => ({
+            ? await platform.audioFiles.get(comparisonCacheKey(track.id, track.comparison)).then((file) => ({
               ...comparison,
               availability: file ? "available" as const : "reconnect" as const,
               persistence: file ? "cached" as const : "indexed" as const,
@@ -832,6 +856,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [audioEngine, createSourceAt, ensureAudioGraph, getTimelineTime]);
 
   const startTrack = useCallback(async (trackId: string, play = true, resumeAt = 0) => {
+    remasterControllerRef.current?.abort();
     const playbackIntentVersion = playbackIntentVersionRef.current;
     const track = tracksRef.current.find((candidate) => candidate.id === trackId);
     if (!track) return false;
@@ -843,6 +868,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     }
     const loadVersion = ++primaryLoadVersionRef.current;
     if (loadedTrackIdRef.current && loadedTrackIdRef.current !== trackId) {
+      setRemasterOpen(false);
+      setRemasterError("");
       compareLoadVersionRef.current += 1;
       audioEngine.setBuffer(1, null);
       stopSourceAt(1);
@@ -896,7 +923,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     if (play && playbackIntentVersion === playbackIntentVersionRef.current) await startPlayback(safeTime);
     if (track.comparison) {
       const comparisonFile = track.comparison.persistence === "cached"
-        ? await platform.audioFiles.get(comparisonCacheKey(track.id))
+        ? await platform.audioFiles.get(comparisonCacheKey(track.id, track.comparison))
         : null;
       if (comparisonFile) {
         await decodeComparisonFile(comparisonFile, track.id, "cached", false, track.comparison.name);
@@ -1428,6 +1455,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   async function cacheAvailableTracks() {
+    cancelRemaster();
     const available = tracksRef.current.filter((track) => runtimeFilesRef.current.has(track.id) && track.persistence !== "cached");
     const comparisonFile = compareSlot.status === "ready" && compareSlot.file && compareSlot.persistence !== "cached" ? compareSlot.file : null;
     patchSession({ cacheEnabled: true });
@@ -1460,7 +1488,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     }
     if (comparisonFile && compareSlot.trackId) {
       try {
-        await platform.audioFiles.put(comparisonCacheKey(compareSlot.trackId), comparisonFile);
+        await platform.audioFiles.put(comparisonCacheKey(compareSlot.trackId, tracksRef.current.find(track => track.id === compareSlot.trackId)?.comparison), comparisonFile);
         patchTracks((current) => current.map((track) => track.id === compareSlot.trackId && track.comparison ? {
           ...track,
           comparison: { ...track.comparison, persistence: "cached", availability: "available" },
@@ -1478,6 +1506,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   async function clearAudioCache() {
+    cancelRemaster();
     await platform.audioFiles.clear();
     patchTracks((current) => current.map((track) => ({
       ...track,
@@ -1498,9 +1527,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   async function toggleTrackCache(track: LibraryTrack) {
+    cancelRemaster();
     if (track.persistence === "cached") {
       await platform.audioFiles.remove(track.id);
-      await platform.audioFiles.remove(comparisonCacheKey(track.id)).catch(() => undefined);
+      await platform.audioFiles.remove(comparisonCacheKey(track.id, track.comparison)).catch(() => undefined);
       patchTracks((current) => current.map((candidate) => candidate.id === track.id ? {
         ...candidate,
         persistence: "indexed",
@@ -1517,7 +1547,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         await platform.audioFiles.put(track.id, file);
         let cachedComparison = false;
         if (track.comparison && compareSlot.trackId === track.id && compareSlot.file) {
-          await platform.audioFiles.put(comparisonCacheKey(track.id), compareSlot.file);
+          await platform.audioFiles.put(comparisonCacheKey(track.id, track.comparison), compareSlot.file);
           cachedComparison = true;
           setCompareSlot((slot) => ({ ...slot, persistence: "cached" }));
         }
@@ -1534,8 +1564,31 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     await refreshStorageState();
   }
 
+  function releaseLoadedAudio() {
+    setRemasterOpen(false);
+    setRemasterError("");
+    primaryLoadVersionRef.current += 1;
+    compareLoadVersionRef.current += 1;
+    loadedTrackIdRef.current = "";
+    preloadingTrackIdRef.current = "";
+    playingRef.current = false;
+    audioEngine.stop();
+    audioEngine.setBuffer(0, null);
+    audioEngine.setBuffer(1, null);
+    audioEngine.setOffset(0);
+    audioEngine.selectSourceImmediately(0);
+    setIsPlaying(false);
+    setActiveSource(0);
+    setPrimaryLoad({ stage: "idle", progress: 0 });
+    setPrimaryPeaks([]);
+    setComparePeaks([]);
+    setCompareSlot({ ...EMPTY_COMPARE_SLOT });
+    setComparisonMotion("idle");
+  }
+
   function clearQueue() {
-    if (playingRef.current) pausePlayback();
+    cancelRemaster();
+    releaseLoadedAudio();
     patchSession({ queue: [], history: [], currentTrackId: "", currentTime: 0 });
     setCurrentTime(0);
     setDuration(0);
@@ -1545,7 +1598,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   async function resetLibrary() {
-    if (playingRef.current) pausePlayback();
+    cancelRemaster();
+    vocalJobs.reset();
+    releaseLoadedAudio();
     await platform.audioFiles.clear();
     await platform.repository.reset();
     runtimeFilesRef.current.clear();
@@ -1572,6 +1627,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   async function loadComparisonFile(file: File) {
+    cancelRemaster();
     const track = tracksRef.current.find((candidate) => candidate.id === sessionRef.current.currentTrackId);
     if (!track) {
       setMessage("Choose a library track before adding Version B.");
@@ -1603,6 +1659,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         setMessage(error instanceof Error ? `${error.message} Version B remains available in this tab.` : "Version B remains available in this tab.");
       }
     }
+    vocalJobs.forget(vocalJobKey(track, 1));
     patchTracks((current) => current.map((candidate) => candidate.id === track.id ? {
       ...candidate,
       comparison: {
@@ -1614,9 +1671,102 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         persistence,
       },
     } : candidate));
+    if (track.comparison?.cacheKey) await platform.audioFiles.remove(track.comparison.cacheKey).catch(() => undefined);
     setCompareSlot((slot) => ({ ...slot, persistence, loadStage: "idle", loadProgress: 100 }));
     await refreshStorageState();
     setMessage(persistence === "cached" ? "Version B is synchronized and kept for your next visit." : "Version B is synchronized for this session.");
+  }
+
+  async function applyRemaster() {
+    if (remasterControllerRef.current) return;
+    const track = tracksRef.current.find(candidate => candidate.id === sessionRef.current.currentTrackId);
+    const source = audioEngine.getBuffer(0);
+    if (!track || !source || loadedTrackIdRef.current !== track.id || primaryLoad.stage !== "idle") return;
+    setRemasterError("");
+    const controller = new AbortController();
+    remasterControllerRef.current = controller;
+    const primaryVersion = primaryLoadVersionRef.current, comparisonVersion = compareLoadVersionRef.current;
+    const assertCurrent = () => {
+      controller.signal.throwIfAborted();
+      if (primaryLoadVersionRef.current !== primaryVersion || compareLoadVersionRef.current !== comparisonVersion
+        || sessionRef.current.currentTrackId !== track.id || audioEngine.getBuffer(0) !== source) {
+        throw new DOMException("Cancelled", "AbortError");
+      }
+    };
+    const cacheKey = `${track.id}--remaster-${crypto.randomUUID()}`;
+    let cached = false, committed = false, cacheAttempted = false;
+    try {
+      const result = await renderRemaster(source, remasterPreset, controller.signal, progress => {
+        if (remasterControllerRef.current === controller) setRemasterProgress(progress);
+      });
+      assertCurrent();
+      setRemasterProgress({ phase: "Preparing version B", progress: .98 });
+      const file = new File([result.blob], `${withoutExtension(track.name)}.remaster-${remasterPreset}.wav`, { type: "audio/wav", lastModified: Date.now() });
+      const context = await ensureAudioGraph(false);
+      const buffer = await context.decodeAudioData(await file.arrayBuffer());
+      assertCurrent();
+      let persistence: "indexed" | "cached" = "indexed";
+      let cacheNotice = "";
+      if (sessionRef.current.cacheEnabled) {
+        try {
+          const storage = await platform.storage.readState();
+          assertCurrent();
+          if (storage.quota > 0 && file.size > (storage.quota - storage.usage) * .9) throw new Error("Not enough device storage.");
+          // Write under a fresh key; cancelled work cannot overwrite the old B.
+          cacheAttempted = true;
+          await platform.audioFiles.put(cacheKey, file);
+          cached = true;
+          assertCurrent();
+          persistence = "cached";
+        } catch (error) {
+          assertCurrent();
+          cacheNotice = error instanceof Error ? ` ${error.message} Download B to keep a copy.` : " Download B to keep a copy.";
+        }
+      }
+      assertCurrent();
+      const peaks = makeWaveformPeaks(buffer);
+      stopSourceAt(1);
+      audioEngine.selectSourceImmediately(0);
+      setActiveSource(0);
+      audioEngine.setBuffer(1, buffer);
+      compareLoadVersionRef.current += 1;
+      setComparisonMotion("entering");
+      setCompareSlot({ file, trackId: track.id, name: file.name, size: file.size, duration: buffer.duration,
+        status: "ready", loadStage: "idle", loadProgress: 100, error: "", persistence });
+      setComparePeaks(peaks);
+      if (playingRef.current) createSourceAt(1, context.currentTime + SOURCE_LEAD_SECONDS, getTimelineTime() + SOURCE_LEAD_SECONDS);
+      vocalJobs.forget(vocalJobKey(track, 1));
+      patchTracks(current => current.map(candidate => candidate.id === track.id ? { ...candidate, comparison: {
+        name: file.name, size: file.size, lastModified: file.lastModified, duration: buffer.duration,
+        availability: cached ? "available" : "session", persistence, cacheKey,
+        remaster: { engineVersion: REMASTER_ENGINE_VERSION, presetId: remasterPreset, createdAt: file.lastModified, metrics: result.metrics },
+      } } : candidate));
+      committed = true;
+      setRemasterOpen(false);
+      if (track.comparison?.persistence === "cached") await platform.audioFiles.remove(comparisonCacheKey(track.id, track.comparison)).catch(() => undefined);
+      await refreshStorageState();
+      if (remasterControllerRef.current === controller) setMessage(`${getRepairPreset(remasterPreset).name} ready in B · ${Math.round(result.metrics.elapsedMs)} ms.${cacheNotice}`);
+    } catch (error) {
+      if (error instanceof Error && error.name !== "AbortError") {
+        setMessage(`Remaster failed: ${error.message}`);
+        if (remasterControllerRef.current === controller) setRemasterError(error.message);
+      }
+    } finally {
+      if (cacheAttempted && (!cached || !committed)) await platform.audioFiles.remove(cacheKey).catch(() => undefined);
+      if (remasterControllerRef.current === controller) { remasterControllerRef.current = null; setRemasterProgress(null); }
+    }
+  }
+
+  function downloadComparison() {
+    const file = compareSlot.file;
+    if (!file || compareSlot.status !== "ready") return;
+    const url = URL.createObjectURL(file), link = document.createElement("a");
+    link.href = url; link.download = compareSlot.name;
+    try { link.click(); } catch (error) { URL.revokeObjectURL(url); throw error; }
+    const timer = window.setTimeout(() => {
+      URL.revokeObjectURL(url); downloadUrlsRef.current.delete(url);
+    }, 30_000);
+    downloadUrlsRef.current.set(url, timer);
   }
 
   function handleComparisonDrop(event: DragEvent<HTMLElement>) {
@@ -1634,6 +1784,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   async function removeComparison() {
+    cancelRemaster();
     if (comparisonMotion === "leaving") return;
     const trackId = compareSlot.trackId || sessionRef.current.currentTrackId;
     setComparisonMotion("leaving");
@@ -1643,9 +1794,11 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     audioEngine.selectSourceImmediately(0);
     setActiveSource(0);
     const removal = trackId
-      ? platform.audioFiles.remove(comparisonCacheKey(trackId)).catch(() => undefined)
+      ? platform.audioFiles.remove(comparisonCacheKey(trackId, tracksRef.current.find(track => track.id === trackId)?.comparison)).catch(() => undefined)
       : Promise.resolve();
     if (trackId) {
+      const track = tracksRef.current.find(candidate => candidate.id === trackId);
+      if (track) vocalJobs.forget(vocalJobKey(track, 1));
       patchTracks((current) => current.map((track) => track.id === trackId ? { ...track, comparison: null } : track));
     }
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -1683,7 +1836,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (event.defaultPrevented || timingTrackId || target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      if (event.defaultPrevented || timingTrackId || target?.closest("dialog, input, textarea, select, [contenteditable='true']")) return;
       const key = event.key.toLowerCase();
       if (key === "escape") {
         if (focusModeRef.current) setFocusWithTransition(false);
@@ -1812,9 +1965,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
               <div className={`comparison-deck ${comparisonExpanded ? "has-version-b" : "is-solo"} comparison-is-${comparisonMotion}`}>
                 <div className="version-a-zone">
                   <article className={`waveform-card version-a ${activeSource === 0 ? "is-active" : ""}`}>
-                    <div className="waveform-card-heading"><button className="source-selector" type="button" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button><div><small>LIBRARY MASTER</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span>{formatTime(primaryDuration)}</span></div>
+                    <div className="waveform-card-heading"><button className="source-selector" type="button" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>A</button><div><small>LIBRARY MASTER</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span className="waveform-card-tools">{formatTime(primaryDuration)}<button className={`remaster-entry ${remasterProgress ? "is-working" : ""}`} type="button" aria-label="Remaster A" title="Remaster A" aria-haspopup="dialog" disabled={!currentTrack || primaryLoad.stage !== "idle" || !primaryPeaks.length} onClick={() => setRemasterOpen(true)}><WandSparkles size={14} /></button></span></div>
                     <PrecisionWaveform peaks={primaryPeaks} currentTime={currentTime} duration={primaryDuration} label="Version A" source={0} onSeek={(time) => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} />
-                    <div className="waveform-card-foot"><span>{primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : !isPlaying ? "READY" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
+                    <div className="waveform-card-foot"><span>{remasterProgress ? <button type="button" className="remaster-activity" aria-label="Open remaster progress" onClick={() => setRemasterOpen(true)}><i />REMASTERING · {Math.round(remasterProgress.progress * 100)}%</button> : primaryLoad.stage === "reading" ? `READING · ${primaryLoad.progress}%` : primaryLoad.stage === "decoding" ? "DECODING AUDIO" : !isPlaying ? "READY" : activeSource === 0 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{currentTrack ? `${formatBytes(currentTrack.size)} · ${currentTrack.sourceLabel}` : "Local library"}</span></div>
+                    {remasterProgress && <progress className="remaster-track-progress" aria-label="Remaster progress" value={remasterProgress.progress} max={1} />}
                   </article>
                   {!comparisonVisible && <aside className="solo-track-context" aria-label="Solo track details"><span>SOLO MASTER</span><strong>{formatTime(Math.max(0, primaryDuration - currentTime))}</strong><small>remaining</small><i /><p>Drag the waveform<br />to seek</p></aside>}
                 </div>
@@ -1823,7 +1977,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                   <div className="quiet-compare-entry" onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}><span>Compare another mix?</span><button type="button" aria-label="Add version B" onClick={() => compareInputRef.current?.click()}><Plus size={15} /> Add B</button><small>Choose or drop one file. A keeps playing.</small></div>
                 ) : (
                   <article className={`waveform-card version-b ${activeSource === 1 ? "is-active" : ""} is-${compareSlot.status}`} onAnimationEnd={() => { if (comparisonMotion === "entering") setComparisonMotion("idle"); }} onDragOver={(event) => event.preventDefault()} onDrop={handleComparisonDrop}>
-                    <div className="waveform-card-heading"><button className="source-selector" type="button" disabled={!comparisonReady} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button><div><small>COMPARISON · {compareSlot.status.toUpperCase()}</small><strong>{trackDisplayName(compareSlot.name)}</strong></div><span className="version-b-actions"><button type="button" onClick={() => compareInputRef.current?.click()} aria-label="Replace version B">Replace</button><button type="button" onClick={() => void removeComparison()} aria-label="Remove version B"><X size={14} /></button></span></div>
+                    <div className="waveform-card-heading"><button className="source-selector" type="button" disabled={!comparisonReady} onClick={() => switchSource(1)} aria-pressed={activeSource === 1}>B</button><div><small title={REPAIR_PRESETS.find(preset => preset.id === currentTrack?.comparison?.remaster?.presetId)?.name}>{comparisonReady && currentTrack?.comparison?.remaster ? `REMASTER · ${REPAIR_PRESETS.find(preset => preset.id === currentTrack.comparison?.remaster?.presetId)?.name ?? "READY"}` : `COMPARISON · ${compareSlot.status.toUpperCase()}`}</small><strong>{trackDisplayName(compareSlot.name)}</strong></div><ComparisonActions ready={comparisonReady} onDownload={downloadComparison} onReplace={() => compareInputRef.current?.click()} onRemove={() => void removeComparison()} /></div>
                     <PrecisionWaveform peaks={comparePeaks} currentTime={currentTime} duration={compareSlot.duration} label="Version B" source={1} onSeek={(time) => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={(time) => { void finishWaveformScrub(time); }} />
                     {durationDelta > 0.05 && <div className="comparison-duration-alert" role="status"><strong>Different lengths</strong><span>The shared timeline follows the longer file. {primaryDuration > compareSlot.duration ? "A" : "B"} is {formatTime(durationDelta, true)} longer.</span></div>}
                     <div className="waveform-card-foot"><span>{compareSlot.loadStage === "reading" ? `READING · ${compareSlot.loadProgress}%` : compareSlot.loadStage === "decoding" ? "DECODING AUDIO" : compareSlot.loadStage === "caching" ? "KEEPING ON DEVICE" : compareSlot.status === "reconnect" ? "RECONNECT NEEDED" : !isPlaying ? "READY" : activeSource === 1 ? "AUDIBLE" : "SYNCHRONIZED"}</span><span>{compareSlot.size ? `${formatBytes(compareSlot.size)} · ` : ""}{formatTime(compareSlot.duration)}</span></div>
@@ -1935,6 +2089,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       </footer>}
 
       {message && <div className="library-status" role="status">{message}</div>}
+
+      {remasterOpen && <RemasterDialog trackName={currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"} duration={formatTime(primaryDuration)} presetId={remasterPreset} progress={remasterProgress} error={remasterError} replaceB={comparisonReady}
+        canApply={!!currentTrack && primaryLoad.stage === "idle" && !!primaryPeaks.length && compareSlot.status !== "loading" && comparisonMotion !== "leaving"}
+        onPreset={id => { setRemasterPreset(id); setRemasterError(""); }} onApply={() => void applyRemaster()} onCancel={cancelRemaster} onDismiss={() => setRemasterOpen(false)} />}
 
       {timingTrack?.lyricTiming && <LyricsTimingEditor key={timingTrack.id} name={trackDisplayName(timingTrack.name)} lines={timingTrack.lyricTiming} duration={timelineDuration} isPlaying={isPlaying} getTime={getTimelineTime}
         onChange={changeTimedLyrics}

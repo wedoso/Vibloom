@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-07",
+  "hardware": "Apple M2 Max",
+  "os": "macOS 27.0.1",
+  "upstreamSHA": "fea2cca81da613ec8a3aca4962a359e060eab9d9",
+  "python": "3.14.5",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1",
+  "manifest": {
+    "preset": "full-safe",
+    "engineVersion": "web-deshimmer-2",
+    "fixtures": [
+      {
+        "id": "180s",
+        "seconds": 180,
+        "pcm": "input/180s.f32",
+        "rate": 44100,
+        "channels": 2,
+        "frames": 7938000,
+        "sha256": "4d683a78766a7adefe0d4b5df55f12653a2fa5e335eb8f29b84124715ed16d37"
+      },
+      {
+        "id": "240s",
+        "seconds": 240,
+        "pcm": "input/240s.f32",
+        "rate": 44100,
+        "channels": 2,
+        "frames": 10584000,
+        "sha256": "e88e11a6395ef61df18dc115602485d174209c1ec0053531adbec901b2f5a91b"
+      }
+    ],
+    "has_numba": false,
+    "method": "Serial, same Float32 PCM; prepared input to PCM24 WAV plus two DeMan loudness passes; excludes decode, startup/import and disk output. Browser Worker includes chunk transport."
+  },
+  "worker": {
+    "electron": "43.3.0",
+    "node": "24.18.1",
+    "rows": [
+      {
+        "fixture": "180s",
+        "repairedLufs": -23.03152341062094,
+        "outputLufs": -23.03152341062094,
+        "samplePeakDb": -15.765818152409851,
+        "truePeakDb": null,
+        "safetyGainDb": 0,
+        "elapsedMs": 40678,
+        "byteLength": 47628044
+      },
+      {
+        "fixture": "240s",
+        "repairedLufs": -23.0326498277545,
+        "outputLufs": -23.0326498277545,
+        "samplePeakDb": -15.815781019766213,
+        "truePeakDb": null,
+        "safetyGainDb": 0,
+        "elapsedMs": 54509.40000009537,
+        "byteLength": 63504044
+      }
+    ]
+  },
+  "pythonResults": [
+    {
+      "fixture": "180s",
+      "elapsedMs": 18317.227917024866,
+      "repairedLufs": -23.031523377458505,
+      "outputLufs": -23.031523377458505,
+      "samplePeak": 0.162820503115654,
+      "byteLength": 47628044
+    },
+    {
+      "fixture": "240s",
+      "elapsedMs": 24269.388415967114,
+      "repairedLufs": -23.03264979526242,
+      "outputLufs": -23.03264979526242,
+      "samplePeak": 0.16188663244247437,
+      "byteLength": 63504044
+    }
+  ],
+  "comparison": [
+    {
+      "seconds": 180,
+      "webSeconds": 40.678,
+      "pythonSeconds": 18.317227917024866,
+      "pythonSpeedup": 2.2207508791323174
+    },
+    {
+      "seconds": 240,
+      "webSeconds": 54.50940000009537,
+      "pythonSeconds": 24.269388415967114,
+      "pythonSpeedup": 2.2460145705292267
+    }
+  ],
+  "scope": "Single serial run per duration, synthetic audio, not real songs. Includes full repair, two loudness measurements and PCM24 WAV encoding; excludes decoder, cache and runtime startup. Worker includes chunk transport; Python has no Numba."
+}

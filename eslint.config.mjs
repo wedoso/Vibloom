@@ -4,7 +4,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "coverage/**", "outputs/**", "work/**", "public/live2d/**/live2dcubism*.js"] },
+  { ignores: ["dist/**", "coverage/**", "outputs/**", "work/**", ".cache/**", "public/live2d/**/live2dcubism*.js"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

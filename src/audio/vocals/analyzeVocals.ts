@@ -1,3 +1,4 @@
+import { runAudioJob } from "../processingQueue";
 import { VOCAL_FRAME_RATE, VOCAL_SAMPLE_RATE } from "./envelope";
 
 export type VocalFrames = { rms: Float32Array; vowels: Uint8Array };
@@ -80,15 +81,12 @@ async function runAnalysis(buffer: AudioBuffer, signal: AbortSignal, onProgress:
 
 // One model/PCM job at a time across Library and Player; rendering and playback
 // continue independently. A failed/cancelled job never poisons the next job.
-let queue: Promise<unknown> = Promise.resolve();
 export function analyzeVocals(source: AudioBuffer | (() => Promise<AudioBuffer>), signal: AbortSignal, onProgress: (progress: VocalProgress) => void): Promise<VocalFrames> {
   onProgress({ phase: "Queued for vocal analysis", progress: 0 });
-  const result = queue.then(async () => {
+  return runAudioJob(signal, async () => {
     signal.throwIfAborted();
     const buffer = typeof source === "function" ? await source() : source;
     signal.throwIfAborted();
     return runAnalysis(buffer, signal, onProgress);
   });
-  queue = result.catch(() => undefined);
-  return result;
 }

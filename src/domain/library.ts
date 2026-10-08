@@ -19,6 +19,8 @@ export function isCurrentVocalAnalysis(analysis: VocalAnalysis | undefined, dura
 }
 
 export type TrackComparison = {
+  cacheKey?: string;
+  remaster?: { engineVersion: string; presetId: string; createdAt: number; metrics: import("../audio/remaster/wav").RenderMetrics };
   vocalAnalysis?: VocalAnalysis;
   name: string;
   size: number;
@@ -155,8 +157,8 @@ export function makeTrackFingerprint(file: Pick<File, "name" | "size" | "lastMod
   return `track-${(hash >>> 0).toString(36)}-${file.size.toString(36)}`;
 }
 
-export function comparisonCacheKey(trackId: string) {
-  return `${trackId}--version-b`;
+export function comparisonCacheKey(trackId: string, comparison?: TrackComparison | null) {
+  return comparison?.cacheKey ?? `${trackId}--version-b`;
 }
 
 export function createShuffleBag(queue: string[], currentTrackId: string, random = Math.random) {

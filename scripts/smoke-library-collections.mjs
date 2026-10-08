@@ -32,7 +32,7 @@ async function smoke() {
       catch (error) { throw new Error(`Renderer command failed: ${code}`, { cause: error }); }
     };
     const waitFor = async (code, label) => {
-      for (let i = 0; i < 150; i++) { if (await run(`Boolean(${code})`)) return; await delay(100); }
+      for (let i = 0; i < 150; i++) { if (await run(`(async () => Boolean(await (${code})))()`)) return; await delay(100); }
       throw new Error(`Timed out: ${label}`);
     };
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
@@ -236,7 +236,16 @@ async function smoke() {
     await waitFor(`document.querySelector('.album-editor')`, "album editor visible"); await delay(150);
     await writeFile(path.join(output, "album-editor.png"), (await window.webContents.capturePage()).toPNG());
     await inputValue('[aria-label="Album name"]', "Favorite music"); await button("Save album");
-    await delay(500);
+    // Wait for the debounced save and its IndexedDB transaction to complete.
+    // A fixed delay can reload before persistence on the software-GPU runner.
+    await waitFor(`(async () => {
+      const db = await new Promise((resolve, reject) => { const r = indexedDB.open('vibloom-library'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+      try {
+        const snapshot = await new Promise((resolve, reject) => { const r = db.transaction('state').objectStore('state').get('library'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+        const album = snapshot?.albums?.find(item => item.name === 'Favorite music');
+        return album?.cover === ${JSON.stringify(savedCover)} && album.trackIds.length === 2;
+      } finally { db.close(); }
+    })()`, "renamed album persisted");
     await window.loadURL("vibloom://app/index.html");
     await waitFor(`document.querySelector('.open-library-button')`, "library restored after reload");
     await click('.open-library-button');

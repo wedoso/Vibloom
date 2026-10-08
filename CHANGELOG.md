@@ -2,6 +2,13 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.9.0](https://github.com/wedoso/Vibloom/compare/v1.8.1...v1.9.0) (2026-10-07)
+
+- Remaster Track A locally with 17 deshimmer presets for shimmer cleanup, denoise, resonance reduction and delivery targets. Compare the processed audio in B and download 24-bit PCM WAV; automatically cached results restore on the next visit.
+- Browse presets in a dedicated, responsive panel opened from A's wand icon. Keep listening while processing, reopen compact progress to cancel, and use B's download and more controls without adding a permanent tools panel to the listening room.
+- Run spectral repair, FFT, peak analysis and limiting in a Worker with a C++/WASM SIMD kernel. Preserve the fixed Python reference's default processing stages and verify outputs with frozen reference fixtures and Worker comparisons.
+- Share one heavy processing queue with vocal preparation. Release old audio references, native working heaps and completed workers; add allocation budgets and clean up replaced B analyses, library reset and download URLs.
+
 ## [1.8.1](https://github.com/wedoso/Vibloom/compare/v1.8.0...v1.8.1) (2026-10-07)
 
 - Keep All songs / Albums and New album inside the Library after music is imported. The empty homepage retains its original Import your music entry.

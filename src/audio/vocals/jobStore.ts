@@ -23,6 +23,7 @@ export class VocalJobStore {
     this.controllers.set(key, controller);
     this.publish(key, { status: "queued", phase: "Queued", progress: 0 });
     void this.analyze(async () => {
+      controller.signal.throwIfAborted();
       this.publish(key, { status: "working", phase: "Reading audio", progress: 0 });
       return typeof source === "function" ? source() : source;
     }, controller.signal, (progress) => {
@@ -37,5 +38,12 @@ export class VocalJobStore {
     }).finally(() => { if (this.controllers.get(key) === controller) this.controllers.delete(key); });
   }
   cancel = (key: string) => { this.controllers.get(key)?.abort(); this.controllers.delete(key); this.publish(key, { status: "idle", phase: "", progress: 0 }); };
-  dispose = () => { for (const key of this.controllers.keys()) this.cancel(key); };
+  forget = (key: string) => { this.controllers.get(key)?.abort(); this.controllers.delete(key); this.publish(key); };
+  reset = () => {
+    for (const controller of this.controllers.values()) controller.abort();
+    this.controllers.clear();
+    this.jobs = {};
+    this.listeners.forEach((listener) => listener());
+  };
+  dispose = () => { this.reset(); this.listeners.clear(); };
 }

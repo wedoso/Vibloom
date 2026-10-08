@@ -219,10 +219,11 @@ test("reconnect preserves queue identity and missing tracks are skippable", asyn
 });
 
 test("completes the progressive A/B comparison workflow", async () => {
-  const [app, domain, styles] = await Promise.all([
+  const [app, domain, styles, actions] = await Promise.all([
     readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
     readFile(new URL("src/domain/library.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
+    readFile(new URL("src/ComparisonActions.tsx", root), "utf8"),
   ]);
 
   assert.match(app, /readAudioFile/u);
@@ -230,7 +231,7 @@ test("completes the progressive A/B comparison workflow", async () => {
   assert.match(app, /loadStage: "decoding"/u);
   assert.match(app, /loadStage: "caching"/u);
   assert.match(app, /formatBytes\(compareSlot\.size\)/u);
-  assert.match(app, /Replace version B/u);
+  assert.match(actions, /Replace version B/u);
   assert.match(app, /handleComparisonDrop/u);
   assert.match(app, /Different lengths/u);
   assert.match(app, /ended at[\s\S]*Switch source to hear the remaining audio/u);
