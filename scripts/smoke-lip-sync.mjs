@@ -199,8 +199,8 @@ async function smoke() {
       const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])');
       input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
-    await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "B ready");
-    await click('.transport-ab-switch .source-b');
+    await waitFor(`document.querySelector('.source-switch-comparison:not(:disabled)')`, "B ready");
+    await click('.source-switch-comparison:not(:disabled)');
     await click('[data-vocal-track="2"]');
     await waitFor(`document.querySelector('[data-vocal-track="2"]')?.getAttribute('aria-label') === 'Disable singing track 2' || document.querySelector('[data-vocal-status="error"]')`, "B analyzed");
     assert.equal(await run(`document.querySelector('[data-vocal-status="error"]')?.textContent ?? ''`), "");
@@ -210,7 +210,7 @@ async function smoke() {
       await select(id);
       assert.equal(await run("window.__sourceStarts"), starts, "model switching never starts extra audio");
       assert.ok(await run("window.__mouthProbe.index >= 0"), "real mouth parameter exists");
-      await click('.transport-ab-switch .source-a');
+      await click('.source-switch-original');
       await range("Playback position", 4.2);
       await click('.transport-play');
       await open(`${id} vocal A opens`);
@@ -239,12 +239,12 @@ async function smoke() {
       await range("Playback position", 0);
       await click('.transport-play');
       await closed(`${id} A instrumental intro despite ongoing drums`);
-      await click('.transport-ab-switch .source-b');
+      await click('.source-switch-comparison:not(:disabled)');
       await range("Playback position", 0);
       await closed(`${id} silent B`);
       await range("Playback position", 4.2);
       await closed(`${id} shorter B ended while A vocals play`);
-      await click('.transport-ab-switch .source-a');
+      await click('.source-switch-original');
       await range("Playback position", 4.2);
       await open(`${id} back to actual vocals`);
       await range("Playback position", 9);
@@ -292,12 +292,12 @@ async function smoke() {
     await waitFor(`document.querySelector('[data-vocal-track="1"]')?.getAttribute('aria-label') === 'Enable singing track 1' || document.querySelector('[data-vocal-status="error"]')`, "saved A timing");
     assert.equal(await run(`document.querySelector('[data-vocal-status="error"]')?.textContent ?? ''`), "");
     await click('[data-vocal-track="1"]');
-    await click('.transport-ab-switch .source-b');
+    await click('.source-switch-comparison:not(:disabled)');
     await waitFor(`document.querySelector('[data-vocal-track="2"]')?.getAttribute('aria-label') === 'Enable singing track 2' || document.querySelector('[data-vocal-status="error"]')`, "saved B timing");
     assert.equal(await run(`document.querySelector('[data-vocal-status="error"]')?.textContent ?? ''`), "");
     console.log("PASS saved A/B analysis is reused after app reload without another worker");
     // Prove old discrete caches cannot silently select the removed classifier.
-    await click('.transport-ab-switch .source-a');
+    await click('.source-switch-original');
     await delay(500);
     const beforeMigration = await run(`new Promise((resolve, reject) => {
       const open = indexedDB.open('vibloom-library', 1);

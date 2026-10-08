@@ -161,14 +161,14 @@ async function smoke() {
     if (!await playing()) await click('.transport-play');
     await waitFor(`document.querySelector('button[aria-label="Pause"]') && Number(document.querySelector('[aria-label="Playback position"]').value) > 0.5`, "playback starts");
     await run(`(() => { const transfer = new DataTransfer(); transfer.items.add(window.__testWav('Mix B.wav', 440)); const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])'); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-    await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
+    await waitFor(`document.querySelector('.source-switch-comparison:not(:disabled)')`, "comparison ready");
     for (const source of ["a", "b"]) {
-      await click(`.transport-ab-switch .source-${source}`);
+      await click(`.source-switch-${source === "a" ? "original" : "comparison"}`);
       await waitFor(`(() => {
         const color = getComputedStyle(document.querySelector('.waveform-source-${source} .waveform-bars i')).backgroundColor;
         return color === getComputedStyle(document.querySelector('.waveform-card.is-active .source-selector')).backgroundColor
           && color === getComputedStyle(document.querySelector('.stage-source-indicator > span.is-active')).backgroundColor
-          && color === getComputedStyle(document.querySelector('.transport-ab-switch > button.is-active')).backgroundColor;
+          && color === getComputedStyle(document.querySelector('.source-switch-thumb')).backgroundColor;
       })()`, "audible source color settles consistently across waveform, stage and transport");
     }
     const before = await position();
@@ -176,7 +176,7 @@ async function smoke() {
     for (const id of ["hiyori", "hong-xi", "hiyori", "hong-xi"]) {
       await select(id); await ready(id);
       assert.equal(await playing(), true);
-      assert.equal(await run(`document.querySelector('.transport-ab-switch .source-b').getAttribute('aria-pressed')`), "true");
+      assert.equal(await run(`document.querySelector('.source-switch-comparison:not(:disabled)').getAttribute('aria-pressed')`), "true");
     }
     assert.equal(await run("window.__sourceStarts"), starts, "switching companions must not restart audio sources");
     assert.ok(await position() > before, "playhead keeps advancing");

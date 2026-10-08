@@ -65,8 +65,8 @@ async function smoke() {
     await click('.transport-play');
     await waitFor(`navigator.mediaSession.playbackState === 'playing' && Number(document.querySelector('[aria-label="Playback position"]').value) > 0.2`, "playing state published");
     await run(`(() => { const data = new DataTransfer(); data.items.add(window.__mediaTestAudio); const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])'); input.files = data.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
-    await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
-    await click('.transport-ab-switch .source-b');
+    await waitFor(`document.querySelector('.source-switch-comparison:not(:disabled)')`, "comparison ready");
+    await click('.source-switch-comparison:not(:disabled)');
     await waitFor(`navigator.mediaSession.metadata.title === 'Version B'`, "audible version metadata");
     const command = (action, details = {}) => run(`window.__mediaHandlers.get(${JSON.stringify(action)})(${JSON.stringify({action, ...details})})`);
     const position = () => run(`Number(document.querySelector('[aria-label="Playback position"]').value)`);

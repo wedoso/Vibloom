@@ -147,7 +147,7 @@ async function smoke() {
     await run(`(() => { const transfer = new DataTransfer(); transfer.items.add(window.__layoutWav('Mix B.wav'));
       const input = document.querySelector('input[type=file]:not([multiple]):not([accept^=".lrc"])'); input.files = transfer.files;
       input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-    await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
+    await waitFor(`document.querySelector('.source-switch-comparison:not(:disabled)')`, "comparison ready");
     for (const [width, height] of sizes) { await resize(width, height); await compare(`player-ab-${width}`); }
     await resize(1440, 1000);
     await click('[aria-label="Wide full-body framing"]'); await delay(1300);
