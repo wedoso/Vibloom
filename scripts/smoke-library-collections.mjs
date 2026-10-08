@@ -65,7 +65,7 @@ async function smoke() {
       document.querySelector(${JSON.stringify(target)}).dispatchEvent(new DragEvent('drop', {bubbles:true, cancelable:true, dataTransfer: transfer}));
     })()`);
     await window.loadURL("vibloom://app/index.html");
-    await waitFor(`document.querySelector('.companion-selector select')?.disabled === false`, "library storage restored");
+    await waitFor(`document.querySelector('.companion-selector [role=combobox]')?.disabled === false`, "library storage restored");
     assert.equal(await run(`document.querySelector('.album-collections')`), null, "empty homepage has no collection navigation");
     assert.equal(await run(`document.querySelectorAll('.welcome-import-primary').length`), 1, "empty homepage retains one import entry");
     await delay(150);
@@ -184,17 +184,29 @@ async function smoke() {
     await button("Create album");
     await waitFor(`document.querySelectorAll('.track-title').length === 1`, "album filters songs");
     assert.deepEqual(await rows(), ["Side song"]);
-    const savedCover = await run(`document.querySelector('.library-album-heading-cover img').src`);
+    let savedCover = await run(`document.querySelector('.library-album-heading-cover img').src`);
     assert.ok(savedCover.startsWith("data:image/webp"));
     const coverSize = await run(`(async () => { const image = new Image(); image.src = ${JSON.stringify(savedCover)}; await image.decode(); return [image.width, image.height]; })()`);
     assert.deepEqual(coverSize, [640, 640], "large covers are bounded before local persistence");
+    await button("Edit album");
+    assert.ok(await run(`!document.querySelector(".album-cover-edit")`), "album editing remains the only cover entry");
+    await run(`(async()=>{const canvas=document.createElement('canvas');canvas.width=320;canvas.height=320;const ctx=canvas.getContext('2d');ctx.fillStyle='#b65c3f';ctx.fillRect(0,0,320,320);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));const transfer=new DataTransfer();transfer.items.add(new File([blob],'replacement.png',{type:'image/png'}));const input=document.querySelector('[aria-label="Album cover image"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await waitFor(`document.querySelector('.album-cover-preview img')?.src!==${JSON.stringify(savedCover)}&&!document.querySelector('.album-save').disabled`, "replacement cover processed");
+    await button("Save album");
+    const replacementCover=await run(`document.querySelector('.library-album-heading-cover img').src`);
+    assert.notEqual(replacementCover,savedCover,'cover can be changed after album creation'); savedCover=replacementCover;
+    const importAlignment = await run(`(()=>{const button=document.querySelector('.library-import-button'), icon=button.querySelector('svg').getBoundingClientRect(),text=button.querySelector('span').getBoundingClientRect();return Math.abs(icon.y+icon.height/2-text.y-text.height/2);})()`);
+    assert.ok(importAlignment < 1, 'import plus and label share a horizontal centre');
     await button("Play all");
     await waitFor(`document.querySelector('[aria-label="Pause"]')`, "album plays");
+    assert.equal(await run(`document.querySelector('.transport-disc img')?.src`), savedCover, "transport shows the playing album cover");
+    await writeFile(path.join(output, "album-playback-cover.png"), (await window.webContents.capturePage()).toPNG());
     await click('[aria-label="Pause"]');
     await run(`document.querySelector('.workspace-rail button[title="Queue"]').click()`);
     await waitFor(`document.querySelectorAll('.queue-list > div').length === 1`, "album playback queue");
     await click('[aria-label="Close queue"]');
     await selectAlbum("All songs");
+    assert.equal(await run(`document.querySelector('.transport-disc img')?.src`),savedCover,'browsing does not change playback artwork');
     // Existing rows have an internal drag type; album assignment never imports a duplicate.
     await run(`(() => {
       const row = document.querySelector('[aria-label="Actions for Same"]').closest('.track-row');
@@ -208,6 +220,29 @@ async function smoke() {
     await waitFor(`!document.querySelector('.album-drag-chooser')`, "album targets close after drop");
     await selectAlbum("Favorites");
     await waitFor(`document.querySelectorAll('.track-title').length === 2`, "song dragged into album");
+    const originalAlbumOrder = await rows();
+    const reorder = async (source, target, edge) => {
+      await run(`(() => {
+        const rows=[...document.querySelectorAll('.track-row[data-track-id]')],source=rows[${source}],target=rows[${target}],transfer=new DataTransfer();
+        source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+        const bounds=target.getBoundingClientRect(),clientY=${JSON.stringify(edge)}==='before'?bounds.top+1:bounds.bottom-1;
+        target.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:transfer,clientY}));
+        window.__albumTransfer=transfer;window.__albumTarget=target;window.__albumClientY=clientY;
+      })()`);
+      assert.ok(await run(`window.__albumTarget.classList.contains('album-drop-${edge}')`), 'insertion indicator matches the drop edge');
+      assert.equal(await run(`document.querySelector('.library-file-drop-overlay')`), null, 'reordering is not an import');
+      await run(`window.__albumTarget.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:window.__albumTransfer,clientY:window.__albumClientY}));window.dispatchEvent(new DragEvent('dragend',{bubbles:true}));`);
+    };
+    await reorder(1,0,'before');
+    assert.deepEqual(await rows(),originalAlbumOrder.toReversed(), 'dragging before the first row changes album order');
+    await reorder(0,1,'after');
+    assert.deepEqual(await rows(),originalAlbumOrder, 'dragging after the last row works');
+    await reorder(1,0,'before');
+    const sortedAlbumOrder=await rows();
+    await button('Play all');await waitFor(`document.querySelector('[aria-label="Pause"]')`, 'reordered album plays');await click('[aria-label="Pause"]');
+    await click('.workspace-rail button[title="Queue"]');
+    assert.deepEqual(await run(`[...document.querySelectorAll('.queue-list strong')].map(el=>el.textContent)`), sortedAlbumOrder, 'Play all follows the saved album order');
+    await click('[aria-label="Close queue"]');
     await drop(`[window.__audioFile('Side song.wav'), new File(['Replacement text\\nSecond'], 'Side song.txt')]`);
     assert.deepEqual(await summary(), [0, 1, 1, 0], "duplicate audio can replace lyrics without duplicating album membership");
     assert.ok(await run(`document.querySelector('.library-album-heading').textContent.includes('2 tracks')`));
@@ -254,13 +289,24 @@ async function smoke() {
     assert.equal(await run(`${albumCard("Favorite music")}.querySelector('img').src`), savedCover);
     await selectAlbum("Favorite music");
     assert.equal((await rows()).length, 2, "album membership survives reload");
+    assert.equal(await run(`document.querySelector('.transport-disc img')?.src`),savedCover,'playback artwork survives reload');
+    assert.deepEqual(await rows(),sortedAlbumOrder, 'dragged album order survives editing and reload');
     await waitFor(`!document.documentElement.classList.contains('is-scene-transitioning')`, "reload transition finished");
     await window.setSize(440, 760); await delay(250);
     await button("Edit album");
     await waitFor(`document.querySelector('.album-editor')`, "narrow album editor visible"); await delay(150);
     assert.ok(await run(`(() => {const r=document.querySelector('.album-editor').getBoundingClientRect();const f=document.querySelector('.album-editor footer').getBoundingClientRect();return r.right <= innerWidth && r.bottom <= innerHeight && f.bottom <= innerHeight;})()`), "album editor and save controls fit narrow windows");
     await writeFile(path.join(output, "album-editor-narrow.png"), (await window.webContents.capturePage()).toPNG());
+    await click('[aria-label="Close album editor"]');
+    for (const width of [390, 320]) {
+      window.setSize(width,760); await delay(200);
+      const artwork=await run(`(()=>{const r=document.querySelector('.transport-disc img').getBoundingClientRect(),play=document.querySelector('.transport-play').getBoundingClientRect();return {width:r.width,x:r.x,right:r.right,playX:play.x,screen:innerWidth};})()`);
+      assert.ok(artwork.width>0&&artwork.x>=0&&artwork.right<=artwork.playX,'compact artwork and playback controls fit '+width);
+    }
+    await writeFile(path.join(output,"album-playback-cover-mobile.png"),(await window.webContents.capturePage()).toPNG());
+    window.setSize(1280,900);await delay(200);await button("Edit album");
     await button("Delete album");
+    assert.ok(await run(`!document.querySelector('.transport-disc img')`),'deleting the album removes stale playback artwork');
     await selectAlbum("All songs");
     await waitFor(`document.querySelectorAll('.track-title').length === 4`, "deleted album preserves all songs");
     await browseAlbums();

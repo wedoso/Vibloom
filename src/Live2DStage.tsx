@@ -1,3 +1,4 @@
+import { MAX_AUDIO_SOURCES } from "./audio/SynchronizedAudioEngine";
 import "@pixi/unsafe-eval";
 import type { Application as PixiApplication } from "pixi.js";
 import { Lock, Mouse, ScanFace, ScanLine, Smile, Sparkles } from "lucide-react";
@@ -17,7 +18,7 @@ type Live2DStageProps = {
   vocalLevelRef: MutableRefObject<VocalPose>;
   variant: StageVariant;
   trackLabel: string;
-  activeSource: 0 | 1;
+  activeSource: number;
   isComparing: boolean;
   isPlaying: boolean;
   focusMode: boolean;
@@ -622,13 +623,13 @@ export default function Live2DStage({
           host.removeEventListener("wheel", handleWheel);
         };
 
-        let lastSource: 0 | 1 = featuresRef.current.source;
+        let lastSource: number = featuresRef.current.source;
         let rhythmPhase = 0;
         let beatInterval = 0.68;
         let targetBeatInterval = 0.68;
-        const tempoBinsBySource = [new Float32Array(26), new Float32Array(26)] as const;
-        const tempoEvidenceBySource = [0, 0];
-        const learnedBeatIntervalBySource = [0.68, 0.68];
+        const tempoBinsBySource = Array.from({ length: MAX_AUDIO_SOURCES }, () => new Float32Array(26));
+        const tempoEvidenceBySource = Array<number>(MAX_AUDIO_SOURCES).fill(0);
+        const learnedBeatIntervalBySource = Array<number>(MAX_AUDIO_SOURCES).fill(0.68);
         let timeSinceOnset = 1;
         let variationPhase = 0;
         let energy = 0;
@@ -1463,7 +1464,7 @@ export default function Live2DStage({
 
           if (lastSource !== features.source) {
             lastSource = features.source;
-            switchAccent = features.source === 0 ? -1 : 1;
+            switchAccent = focusModeRef.current ? 0 : features.source === 0 ? -1 : 1;
             targetBeatInterval = learnedBeatIntervalBySource[features.source];
             beatInterval = targetBeatInterval;
             beatClock = 0;
@@ -1473,9 +1474,9 @@ export default function Live2DStage({
             lastBassInput = features.bass;
             transientFloor = features.transient;
           }
-          switchAccent *= Math.exp(-2.2 * dt);
+          switchAccent = focusModeRef.current ? 0 : switchAccent * Math.exp(-2.2 * dt);
 
-          const followsComparedTrack = features.isComparing && features.isPlaying && performance.now() >= pointerActiveUntil;
+          const followsComparedTrack = !focusModeRef.current && features.isComparing && features.isPlaying && performance.now() >= pointerActiveUntil;
           const sourceGaze = followsComparedTrack ? (features.source === 0 ? -0.82 : 0.82) : pointerX * 0.32;
           const sourceGazeY = followsComparedTrack ? (isCompactLayout ? 0.24 : 0.18) : pointerY * 0.22;
           gazeX = follow(gazeX, sourceGaze, features.isComparing ? 2.6 : 4.2);
@@ -1656,7 +1657,7 @@ export default function Live2DStage({
     : !isPlaying
       ? "Paused · resting"
       : isComparing
-        ? `Listening to ${activeSource === 0 ? "A" : "B"}`
+        ? `Listening to track ${activeSource + 1}`
         : "Listening with you";
 
   return (

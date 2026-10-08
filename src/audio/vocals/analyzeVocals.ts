@@ -59,6 +59,7 @@ async function runAnalysis(buffer: AudioBuffer, signal: AbortSignal, onProgress:
       source.connect(offline.destination);
       source.start(0, from, to - from);
       const resampled = await offline.startRendering();
+      source.disconnect(); source.buffer = null;
       signal.throwIfAborted();
       const left = resampled.getChannelData(0).slice(), right = resampled.getChannelData(1).slice();
       const result = await request(separator, { type: "separate", left, right }, [left.buffer, right.buffer]);

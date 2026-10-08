@@ -114,11 +114,20 @@ test('worker transport bounds PCM copies, keeps A owned by playback, and termina
   const pcm=sine(rate*5), source={sampleRate:rate,length:pcm.length,numberOfChannels:1,getChannelData:()=>pcm};
   globalThis.Worker=Worker;
   try {
-    const output=await renderRemaster(source,'default',new AbortController().signal,()=>{});
+    const {runAudioJob}=await loadTs('../src/audio/processingQueue.ts');
+    let release,loaded=0;
+    const busy=runAudioJob(new AbortController().signal,()=>new Promise(resolve=>{release=resolve;}));
+    await new Promise(resolve=>setImmediate(resolve));
+    const queuedCancel=new AbortController();
+    const queued=renderRemaster(async()=>{loaded++;return source;},'default',queuedCancel.signal,()=>{});
+    queuedCancel.abort();await assert.rejects(queued,{name:'AbortError'});assert.equal(loaded,0);assert.equal(workers.length,0,'a cancelled queued task owns neither PCM nor a worker');
+    release();await busy;
+    const output=await renderRemaster(async()=>{loaded++;return source;},'default',new AbortController().signal,()=>{});
+    assert.equal(loaded,1,'input is decoded only after the shared queue admits the task');
     assert.equal(output.blob.size,44);assert.equal(pcm.length,rate*5);assert.deepEqual(workers[0].lengths,[rate*2,rate*2,rate]);assert.ok(workers[0].terminated);
     mode='hold';const cancel=new AbortController(), aborted=renderRemaster(source,'default',cancel.signal,()=>{});
     await new Promise(resolve=>setImmediate(resolve));cancel.abort();await assert.rejects(aborted,{name:'AbortError'});assert.ok(workers[1].terminated);
-    mode='fail';await assert.rejects(renderRemaster(source,'default',new AbortController().signal,()=>{}),/worker could not run/);assert.ok(workers[2].terminated);
+    mode='fail';await assert.rejects(renderRemaster(source,'default',new AbortController().signal,()=>{}),/Audio repair could not run/);assert.ok(workers[2].terminated);
     mode='normal';await renderRemaster(source,'default',new AbortController().signal,()=>{});assert.ok(workers[3].terminated);
     mode='throw';await assert.rejects(renderRemaster(source,'default',new AbortController().signal,()=>{}),/Send failed/);
     assert.ok(workers[4].terminated);assert.equal(workers[4].onmessage,null);

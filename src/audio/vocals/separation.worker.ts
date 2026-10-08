@@ -53,7 +53,7 @@ scope.onmessage = async ({ data }) => {
       ort.env.webgpu.powerPreference = "high-performance";
       ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: wasmModuleUrl };
       const weights = await loadWeights();
-      scope.postMessage({ type: "progress", phase: "Starting vocal analysis", progress: 0 });
+      scope.postMessage({ type: "progress", phase: "Loading vocal model · preparing inference", progress: 0 });
       processor = new DemucsProcessor({
         ort,
         sessionOptions: { executionProviders: ["webgpu", "wasm"], graphOptimizationLevel: "basic" },

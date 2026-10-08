@@ -6,7 +6,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 root=Path(__file__).resolve().parent.parent
-old=json.loads((root/'docs/remaster-parity-results.json').read_text())
+old=json.loads((root/'outputs/remaster-parity/summary.json').read_text())
 # Baseline records preserve the original run even when reference WAVs are rebuilt.
 old_rows=old.get('comparisons',old.get('comparison',old.get('rows',[])))
 if not old_rows:raise ValueError('Missing frozen baseline comparison rows')
@@ -24,4 +24,6 @@ for ax,rows,title in zip(axes,[old_rows,new],['Before: web-deshimmer-1','After: 
             v=values[i,j];ax.text(j,i,'exact'if records[i][j]['rmse']==0 else f'{v:.1f}',ha='center',va='center',fontsize=8,color='black'if v>95 else'white')
 fig.colorbar(im,ax=axes,label='Unshifted, unmatched null-test SNR (dB); higher = closer',shrink=.7)
 fig.suptitle('Identical Float32 PCM input vs full Python defaults, all 17 presets\nEngineering threshold: >=60 dB SNR, <=0.1 LU, <=0.1 dB active-band difference',fontsize=13)
-fig.savefig(root/'docs/assets/remaster-equivalence.png',dpi=150)
+output=root/'outputs/remaster-equivalence/remaster-equivalence.png'
+output.parent.mkdir(parents=True,exist_ok=True)
+fig.savefig(output,dpi=150)

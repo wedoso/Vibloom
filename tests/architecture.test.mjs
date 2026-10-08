@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import ts from "typescript";
+import { loadTs } from "./load-ts.mjs";
 
 const root = new URL("../", import.meta.url);
 
@@ -23,7 +24,7 @@ test("migrates legacy library snapshots at the domain boundary", async () => {
     session: { queue: ["track-1"], volume: 0.5 },
   });
 
-  assert.equal(migrated.version, 2);
+  assert.equal(migrated.version, 3);
   assert.equal(migrated.session.cacheEnabled, true);
   assert.equal(migrated.session.volume, 0.5);
   assert.deepEqual(migrated.session.history, []);
@@ -38,6 +39,18 @@ test("restores virtual album covers and removes stale or duplicate track referen
   assert.deepEqual(snapshot.albums, [{ ...album, trackIds: ["a"] }]);
   assert.deepEqual(addAlbumTracks(snapshot.albums[0], ["b", "a", "b"]), { ...album, trackIds: ["a", "b"] });
   assert.deepEqual(snapshot.albums[0].trackIds, ["a"], "adding album songs leaves the source album unchanged");
+});
+
+test("album moves preserve hidden songs, boundaries and other collections", async () => {
+  const { reorderAlbumTrack } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  const album = { id: "album", name: "Mix", trackIds: ["a", "hidden", "b", "c"] };
+  assert.deepEqual(reorderAlbumTrack(album, "c", "a", "before").trackIds, ["c", "a", "hidden", "b"]);
+  assert.deepEqual(reorderAlbumTrack(album, "a", "c", "after").trackIds, ["hidden", "b", "c", "a"]);
+  assert.deepEqual(reorderAlbumTrack(album, "a", "b", "before").trackIds, ["hidden", "a", "b", "c"]);
+  assert.equal(reorderAlbumTrack(album, "a", "a", "after"), album);
+  assert.equal(reorderAlbumTrack(album, "outside", "a", "before"), album);
+  assert.equal(reorderAlbumTrack(album, "a", "outside", "before"), album);
+  assert.deepEqual(album.trackIds, ["a", "hidden", "b", "c"]);
 });
 
 test("matches local lyrics without crossing ambiguous folders or losing LRC preference", async () => {
@@ -82,8 +95,8 @@ test("keeps browser APIs behind the replaceable platform boundary", async () => 
   assert.match(browser, /navigator\.storage\.getDirectory/u);
 });
 
-test("schedules A and B against one clock and preserves the pause position", async () => {
-  const { SynchronizedAudioEngine } = await importTypeScriptModule(new URL("src/audio/SynchronizedAudioEngine.ts", root));
+test("schedules audible tracks against one clock and preserves the pause position", async () => {
+  const { SynchronizedAudioEngine } = await loadTs("../src/audio/SynchronizedAudioEngine.ts");
   const starts = [];
   const ramps = [];
   const stopped = [];
@@ -130,21 +143,22 @@ test("schedules A and B against one clock and preserves the pause position", asy
   assert.equal(await engine.play(5, 0.025, 0.9), true);
   assert.deepEqual(starts, [
     { when: 10.025, offset: 5, duration: 120 },
-    { when: 10.025, offset: 5, duration: 90 },
   ]);
 
   context.currentTime = 12.025;
   assert.equal(engine.getTimelineTime(), 7);
   assert.equal(engine.selectSource(1, 0.018), true);
   assert.deepEqual(ramps.map(({ value, time }) => ({ value, time: Number(time.toFixed(3)) })), [
-    { value: 0, time: 12.043 },
-    { value: 1, time: 12.043 },
+    { value: 0, time: 12.068 },
+    { value: 1, time: 12.068 },
+    ...Array.from({length:7}, () => ({ value: 0, time: 12.068 })),
   ]);
 
   assert.equal(engine.pause(), 7);
   context.currentTime = 20;
   assert.equal(engine.getTimelineTime(), 7);
-  assert.deepEqual(stopped, [120, 90]);
+  assert.deepEqual(starts[1], {when:12.05, offset:7.025, duration:90}, "switch schedules the destination at the shared timeline offset");
+  assert.deepEqual(stopped, [120, 120, 90]);
 
   // Removing a headset while its output device is resuming must cancel playback.
   let resume;
@@ -324,4 +338,23 @@ test("Hong Xi's procedural performance stays finite, bounded and returns to idle
   }
   const rest = hongXiPose(0, 1, 0, 0, 0, 0);
   assert.ok(Object.values(rest).every((value) => value === 0));
+});
+
+test("playback artwork uses album provenance, updates with edits, and falls back after removal", async () => {
+  const { albumForTrack, migrateLibrarySnapshot } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  const albums = [
+    {id:"empty",name:"No artwork",trackIds:["a"]},
+    {id:"first",name:"First",trackIds:["a"],cover:"first.jpg"},
+    {id:"second",name:"Second",trackIds:["a","b"],cover:"second.jpg"},
+  ];
+  assert.equal(albumForTrack(albums,"a").cover,"first.jpg");
+  assert.equal(albumForTrack(albums,"a","second").cover,"second.jpg");
+  assert.equal(albumForTrack(albums,"a","empty").cover,undefined,"the playing album can deliberately have no cover");
+  assert.equal(albumForTrack(albums,"outside","second"),undefined);
+  assert.equal(albumForTrack(albums,"","second"),undefined);
+  assert.equal(albumForTrack(albums.filter(album=>album.id!=="second"),"a","second").cover,"first.jpg");
+  assert.equal(albumForTrack(albums.map(album=>({...album,cover:album.id==="second"?"edited.jpg":album.cover})),"a","second").cover,"edited.jpg");
+  const restored=migrateLibrarySnapshot({version:3,tracks:[{id:"a"}],albums,session:{currentTrackId:"a",playbackAlbumId:"second"}});
+  assert.equal(restored.session.playbackAlbumId,"second");
+  assert.equal(migrateLibrarySnapshot({version:1,tracks:[],session:{}}).session.playbackAlbumId,"");
 });

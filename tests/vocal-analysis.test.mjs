@@ -38,7 +38,7 @@ test("multi-window jobs discard context consistently, queue safely and terminate
   }
   class Offline {
     constructor(_channels, length, rate) { this.length = length; this.sampleRate = rate; this.destination = {}; }
-    createBufferSource() { return { connect() {}, start: (_when, offset) => { this.offset = offset; }, buffer: null }; }
+    createBufferSource() { return { connect() {}, disconnect() { this.disconnected = true; }, start: (_when, offset) => { this.offset = offset; }, buffer: null }; }
     async startRendering() {
       windows.push({ from: this.offset, length: this.length });
       const samples = Float32Array.from({ length: this.length }, (_, i) => Math.round(this.offset * 50) + Math.floor(i / 882));

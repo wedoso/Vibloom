@@ -1,0 +1,23 @@
+.styled-select { display: inline-block; min-width: 0; font: inherit; }
+.library-app .styled-select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; max-width: 100%; padding: 5px 9px; border: 1px solid var(--library-line); border-radius: 7px; background: color-mix(in srgb, var(--library-paper) 90%, white); color: var(--library-ink); font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
+.styled-select-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.styled-select-trigger > svg { flex: none; transition: transform .15s; }
+.styled-select-trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.library-app .styled-select-trigger:disabled { opacity: .45; cursor: not-allowed; }
+.library-app .styled-select-menu { position: fixed; inset: auto; margin: 0; padding: 5px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--library-line); border-radius: 10px; background: linear-gradient(var(--library-paper), var(--library-paper)), #fff; color: var(--library-ink); box-shadow: 0 12px 36px color-mix(in srgb, var(--library-ink) 16%, transparent); font: 400 11px var(--font-ui); }
+.library-app .styled-select-menu:popover-open { display: grid; gap: 2px; animation: styled-select-enter .12s ease-out; }
+.library-app .styled-select-menu > button { width: 100%; min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.library-app .styled-select-menu > button > span { min-width: 0; overflow-wrap: anywhere; }
+.library-app .styled-select-menu > button > svg { flex: none; }
+.library-app .styled-select-menu > button[aria-selected="true"] { color: var(--library-accent); background: color-mix(in srgb, var(--library-accent) 8%, transparent); }
+.library-app .styled-select-menu > button:hover:not(:disabled), .library-app .styled-select-menu > button:focus-visible { background: color-mix(in srgb, var(--library-accent) 12%, transparent); }
+.library-app .styled-select-menu > button:disabled { opacity: .4; cursor: not-allowed; }
+.library-app .styled-select-trigger:focus-visible, .library-app .styled-select-menu > button:focus-visible { outline: 2px solid var(--library-accent); outline-offset: 1px; }
+.companion-selector .styled-select-trigger { min-height: 38px; max-width: 116px; border-radius: 10px; }
+.track-album-select .styled-select, .track-album-select .styled-select-trigger { width: 100%; }
+.sound-format .styled-select-trigger { min-height: 26px; padding: 3px 5px; font-size: 10px; }
+.processing-destination .styled-select-trigger { max-width: 145px; }
+@keyframes styled-select-enter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 400px) { .companion-selector .styled-select-trigger { max-width: 94px; } }
+@media (max-width: 680px) { .is-eq-dialog .processing-destination .styled-select-trigger { max-width: 120px; } }
+@media (prefers-reduced-motion: reduce) { .library-app .styled-select-menu:popover-open { animation: none; } .styled-select-trigger > svg { transition: none; } }

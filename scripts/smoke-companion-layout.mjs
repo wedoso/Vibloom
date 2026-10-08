@@ -24,7 +24,7 @@ const selectors = [
   ".unified-shell", ".workspace-rail", ".workspace-surface", ".player-console", ".console-heading", ".console-heading h1",
   ".engine-status", ".comparison-deck", ".waveform-card", ".precision-waveform", ".solo-track-context", ".console-lower",
   ".library-lyrics", ".persistent-stage-panel", ".now-listening-heading", ".persistent-stage-canvas", ".live2d-host",
-  ".stage-source-indicator", ".camera-capsule", ".camera-hint", ".vocal-lip-sync", ".focus-exit-control",
+  ".stage-source-indicator", ".camera-capsule", ".camera-hint", ".card-processing-tools", ".focus-exit-control",
   ".library-list-heading", ".library-list-heading h1", ".library-list-toolbar", ".track-table", ".track-row",
   ".library-transport", ".transport-track", ".transport-center", ".transport-buttons", ".transport-progress", ".transport-secondary",
   ".side-sheet", ".side-sheet h2", ".queue-list", ".storage-actions", ".import-summary", ".import-summary h2",
@@ -65,8 +65,7 @@ async function smoke() {
       await delay(350);
     };
     const select = async id => {
-      await run(`(() => { const select = document.querySelector('[aria-label="Music companion"]');
-        select.value = ${JSON.stringify(id)}; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+      await run(`(() => { const select = document.querySelector('[aria-label="Music companion"]');const value=${JSON.stringify(id)};select.click();document.querySelector('[role=option][data-value="'+value+'"]').click(); })()`);
     };
     const snapshot = () => run(`(() => {
       const bounds = {};
@@ -148,7 +147,7 @@ async function smoke() {
     await run(`(() => { const transfer = new DataTransfer(); transfer.items.add(window.__layoutWav('Mix B.wav'));
       const input = document.querySelector('input[type=file]:not([multiple]):not([accept^=".lrc"])'); input.files = transfer.files;
       input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-    await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
+    await waitFor(`document.querySelector('.source-switch-comparison:not(:disabled)')`, "comparison ready");
     for (const [width, height] of sizes) { await resize(width, height); await compare(`player-ab-${width}`); }
     await resize(1440, 1000);
     await click('[aria-label="Wide full-body framing"]'); await delay(1300);

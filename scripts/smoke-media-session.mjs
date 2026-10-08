@@ -65,8 +65,8 @@ async function smoke() {
     await click('.transport-play');
     await waitFor(`navigator.mediaSession.playbackState === 'playing' && Number(document.querySelector('[aria-label="Playback position"]').value) > 0.2`, "playing state published");
     await run(`(() => { const data = new DataTransfer(); data.items.add(window.__mediaTestAudio); const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])'); input.files = data.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
-    await waitFor(`document.querySelector('.transport-ab-switch .source-b')`, "comparison ready");
-    await click('.transport-ab-switch .source-b');
+    await waitFor(`document.querySelector('.source-switch-comparison:not(:disabled)')`, "comparison ready");
+    await click('.source-switch-comparison:not(:disabled)');
     await waitFor(`navigator.mediaSession.metadata.title === 'Version B'`, "audible version metadata");
     const command = (action, details = {}) => run(`window.__mediaHandlers.get(${JSON.stringify(action)})(${JSON.stringify({action, ...details})})`);
     const position = () => run(`Number(document.querySelector('[aria-label="Playback position"]').value)`);
@@ -80,12 +80,10 @@ async function smoke() {
     await command("play");
     await waitFor(`navigator.mediaSession.playbackState === 'playing'`, "headset resumes");
     const starts = await run(`window.__sourceStarts`);
-    assert.equal(starts.length, 2);
-    assert.equal(starts[0].when, starts[1].when, "both versions resume on one audio clock");
-    assert.equal(starts[0].offset, starts[1].offset);
+    assert.equal(starts.length, 1, "only the audible version resumes");
     assert.ok(Math.abs(starts[0].offset - pausedAt) < 0.05, "resume from paused position");
     await command("play"); await delay(200);
-    assert.equal(await run(`window.__sourceStarts.length`), 2, "repeated play does not restart sources");
+    assert.equal(await run(`window.__sourceStarts.length`), 1, "repeated play does not restart the audible source");
     await command("pause"); await command("seekto", {seekTime: 4.25});
     await waitFor(`Number(document.querySelector('[aria-label="Playback position"]').value) === 4.25`, "system seeking uses shared transport");
     await run(`window.__mediaHandlers.get('play')({action:'play'}); window.__mediaHandlers.get('pause')({action:'pause'});`);

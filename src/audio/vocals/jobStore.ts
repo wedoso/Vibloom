@@ -1,8 +1,11 @@
-import type { LibraryTrack, VocalAnalysis } from "../../domain/library";
+import { comparisonsOf, type LibraryTrack, type VocalAnalysis } from "../../domain/library";
 import { analyzeVocals, type VocalProgress } from "./analyzeVocals";
 
 export type VocalJob = VocalProgress & { status: "idle" | "queued" | "working" | "ready" | "error"; error?: string; analysis?: VocalAnalysis };
-export const vocalJobKey = (track: LibraryTrack, source: 0 | 1 = 0) => JSON.stringify([track.id, track.fingerprint, source, source === 1 ? track.comparison && [track.comparison.name, track.comparison.size, track.comparison.lastModified] : null]);
+export const vocalJobKey = (track: LibraryTrack, source = 0) => {
+  const comparison = source ? comparisonsOf(track).find(item => item.slot === source) : null;
+  return JSON.stringify([track.id, track.fingerprint, source, comparison && [comparison.id, comparison.name, comparison.size, comparison.lastModified]]);
+};
 
 /** One source identity, one task, any number of UI subscribers. */
 export class VocalJobStore {

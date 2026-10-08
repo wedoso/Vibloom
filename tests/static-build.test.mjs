@@ -209,7 +209,7 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /if \(features\.isPlaying && !wasListening\)/u);
   assert.match(stage, /rhythmPhase \+= dt \* Math\.PI \/ beatInterval \* listening/u);
   assert.match(stage, /while \(candidate < 0\.5\) candidate \*= 2/u);
-  assert.match(stage, /const tempoBinsBySource = \[new Float32Array\(26\), new Float32Array\(26\)\]/u);
+  assert.match(stage, /const tempoBinsBySource = Array\.from\(\{ length: MAX_AUDIO_SOURCES \}/u);
   assert.match(stage, /learnedBeatIntervalBySource\[source\] = 0\.51 \+ strongestBin \* 0\.02/u);
   assert.match(stage, /const scheduledBeat = hasNoddedSincePlay && beatClock >= beatInterval/u);
   assert.match(stage, /const phraseBoundary = beatCount % 8 === 0/u);
@@ -262,14 +262,14 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.match(stage, /nodGestureTime = Number\.POSITIVE_INFINITY;[\s\S]*?nodGestureStrength = 0;/u);
   assert.match(stage, /features\.isPlaying \? 3\.2 : 7\.5/u);
   assert.match(stage, /Math\.max\(directorRange\.min, Math\.min\(directorRange\.max, pausedCameraZoom\)\)/u);
-  assert.match(stage, /const followsComparedTrack = features\.isComparing && features\.isPlaying/u);
+  assert.match(stage, /const followsComparedTrack = !focusModeRef\.current && features\.isComparing && features\.isPlaying/u);
   assert.match(stage, /getParameterDefaultValue/u);
   assert.match(visual, /const bassRise = Math\.max\(0, bass - previous\.bass\)/u);
   assert.doesNotMatch(stage, /model\.rotation =/u);
   assert.doesNotMatch(stage, /model\.position\.set\(/u);
   assert.doesNotMatch(stage, /addMusicParameter\("ParamHair/u);
-  assert.match(engine, /analyser\.fftSize = 1024/u);
-  assert.match(engine, /analyser\.smoothingTimeConstant = 0\.68/u);
+  assert.match(engine, /analysers\[i\]\.fftSize = 1024/u);
+  assert.match(engine, /analysers\[i\]\.smoothingTimeConstant = \.68/u);
   assert.match(styles, /--beat-pulse/u);
   assert.match(styles, /\.stage-music-disc/u);
   assert.doesNotMatch(styles, /\.stage-floor-light/u);

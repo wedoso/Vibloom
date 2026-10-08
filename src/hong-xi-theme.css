@@ -117,7 +117,8 @@
   .transport-ab-switch::before { background: rgb(var(--hx-a-rgb)); box-shadow: 0 2px 6px rgb(36 51 76 / .16); }
   .transport-ab-switch.is-source-b::before { background: rgb(var(--hx-b-rgb)); }
   .transport-secondary .transport-ab-switch button { color: var(--library-muted); background: transparent; }
-  .transport-secondary .transport-ab-switch button.is-active { color: #fff; background: transparent; }
+  .transport-secondary .transport-ab-switch button.is-active { color: #fff; background: rgb(var(--hx-b-rgb)); }
+  .transport-secondary .transport-ab-switch button.source-a.is-active { background: rgb(var(--hx-a-rgb)); }
 
   /* Welcome, library, menus and all overlay surfaces belong to the same room. */
   &.is-empty .welcome-import-surface > .welcome-import-primary { color: var(--hx-surface); border-color: var(--library-line); background: var(--library-ink); box-shadow: var(--hx-shadow); }

@@ -19,6 +19,12 @@ export function isCurrentVocalAnalysis(analysis: VocalAnalysis | undefined, dura
 }
 
 export type TrackComparison = {
+  id?: string;
+  slot?: number;
+  source?: { id: string; number: number; name: string };
+  mastering?: { engineVersion: string; upstream: string; inputIdentity: string; settings: import("../audio/mastering/settings").MasteringSettings; createdAt: number; clippedSamples: number };
+  eq?: { engineVersion: string; presetId: string; createdAt: number; clippedSamples: number };
+  peaks?: number[];
   cacheKey?: string;
   remaster?: { engineVersion: string; presetId: string; createdAt: number; metrics: import("../audio/remaster/wav").RenderMetrics };
   vocalAnalysis?: VocalAnalysis;
@@ -47,12 +53,14 @@ export type LibraryTrack = {
   lyricTiming?: LyricTimingLine[];
   lyricMetadata?: string[];
   comparison: TrackComparison | null;
+  comparisons?: TrackComparison[];
 };
 
 export type LibrarySession = {
   queue: string[];
   history: string[];
   currentTrackId: string;
+  playbackAlbumId?: string;
   currentTime: number;
   shuffle: boolean;
   repeat: RepeatMode;
@@ -62,7 +70,7 @@ export type LibrarySession = {
 };
 
 export type LibrarySnapshot = {
-  version: 2;
+  version: 3;
   tracks: LibraryTrack[];
   albums: LibraryAlbum[];
   session: LibrarySession;
@@ -76,14 +84,30 @@ export type LibraryAlbum = {
   cover?: string;
 };
 
+/** Artwork follows playback provenance; browsing another album does not retarget it. */
+export function albumForTrack(albums: LibraryAlbum[], trackId: string, preferredId = "") {
+  if (!trackId) return undefined;
+  return albums.find(album => album.id === preferredId && album.trackIds.includes(trackId))
+    ?? albums.find(album => !!album.cover && album.trackIds.includes(trackId));
+}
+
 export const TRACK_DRAG_TYPE = "application/x-vibloom-track";
 
 export function addAlbumTracks(album: LibraryAlbum, trackIds: string[]) {
   return { ...album, trackIds: [...new Set([...album.trackIds, ...trackIds])] };
 }
 
+/** Move relative to a visible row without disturbing songs hidden by search. */
+export function reorderAlbumTrack(album: LibraryAlbum, trackId: string, targetId: string, edge: "before" | "after") {
+  if (trackId === targetId || !album.trackIds.includes(trackId) || !album.trackIds.includes(targetId)) return album;
+  const trackIds = album.trackIds.filter(id => id !== trackId);
+  const position = trackIds.indexOf(targetId) + (edge === "after" ? 1 : 0);
+  trackIds.splice(position, 0, trackId);
+  return { ...album, trackIds };
+}
+
 export type StoredLibrarySnapshot = {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   tracks: LibraryTrack[];
   albums?: LibraryAlbum[];
   session: Omit<LibrarySession, "cacheEnabled" | "companionId"> & Partial<Pick<LibrarySession, "cacheEnabled" | "companionId">>;
@@ -93,6 +117,7 @@ export const EMPTY_SESSION: LibrarySession = {
   queue: [],
   history: [],
   currentTrackId: "",
+  playbackAlbumId: "",
   currentTime: 0,
   shuffle: false,
   repeat: "off",
@@ -104,8 +129,8 @@ export const EMPTY_SESSION: LibrarySession = {
 export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): LibrarySnapshot {
   const trackIds = new Set(snapshot.tracks.map((track) => track.id));
   return {
-    version: 2,
-    tracks: snapshot.tracks.map((track) => ({ ...track, comparison: track.comparison ?? null })),
+    version: 3,
+    tracks: snapshot.tracks.map((track) => withComparisons(track, comparisonsOf(track))),
     albums: (snapshot.albums ?? []).map((album) => ({
       ...album,
       trackIds: [...new Set(album.trackIds)].filter((id) => trackIds.has(id)),
@@ -113,12 +138,26 @@ export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): Library
     session: {
       ...EMPTY_SESSION,
       ...snapshot.session,
+      playbackAlbumId: typeof snapshot.session.playbackAlbumId === "string" ? snapshot.session.playbackAlbumId : "",
       companionId: snapshot.session.companionId === "hiyori" || snapshot.session.companionId === "hong-xi"
         ? snapshot.session.companionId
         : EMPTY_SESSION.companionId,
       cacheEnabled: snapshot.version >= 2 ? (snapshot.session.cacheEnabled ?? true) : true,
     },
   };
+}
+
+/** Preserve legacy B and its cache key; slots are stable after removals. */
+export function comparisonsOf(track: LibraryTrack): TrackComparison[] {
+  const source = track.comparisons ?? (track.comparison ? [{ ...track.comparison, slot: 1, id: "legacy-b" }] : []);
+  const used = new Set<number>();
+  return source.filter(item => {
+    if (!Number.isInteger(item.slot) || item.slot! < 1 || item.slot! > 8 || used.has(item.slot!)) return false;
+    used.add(item.slot!); return true;
+  }).map(item => ({ ...item, id: item.id ?? `legacy-${item.slot}`, cacheKey: item.cacheKey ?? (item.slot === 1 ? `${track.id}--version-b` : `${track.id}--version-${item.slot! + 1}`) })).sort((a, b) => a.slot! - b.slot!);
+}
+export function withComparisons(track: LibraryTrack, comparisons: TrackComparison[]): LibraryTrack {
+  return { ...track, comparisons, comparison: comparisons.find(item => item.slot === 1) ?? null };
 }
 
 export function normalizeFileName(value: string) {

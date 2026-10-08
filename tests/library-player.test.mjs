@@ -42,7 +42,7 @@ test("ships the local library as the primary application", async () => {
   assert.match(engine, /source\.start\(when, Math\.max\(0, offset\)\)/u);
   assert.doesNotMatch(app, /new Audio\(\)/u);
   assert.match(engine, /linearRampToValueAtTime/u);
-  assert.match(app, /Add version B/u);
+  assert.match(app, /Add comparison track/u);
   assert.match(app, /PrecisionWaveform/u);
   assert.match(app, /className="waveform-seek"/u);
   assert.match(app, /beginWaveformScrub/u);
@@ -198,7 +198,7 @@ test("persists only intentional local state and supports recoverable clearing", 
   assert.match(domain, /cacheEnabled: true/u);
   assert.match(domain, /comparisonCacheKey/u);
   assert.match(app, /Automatically keep new music/u);
-  assert.match(app, /Version B is synchronized and kept for your next visit/u);
+  assert.match(app, /comparison files remain playable after reopening/u);
   assert.match(domain, /normalizeFileName\(file\.name\)/u);
   assert.match(app, /Clear queue only/u);
   assert.match(app, /Clear cached audio/u);
@@ -218,27 +218,27 @@ test("reconnect preserves queue identity and missing tracks are skippable", asyn
   assert.doesNotMatch(app, /queue: remaining/u);
 });
 
-test("completes the progressive A/B comparison workflow", async () => {
+test("completes the progressive nine-track comparison workflow", async () => {
   const [app, domain, styles, actions] = await Promise.all([
-    readFile(new URL("src/LibraryApp.tsx", root), "utf8"),
+    Promise.all(["src/LibraryApp.tsx", "src/comparison/useComparisonWorkspace.ts"].map(file => readFile(new URL(file, root), "utf8"))).then(parts => parts.join("\n")),
     readFile(new URL("src/domain/library.ts", root), "utf8"),
     readFile(new URL("src/library.css", root), "utf8"),
     readFile(new URL("src/ComparisonActions.tsx", root), "utf8"),
   ]);
 
   assert.match(app, /readAudioFile/u);
-  assert.match(app, /loadStage: "reading"/u);
-  assert.match(app, /loadStage: "decoding"/u);
-  assert.match(app, /loadStage: "caching"/u);
-  assert.match(app, /formatBytes\(compareSlot\.size\)/u);
-  assert.match(actions, /Replace version B/u);
+  assert.match(app, /ensureBuffer/u);
+  assert.match(app, /Preparing comparison track/u);
+  assert.match(app, /comparison-versions/u);
+  assert.match(app, /for \(let target = 1; target < 9/u);
+  assert.match(actions, /Replace track/u);
   assert.match(app, /handleComparisonDrop/u);
   assert.match(app, /Different lengths/u);
   assert.match(app, /ended at[\s\S]*Switch source to hear the remaining audio/u);
   assert.match(app, /Back 5 seconds/u);
   assert.match(app, /Forward 5 seconds/u);
   assert.doesNotMatch(app, /Focus comparison waveforms/u);
-  assert.match(app, /comparisonCacheKey\(track\.id\)/u);
+  assert.match(app, /comparisonCacheKey\(track\.id, item\)/u);
   assert.match(app, /has-version-b/u);
   assert.match(domain, /comparison: TrackComparison \| null/u);
   assert.match(domain, /--version-b/u);

@@ -22,8 +22,8 @@ async function main(){try{
  const run=code=>window.webContents.executeJavaScript(`try { ${code} } catch(error) { console.error(error.stack); throw error; }`,true);
  const waitFor=async(code,label)=>{console.log('WAIT',label);for(let i=0;i<1200;i++){if(await run(code))return;await delay(50);}throw new Error('Timeout '+label);};
  const click=selector=>run(`document.querySelector(${JSON.stringify(selector)}).click()`);
- const openRemaster=async()=>{if(!await run(`Boolean(document.querySelector('.remaster-dialog[open]'))`)){await run(`document.querySelector('.remaster-entry').focus()`);await click('.remaster-entry');await waitFor(`Boolean(document.querySelector('.remaster-dialog[open]'))`,'preset dialog');}};
- const remaster=async()=>{await openRemaster();await click('.remaster-submit');};
+ const openRemaster=async()=>{if(!await run(`Boolean(document.querySelector('.remaster-dialog[open]'))`)){await run(`document.querySelector('[aria-label="Audio repair track 1"]').focus()`);await click('[aria-label="Audio repair track 1"]');await waitFor(`Boolean(document.querySelector('.remaster-dialog[open]'))`,'preset dialog');}};
+ const remaster=async()=>{await openRemaster();await run(`(()=>{const select=document.querySelector('[aria-label="Output track"]');const value='1';select.click();document.querySelector('[role=option][data-value="'+value+'"]').click();})()`);await click('.remaster-submit');};
  await window.loadURL('vibloom://app/index.html');await waitFor(`document.querySelector('.live2d-stage[data-status="ready"]')`,'app');
  await run(`(()=>{
   window.__memory={activeWorkers:0,createdWorkers:0,endedWorkers:0,weakBuffers:[],urls:0};
@@ -46,7 +46,7 @@ async function main(){try{
   window.__memory.load(60);
  })()`);
  await waitFor(`document.querySelector('#import-title')?.textContent==='Import complete'`,'import');await click('[aria-label="Close import summary"]');
- await waitFor(`document.querySelector('.remaster-entry')&&!document.querySelector('.remaster-entry').disabled`,'decoded A');
+ await waitFor(`document.querySelector('[aria-label="Audio repair track 1"]')&&!document.querySelector('[aria-label="Audio repair track 1"]').disabled`,'decoded A');
  const samples=[];
  const measure=async(label)=>{
   await delay(150);
@@ -60,31 +60,31 @@ async function main(){try{
  await measure('A loaded');
  for(let round=0;round<rounds;round++){
   await openRemaster();await click('.remaster-categories button');await click('[data-preset-id="full-safe"]');
-  await remaster();await waitFor(`document.querySelector('.version-b.is-ready')&&!document.querySelector('[aria-label="Remaster progress"]')`,'replace B');
+  await remaster();await waitFor(`document.querySelector('.version-b.is-ready')&&!document.querySelector('.card-perimeter-progress')`,'replace B');
   assert.equal((await measure('success '+round)).resources.activeWorkers,0);
   if(round===0){
     const downloaded=new Promise((resolve,reject)=>window.webContents.session.once('will-download',(_event,item)=>{item.setSavePath(path.join(output,'download.wav'));item.once('done',(_event,state)=>state==='completed'?resolve():reject(new Error(state)));}));
-    await click('[aria-label="Download B"]');
+    await click('[aria-label="Download track 2"]');
     await downloaded;assert.equal((await readFile(path.join(output,'download.wav'))).readUInt16LE(34),24);
   }
  }
  // Fail after creation: Worker must be terminated even when init postMessage throws.
- await run('__memory.failInit=true');await remaster();await waitFor(`!document.querySelector('[aria-label="Remaster progress"]')&&__memory.createdWorkers===${rounds+1}`,'send failure');
+ await run('__memory.failInit=true');await remaster();await waitFor(`!document.querySelector('.card-perimeter-progress')&&__memory.createdWorkers===${rounds+1}`,'send failure');
  assert.equal((await measure('init send failure')).resources.activeWorkers,0);await run('__memory.failInit=false');
  // Cancel real initialized jobs, including one after native allocation/processing begins.
  for(let i=0;i<3;i++){
-  await remaster();await waitFor(`Boolean(document.querySelector('[aria-label="Remaster progress"]'))`,'progress');await delay(i===2?900:150);
+  await remaster();await waitFor(`Boolean(document.querySelector('.card-perimeter-progress'))`,'progress');await delay(i===2?900:150);
   await click('.remaster-cancel');
   await waitFor('__memory.activeWorkers===0','terminated');assert.equal((await measure('cancel '+i)).resources.activeWorkers,0);
  }
- await click('[aria-label="Close remaster"]');await click('[aria-label="Version B options"]');await click('[aria-label="Remove version B"]');await waitFor(`!document.querySelector('.version-b')`,'remove B');
+ await click('[aria-label="Close audio repair"]');await click('[aria-label="Track 2 options"]');await click('[aria-label="Remove track 2"]');await waitFor(`!document.querySelector('.version-b')`,'remove B');
  assert.equal((await measure('B removed')).resources.aliveBuffers,1);
  // Clear queue through the actual application flow; decoded A and B must release.
  await run(`document.querySelector('.transport-secondary > button').click()`);
  await click('.queue-sheet .destructive-text-button');
  await waitFor(`Boolean(document.querySelector('.confirm-destructive'))`,'queue confirmation');
  await run(`document.querySelector('.confirm-destructive').click()`);
- await waitFor(`!document.querySelector('.version-b')&&document.querySelector('.remaster-entry')?.disabled`,'cleared queue');
+ await waitFor(`!document.querySelector('.version-b')&&document.querySelector('[aria-label="Audio repair track 1"]')?.disabled`,'cleared queue');
  await waitFor('__memory.urls===0','download URL released');
  const cleared=await measure('queue cleared');
  if(cleared.resources.aliveBuffers){
@@ -102,11 +102,11 @@ async function main(){try{
  await click('[aria-label="Play Memory A"]');
  await waitFor(`document.querySelector('.transport-track strong')?.textContent==='Memory A'`,'restored track');
  await click('[title="Player"]');
- await waitFor(`document.querySelector('.remaster-entry')&&!document.querySelector('.remaster-entry').disabled`,'A restored');
- await remaster();await waitFor(`document.querySelector('.version-b.is-ready')&&!document.querySelector('[aria-label="Remaster progress"]')`,'B restored');
+ await waitFor(`document.querySelector('[aria-label="Audio repair track 1"]')&&!document.querySelector('[aria-label="Audio repair track 1"]').disabled`,'A restored');
+ await remaster();await waitFor(`document.querySelector('.version-b.is-ready')&&!document.querySelector('.card-perimeter-progress')`,'B restored');
  await measure('A/B restored');await click('.storage-actions .is-destructive');
  await waitFor(`Boolean(document.querySelector('.confirm-destructive'))`,'reset confirmation');await click('.confirm-destructive');
- await waitFor(`!document.querySelector('.version-b')&&document.querySelector('.remaster-entry')?.disabled`,'reset');
+ await waitFor(`!document.querySelector('.version-b')&&document.querySelector('[aria-label="Audio repair track 1"]')?.disabled`,'reset');
  const reset=await measure('library reset');assert.equal(reset.resources.aliveBuffers,0);assert.equal(reset.resources.activeWorkers,0);assert.equal(reset.resources.urls,0);
  assert.ok(samples.filter(x=>x.label.startsWith('success ')).every(x=>x.resources.aliveBuffers===2),'only the current A and B buffers may remain');
  assert.ok(samples.filter(x=>x.label.startsWith('success ')).at(-1).heap.usedSize-samples.find(x=>x.label==='success 0').heap.usedSize<8*1024*1024,'repeated jobs do not continuously grow retained JS heap');

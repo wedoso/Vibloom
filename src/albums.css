@@ -71,7 +71,7 @@
 @media (prefers-reduced-motion: reduce) { .library-file-drop-overlay { animation: none; } }
 .library-empty-results { padding: 24px 12px; color: var(--library-muted); font-size: 13px; line-height: 1.6; }
 .track-album-select { display: grid; gap: 6px; padding: 10px; font-size: 11px; color: var(--library-muted); }
-.track-album-select select { width: 100%; padding: 7px; border: 1px solid var(--library-line); border-radius: 6px; background: white; color: var(--library-ink); }
+
 @media (max-width: 600px) {
   .album-navigation { gap: 16px; }
   .album-navigation-actions { gap: 12px; }
