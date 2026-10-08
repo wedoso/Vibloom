@@ -16,7 +16,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function main(){const timer=setTimeout(()=>app.exit(1),300000);try{
  await app.whenReady();await mkdir(output,{recursive:true});
  protocol.handle('vibloom',request=>{const file=path.resolve(root,'dist',`.${new URL(request.url).pathname}`);return file.startsWith(path.join(root,'dist')+path.sep)?net.fetch(pathToFileURL(file).href):new Response('Not found',{status:404});});
- window=new BrowserWindow({show:false,width:1440,height:1000,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
+ window=new BrowserWindow({show:process.env.CI==='true',width:1440,height:1000,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
  window.webContents.setAudioMuted(true);
  const errors=[];window.webContents.on('console-message',event=>{if(event.level==='error'){errors.push(event.message);console.error('RENDERER',event.message);}});
  const run=code=>window.webContents.executeJavaScript(code,true);
@@ -120,6 +120,7 @@ async function main(){const timer=setTimeout(()=>app.exit(1),300000);try{
  assert.equal(await run(`document.querySelectorAll('.precision-waveform').length`),2,'collapsed waveforms unmount after the transition');
  for(const [width,height] of [[1440,1000],[1280,900],[1280,720]]){
   window.setBounds({width,height});await delay(650);
+  await wait(`document.querySelector('[data-track-number="9"]').getBoundingClientRect().height>=200`,'selected card expansion at '+width+'×'+height);
   const layout=await run(`(()=>{const stack=document.querySelector('.comparison-versions'),r=stack.getBoundingClientRect(),footer=document.querySelector('.console-footer').getBoundingClientRect();return {height:r.height,scrollHeight:stack.scrollHeight,clientHeight:stack.clientHeight,cards:[...stack.querySelectorAll('article')].map(card=>{const b=card.getBoundingClientRect();return {number:card.dataset.trackNumber,top:b.top,bottom:b.bottom,height:b.height};}),top:r.top,bottom:r.bottom,footer:footer.top};})()`);
   console.log('LAYOUT',width,height,JSON.stringify(layout));
   assert.ok(layout.scrollHeight<=layout.clientHeight+2,'no right-side scrolling at '+width+'×'+height);
