@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
-import ts from 'typescript';
-let source=await readFile(new URL('../src/audio/vocals/jobStore.ts',import.meta.url),'utf8');
-source=source.replace('import { analyzeVocals, type VocalProgress } from "./analyzeVocals";', 'type VocalProgress = {phase:string;progress:number}; const analyzeVocals: any = null;');
-const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {VocalJobStore,vocalJobKey}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+import {loadTs} from './load-ts.mjs';
+const {VocalJobStore,vocalJobKey}=await loadTs('../src/audio/vocals/jobStore.ts', source => source.replace(/import \{ analyzeVocals \} from [^;]+;/, 'const analyzeVocals = null;'));
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('Library and Player share one task, live progress, cancellation, retry and source identity',async()=>{
  let calls=0,finish,progress,signal,saves=0;

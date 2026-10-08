@@ -15,5 +15,5 @@ Pyloudnorm is MIT-licensed. Its Python package is not bundled. The TypeScript
 implementation reproduces the fixed reference's RBJ normalization and separately
 uses DeMan for displayed loudness measurements.
 
-See docs/remaster-equivalence.zh-CN.md for numerical equivalence measurements,
-the fixed reference versions and the limits of the tested scope.
+See docs/audio-processing.md (Validation) for the fixed reference versions, reproducible checks
+and processing boundaries.

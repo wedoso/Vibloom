@@ -2,19 +2,19 @@
 
 The approved local-library, playlist, cache, reconnect, and cross-browser product contract is documented in [library-player.md](library-player.md). This document continues to describe the existing playback and Live2D runtime invariants that the library implementation must preserve.
 
-Vibloom is a static React/Vite application. Audio decoding, analysis, playback, Live2D rendering, and A/B switching all run inside the browser tab. The production build has no server runtime and remains deployable directly to GitHub Pages.
+Vibloom is a static React/Vite application. Audio decoding, analysis, playback, Live2D rendering, and numbered source switching all run inside the browser tab. The production build has no server runtime and remains deployable directly to GitHub Pages.
 
 ## Runtime flow
 
 ```text
 Local File(s)
     │
-    ├─ Library index → demand-decoded AudioBuffer A/B → Web Audio gain/analyser graph
+    ├─ Library index → demand-decoded AudioBuffer slots 1–9 → Web Audio gain/analyser graph
     ├─ Focused legacy comparison → same AudioBuffer scheduling model
     ├─ optional LRC → Unicode decode → timestamp/offset parser → lyric timeline
     │
     ├─ one shared AudioContext clock → synchronized BufferSource nodes
-    │                                  └─ 18 ms A/B gain crossfade
+    │                                  └─ 18 ms audible-source gain crossfade
     │
     └─ analyser for audible source
            └─ energy + bass/mid/treble + transient/bass flux
@@ -40,7 +40,10 @@ Local File(s)
 
 - The landing page accepts one Track A file through a single invitation integrated into Hiyori's stage. The same surface contains the file-picker action and drag/drop hint; a compact player-side action requests Track B, so neither a duplicate homepage uploader nor an empty comparison panel competes with the primary listening path.
 - Before B is requested, React renders only Track A's score note and waveform. Requesting B immediately changes the score strip to equal A/B portions; the B waveform and source selector then share the same state boundary.
-- The library player decodes A and B into AudioBuffers, starts both BufferSource nodes at the same future `AudioContext.currentTime`, and keeps the muted source running on that exact clock. There is no periodic `currentTime` correction loop.
+- The library player supports nine stable slots. Only the audible BufferSource runs; switching starts the destination at the shared clock’s offset, crossfades for 18 ms, then stops the previous source. Known durations stay available when inactive PCM is evicted; the longest version defines the timeline. The original and audible source stay warm, while an LRU cache targets 256 MiB of decoded PCM. In-flight processing inputs can temporarily add residency; files, renderer textures and DSP scratch are separate. There is no periodic `currentTime` correction loop.
+- Unfinished fading sources retain their PCM until `onended` disconnects them and retries LRU eviction. Rapid returns reuse an aligned source and replace its scheduled stop; gain automation holds its current value, and every interrupted fade receives the new end time. This prevents eviction or an obsolete scheduled stop from cutting off an audible transition. Cold decoding runs without pausing the existing source.
+- Multiple comparison cards expand only the selected version. A CSS grid transition hides the body, then unmounts waveform controls/bars after 280 ms; original selection preserves the last expanded comparison. The original and selected waveform remain available for seeking. Existing bar elements are memoized independently of the playhead.
+- Album row moves modify only that album’s ordered `trackIds`, preserving search-hidden songs. The persisted order drives subsequent Play all queues; moving rows does not mutate the current playback queue or another album.
 - Selecting or restoring the current track decodes it against a suspended audio graph before playback, so the 144-column waveform is ready while paused. The same decoded buffer is handed to playback, avoiding a second decode and its associated CPU/memory spike.
 - The two waveforms are visual evidence only. The persistent bottom transport is the sole seek/play control and switches to millisecond readouts while B is present.
 - Queue playback and focused comparison use the same scheduled `AudioContext.currentTime` reference for decoded AudioBuffers.
@@ -129,8 +132,9 @@ Library can queue multiple songs without selecting them for playback. Only one
 analysis job holds model/decoded audio memory at a time, including Player jobs.
 Each Library job decodes independently when its turn arrives; processing never
 replaces playback buffers. Cancellation, retry and per-song progress remain
-available. Results belong to the original track fingerprint. The Player still
-requires explicit singing activation; preparation never starts another audio path.
+available. Results belong to the original track fingerprint. A newly completed job enables singing for its source automatically; the microphone
+then toggles it. Reloaded timing caches wait for explicit activation. Preparation
+never starts another audio path.
 
 The 172 MiB pinned Demucs weights are cached locally. Processing uses 24-second
 windows with two seconds of context on each side, resampled to 44.1 kHz stereo.
@@ -301,3 +305,20 @@ from changing timestamp precision and lyric selection. Pointer scrubbing pauses 
 commits once on release/cancel/lost capture. Keyboard seeking commits directly.
 The desktop smoke test measures live frame/React commit counts and audio source
 restarts as well as export, draft persistence and LRC adjustment.
+
+## Version processing
+
+`useComparisonWorkspace` owns comparison identities, lazily decoded files, slot reservations, cancellable transformations, downloads and cache commits. Each EQ/remaster output records its parent identity and track number; replacing a slot changes its identity and forgets that source’s vocal analysis. Snapshot v3 migrates legacy B to slot 2 with its existing cache key and metadata.
+
+`ProcessingDialog` is shared by six native five-band EQ presets and 17 existing WASM remaster presets. `CardProgress` renders perimeter progress for EQ, remaster and vocal preparation. Heavy jobs share one queue through source loading, DSP and output commit; queued work retains metadata rather than full-song PCM.
+
+The comparison switch keeps the original on its left and the most recently selected version on its right in a 70 px bordered capsule. A 3×3 picker exposes tracks 1–9; comparison numbers roll in 160 ms, while the selection background moves only between original and comparison. The picker supports arrow navigation, number keys and Escape; navigating it does not seek or toggle playback, and closing it restores normal shortcuts. Returning to the original preserves the last expanded comparison. In-app tooltips inherit the card palette across a body portal. `clearAll` invalidates pending reads/commits, cancels transformations and comparison vocal jobs, switches to the original before disconnecting comparison buffers, drops session files/timing, revokes download URLs and deletes persisted comparison audio. The original and shared model cache remain available.
+
+Development explicitly prebundles worker-only Demucs/ONNX imports from `index.html`; fixtures and generated artifacts are excluded from the file watcher. This prevents first-use optimization from reloading playback.
+
+Transformation completion never selects or starts its output. A selected output cannot be replaced; its processing destination is reserved against card/reel/keyboard selection while the update runs. This prevents a background commit from forcing playback to another source. The temporary preview session now shares the existing AudioContext and timeline, routes only its input source through a disposable graph, retains the user selection, and restores it on exit. A 25 ms warmup and 18 ms fade avoid compressor-start gaps. EQ drafts and repair presets are keyed by immutable input identity; output settings snapshots are separate from drafts. Full mastering renders tone/dynamics/M-S first, measures processed LUFS in a terminating Worker, then runs an isolated limiter and 4× clipping pass. Resident preview LUFS caches are bounded to 32 scalar entries; no extra source PCM is cached. See [audio processing](audio-processing.md).
+
+Album playback provenance is stored as an optional `LibrarySession.playbackAlbumId`.
+The transport resolves artwork only among albums containing the current original
+track, preferring the playback album. Album browsing does not change this context;
+cover edits, removal and snapshot restore resolve from current album metadata.

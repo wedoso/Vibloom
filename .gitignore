@@ -33,10 +33,15 @@ yarn-error.log*
 *.tsbuildinfo
 /outputs/
 /work/
-/.superdesign/tmp/
+# Generated design-tool context stays local.
+/.superdesign/
 
 /.cache/
 
 # Python comparison tooling
 __pycache__/
 *.pyc
+
+# Generated audit/benchmark reports belong in outputs/, not product docs.
+/docs/*-results.json
+/docs/*-report.json

@@ -42,7 +42,7 @@ async function smoke() {
       throw new Error(`Timed out: ${label}`);
     };
     const ready = (id) => waitFor(`document.querySelector('.live2d-stage[data-companion="${id}"][data-status="ready"]') && document.querySelectorAll('canvas.live2d-canvas').length === 1 && document.querySelector('canvas.live2d-canvas').style.visibility !== 'hidden'`, `${id} rendered`);
-    const select = (id) => run(`document.querySelector('[aria-label="Music companion"]').value = ${JSON.stringify(id)}; document.querySelector('[aria-label="Music companion"]').dispatchEvent(new Event('change', { bubbles: true }));`);
+    const select = (id) => run(`(()=>{document.querySelector('[aria-label="Music companion"]').click();document.querySelector('[role=option][data-value="'+${JSON.stringify(id)}+'"]').click();})()`);
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
     const capture = async (name) => {
       await waitFor(`getComputedStyle(document.querySelector('.live2d-host')).opacity === '1'`, "companion fade complete for screenshot");
@@ -167,8 +167,8 @@ async function smoke() {
       await waitFor(`(() => {
         const color = getComputedStyle(document.querySelector('.waveform-source-${source} .waveform-bars i')).backgroundColor;
         return color === getComputedStyle(document.querySelector('.waveform-card.is-active .source-selector')).backgroundColor
-          && color === getComputedStyle(document.querySelector('.stage-source-indicator > button.is-active')).backgroundColor
-          && color === getComputedStyle(document.querySelector('.transport-ab-switch'), '::before').backgroundColor;
+          && color === getComputedStyle(document.querySelector('.stage-source-indicator > span.is-active')).backgroundColor
+          && color === getComputedStyle(document.querySelector('.transport-ab-switch > button.is-active')).backgroundColor;
       })()`, "audible source color settles consistently across waveform, stage and transport");
     }
     const before = await position();

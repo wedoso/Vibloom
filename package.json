@@ -1,6 +1,6 @@
 {
   "name": "vibloom",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "A private local music player with synchronized A/B comparison and a Live2D companion.",
   "author": "Vibloom contributors",
   "license": "MIT",
@@ -33,7 +33,13 @@
     "desktop:smoke:library": "npm run build && electron scripts/smoke-library-collections.mjs",
     "desktop:smoke:media": "npm run build && electron scripts/smoke-media-session.mjs",
     "desktop:smoke:lipsync": "npm run build && electron scripts/smoke-lip-sync.mjs",
-    "desktop:smoke:remaster": "npm run build && electron scripts/smoke-remaster.mjs"
+    "desktop:smoke:remaster": "npm run build && electron scripts/smoke-remaster.mjs",
+    "desktop:smoke:multi": "npm run build && electron scripts/smoke-multi-track.mjs",
+    "check:eq": "electron scripts/check-eq-consistency.mjs",
+    "check:multi-memory": "npm run build && electron scripts/check-multi-track-memory.mjs",
+    "check:multi-playback": "npm run build && electron scripts/check-multi-track-playback.mjs",
+    "desktop:smoke:vocal-startup": "electron scripts/smoke-vocal-startup.mjs",
+    "check:mastering": "electron scripts/check-mastering-consistency.mjs"
   },
   "dependencies": {
     "@pixi/sound": "^5.2.3",

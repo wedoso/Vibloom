@@ -6,7 +6,7 @@ export type AudioVisualFeatures = {
   transient: number;
   isPlaying: boolean;
   isComparing: boolean;
-  source: 0 | 1;
+  source: number;
   elapsed: number;
 };
 
@@ -28,7 +28,7 @@ export function sampleAnalyser(
   timeData: Uint8Array<ArrayBuffer>,
   previous: AudioVisualFeatures,
   elapsed: number,
-  source: 0 | 1,
+  source: number,
 ): AudioVisualFeatures {
   analyser.getByteFrequencyData(frequencyData);
   analyser.getByteTimeDomainData(timeData);

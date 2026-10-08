@@ -1,0 +1,14 @@
+EQ integration and test reference
+
+Source: SUP3RMASS1VE/Suno-Song-Remaster
+https://github.com/SUP3RMASS1VE/Suno-Song-Remaster
+Pinned revision: 862a0aa7a686be3bc7e420d108f4e3e4e050bb1f
+Upstream package.json and README declare ISC licensing.
+
+The six gain recipes and five Web Audio filter settings follow the upstream EQ
+section. Tests retain its original configureEQNodes/eqPresets definitions,
+audioConstants.js and wavEncoder.js as an independent output oracle.
+The mastering integration also ports its tonal, dynamics, mid-side stereo,
+loudness, final limiting, 4x clipping and 16-bit TPDF / 24-bit encoding logic.
+The independent fixtures retain unmodified upstream functions and source files.
+The upstream repository distributes no separate license file.

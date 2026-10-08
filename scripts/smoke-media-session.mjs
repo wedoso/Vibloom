@@ -80,12 +80,10 @@ async function smoke() {
     await command("play");
     await waitFor(`navigator.mediaSession.playbackState === 'playing'`, "headset resumes");
     const starts = await run(`window.__sourceStarts`);
-    assert.equal(starts.length, 2);
-    assert.equal(starts[0].when, starts[1].when, "both versions resume on one audio clock");
-    assert.equal(starts[0].offset, starts[1].offset);
+    assert.equal(starts.length, 1, "only the audible version resumes");
     assert.ok(Math.abs(starts[0].offset - pausedAt) < 0.05, "resume from paused position");
     await command("play"); await delay(200);
-    assert.equal(await run(`window.__sourceStarts.length`), 2, "repeated play does not restart sources");
+    assert.equal(await run(`window.__sourceStarts.length`), 1, "repeated play does not restart the audible source");
     await command("pause"); await command("seekto", {seekTime: 4.25});
     await waitFor(`Number(document.querySelector('[aria-label="Playback position"]').value) === 4.25`, "system seeking uses shared transport");
     await run(`window.__mediaHandlers.get('play')({action:'play'}); window.__mediaHandlers.get('pause')({action:'pause'});`);

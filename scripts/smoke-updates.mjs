@@ -86,7 +86,7 @@ async function smoke() {
     await capture("available-hong-xi");
     const geometry = () => run(`['.update-dialog','.update-notes','.update-actions'].map(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return [r.x,r.y,r.width,r.height]})`);
     const before = await geometry();
-    await run(`(() => {const select=document.querySelector('[aria-label="Music companion"]');select.value='hiyori';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await run(`(() => {const select=document.querySelector('[aria-label="Music companion"]');const value='hiyori';select.click();document.querySelector('[role=option][data-value="'+value+'"]').click();})()`);
     await waitFor(`document.querySelector('.live2d-stage[data-companion="hiyori"][data-status="ready"]')`, "Hiyori ready");
     assert.deepEqual(await geometry(), before, "update notes geometry is identical across companion themes");
     await capture("available-hiyori");

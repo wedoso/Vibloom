@@ -4,11 +4,19 @@ import type { RenderMetrics } from "./wav";
 
 export type RemasterProgress = { phase: string; progress: number };
 export type RemasterResult = { blob: Blob; metrics: RenderMetrics };
-export function renderRemaster(buffer: AudioBuffer, presetId: string, signal: AbortSignal, onProgress: (p: RemasterProgress) => void): Promise<RemasterResult> {
-  validateRepairInput(buffer.sampleRate, buffer.length, buffer.numberOfChannels);
+export function renderRemaster(source: AudioBuffer | (() => Promise<AudioBuffer>), presetId: string, signal: AbortSignal, onProgress: (p: RemasterProgress) => void): Promise<RemasterResult> {
+  if (typeof source !== "function") validateRepairInput(source.sampleRate, source.length, source.numberOfChannels);
   getRepairPreset(presetId); signal.throwIfAborted();
   onProgress({ phase: "Queued for audio processing", progress: 0 });
-  return runAudioJob(signal, () => new Promise((resolve, reject) => {
+  return runAudioJob(signal, () => renderRemasterNow(source, presetId, signal, onProgress));
+}
+
+/** Caller owns the shared audio-job queue, including decoding its output. */
+export async function renderRemasterNow(source: AudioBuffer | (() => Promise<AudioBuffer>), presetId: string, signal: AbortSignal, onProgress: (p: RemasterProgress) => void): Promise<RemasterResult> {
+    getRepairPreset(presetId); signal.throwIfAborted();
+    const buffer = typeof source === "function" ? await source() : source;
+    signal.throwIfAborted(); validateRepairInput(buffer.sampleRate, buffer.length, buffer.numberOfChannels);
+    return new Promise<RemasterResult>((resolve, reject) => {
     const worker = new Worker(new URL("./remaster.worker.ts", import.meta.url), { type: "module" });
     let offset = 0, settled = false;
     const dispose = () => {
@@ -26,8 +34,8 @@ export function renderRemaster(buffer: AudioBuffer, presetId: string, signal: Ab
       offset = end;
       worker.postMessage({ type: "chunk", channels, final: end === buffer.length }, channels.map(x => x.buffer));
     };
-    worker.onerror = () => fail(new Error("The remaster worker could not run. Please retry."));
-    worker.onmessageerror = () => fail(new Error("Could not receive remaster audio."));
+    worker.onerror = () => fail(new Error("Audio repair could not run. Please retry."));
+    worker.onmessageerror = () => fail(new Error("Could not receive repaired audio."));
     worker.onmessage = ({ data }) => {
       if (settled) return;
       try {
@@ -36,7 +44,7 @@ export function renderRemaster(buffer: AudioBuffer, presetId: string, signal: Ab
         else if (data.type === "progress") onProgress(data);
         else if (data.type === "error") fail(new Error(data.message));
         else if (data.type === "result") {
-          if (!(data.buffer instanceof ArrayBuffer) || !Number.isInteger(data.byteLength) || data.byteLength < 44 || data.byteLength > data.buffer.byteLength) throw new Error("Invalid remaster result.");
+          if (!(data.buffer instanceof ArrayBuffer) || !Number.isInteger(data.byteLength) || data.byteLength < 44 || data.byteLength > data.buffer.byteLength) throw new Error("Invalid audio repair result.");
           const blob = new Blob([new Uint8Array(data.buffer, 0, data.byteLength)], { type: "audio/wav" });
           settled = true; dispose(); resolve({ blob, metrics: data.metrics });
         }
@@ -46,5 +54,5 @@ export function renderRemaster(buffer: AudioBuffer, presetId: string, signal: Ab
       signal.throwIfAborted();
       worker.postMessage({ type: "init", rate: buffer.sampleRate, length: buffer.length, channels: buffer.numberOfChannels, presetId });
     } catch (error) { fail(error); }
-  }));
+    });
 }

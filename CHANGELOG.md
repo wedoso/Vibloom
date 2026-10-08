@@ -2,6 +2,13 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.10.0](https://github.com/wedoso/Vibloom/compare/v1.9.0...v1.10.0) (2026-10-08)
+
+- Compare up to nine tracks with number shortcuts, compact cards and one-click cleanup.
+- Preview EQ and mastering presets live; chain EQ, Mastering and Audio Repair into downloadable tracks.
+- See when preview changes become audible and follow per-track vocal preparation with automatic lip-sync activation.
+- Reorder album tracks, show album artwork during playback, and enjoy more compact panels and themed menus.
+
 ## [1.9.0](https://github.com/wedoso/Vibloom/compare/v1.8.1...v1.9.0) (2026-10-07)
 
 - Remaster Track A locally with 17 deshimmer presets for shimmer cleanup, denoise, resonance reduction and delivery targets. Compare the processed audio in B and download 24-bit PCM WAV; automatically cached results restore on the next visit.
