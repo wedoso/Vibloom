@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const uiControlsOnly = process.env.VIBLOOM_UI_CONTROLS_ONLY === '1';
+const showCiWindow = process.env.CI === 'true';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const profile=await mkdtemp(path.join(tmpdir(),'vibloom-multi-'));
 const output=path.join(root,'outputs/multi-track-smoke');
@@ -16,7 +17,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function main(){const timer=setTimeout(()=>app.exit(1),300000);try{
  await app.whenReady();await mkdir(output,{recursive:true});
  protocol.handle('vibloom',request=>{const file=path.resolve(root,'dist',`.${new URL(request.url).pathname}`);return file.startsWith(path.join(root,'dist')+path.sep)?net.fetch(pathToFileURL(file).href):new Response('Not found',{status:404});});
- window=new BrowserWindow({show:process.env.CI==='true',width:1440,height:1000,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
+ window=new BrowserWindow({show:showCiWindow,width:1440,height:1000,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
  window.webContents.setAudioMuted(true);
  const errors=[];window.webContents.on('console-message',event=>{if(event.level==='error'){errors.push(event.message);console.error('RENDERER',event.message);}});
  const run=code=>window.webContents.executeJavaScript(code,true);
