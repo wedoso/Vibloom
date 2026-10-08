@@ -138,6 +138,7 @@ export class SynchronizedAudioEngine {
     source.onended = null;
     try { source.stop(); } catch { /* The shorter source may already have ended. */ }
     source.disconnect();
+    source.buffer = null;
     this.sources[index] = null;
   }
 
@@ -179,7 +180,11 @@ export class SynchronizedAudioEngine {
     this.playRequest += 1;
     this.playing = false;
     this.stopAllSources();
+    this.buffers = [null, null];
     const context = this.graph?.context;
+    if (this.graph) {
+      for (const node of [...this.graph.analysers, ...this.graph.gains, this.graph.master]) node.disconnect();
+    }
     this.graph = null;
     if (context && context.state !== "closed") await context.close();
   }

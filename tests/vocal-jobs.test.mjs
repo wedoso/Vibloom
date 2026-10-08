@@ -36,3 +36,37 @@ test('failure is shared and retryable without poisoning another source',async()=
  assert.equal(store.getSnapshot().A.status,'error');assert.equal(store.getSnapshot().A.error,'fixture failure');
  store.cancel('A');assert.equal(store.getSnapshot().A.status,"idle");
 });
+test('replacing B forgets its analysis and aborts pending work without late publication',async()=>{
+ const tasks=[],saves=[];
+ const store=new VocalJobStore((source,signal,progress)=>new Promise(resolve=>tasks.push({source,signal,progress,resolve})));
+ store.prepare('A',{},()=>saves.push('A'));
+ store.prepare('old B',{},()=>saves.push('old B'));
+ store.forget('old B');
+ assert.ok(tasks[1].signal.aborted);
+ assert.equal(store.getSnapshot()['old B'],undefined);
+ await assert.rejects(tasks[1].source(),{name:'AbortError'});
+ tasks[1].progress({phase:'Late progress',progress:.8});
+ tasks[1].resolve({rms:Float32Array.of(.1),vowels:Uint8Array.of(0,0,255,0,0)});
+ tasks[0].resolve({rms:Float32Array.of(.1),vowels:Uint8Array.of(0,0,255,0,0)});
+ await flush();
+ assert.deepEqual(saves,['A']);
+ assert.equal(store.getSnapshot().A.status,'ready');
+ assert.equal(store.getSnapshot()['old B'],undefined);
+ store.forget('A');assert.deepEqual(store.getSnapshot(),{});
+ store.dispose();
+});
+test('reset cancels every task, discards records and supports a fresh task',async()=>{
+ const tasks=[];let saves=0;
+ const store=new VocalJobStore((_source,signal,progress)=>new Promise(resolve=>tasks.push({signal,progress,resolve})));
+ store.prepare('A',{},()=>saves++);store.prepare('B',{},()=>saves++);
+ store.reset();assert.deepEqual(store.getSnapshot(),{});
+ for(const task of tasks){
+  assert.ok(task.signal.aborted);task.progress({phase:'Late progress',progress:.8});
+  task.resolve({rms:Float32Array.of(.1),vowels:Uint8Array.of(0,0,255,0,0)});
+ }
+ await flush();assert.equal(saves,0);assert.deepEqual(store.getSnapshot(),{});
+ store.prepare('A',{},()=>saves++);
+ tasks[2].resolve({rms:Float32Array.of(.1),vowels:Uint8Array.of(0,0,255,0,0)});
+ await flush();assert.equal(saves,1);assert.equal(store.getSnapshot().A.status,'ready');
+ store.dispose();assert.deepEqual(store.getSnapshot(),{});
+});

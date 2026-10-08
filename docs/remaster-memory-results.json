@@ -1,0 +1,1005 @@
+{
+  "auditDateLocal": "2026-10-07",
+  "branch": "codex/web-deshimmer",
+  "engineVersion": "web-deshimmer-3",
+  "environment": {
+    "hardware": "Apple M2 Max",
+    "os": "macOS 27.0.1",
+    "hostArchitecture": "arm64"
+  },
+  "sourceHashes": {
+    "scripts/check-remaster-long-memory.mjs": "ccef661ac90bcf2be04920ee5ad4170c252ae5f56d00bd0c3430fcaf8606e5bc",
+    "scripts/check-remaster-memory.mjs": "ea3147bf170383e8be7d797905c7aef5e446fdf8c112f219bfef6f7efe68498a",
+    "scripts/check-remaster-native-memory.mjs": "63cd1c6f68eddb7c36eb7620d7cb21f7fe9155e34a584b3b597ada1e5f9e9eaa",
+    "scripts/check-remaster-sanitizer.cpp": "c503d82dd561572da76c26fa7f58ff2e77383c337808ea7f1bbb38158cb90167",
+    "src/LibraryApp.tsx": "0bf50fa40ef6e35aed41b1b8a2bd89e07a852ff804826fe25f1431e7d9a94c5e",
+    "src/audio/SynchronizedAudioEngine.ts": "d4d1b0339fd665c1112dacc2f3f1794d533f11b0b2c01a0ea31221f1e572dc72",
+    "src/audio/processingQueue.ts": "7050710d8584711851d5b8c62ef0bd8179a2e21e476e53e52842becdeae47ddc",
+    "src/audio/remaster/dsp.ts": "20b7c36125d1ba6ef94d434b06cfb76af57df6fab6068b3cf678169710aa4a05",
+    "src/audio/remaster/fft.ts": "d87434f59a7d09047a203632e8d6b13a8322228fe1a42266f955b69b22c0b6ce",
+    "src/audio/remaster/loudness.ts": "fbf16df6c2fd359d88d98965ac0c599386866cbb6b91fc9aa309f5e3b4355a86",
+    "src/audio/remaster/master.ts": "f758b6bf2caa693ba8139b2437f86e6fbb8fe5ea3ab0f37b57ab96dcc1404c71",
+    "src/audio/remaster/nativeLimiter.ts": "1ab33a8affa4782c959f95ab37234d8a3e6e4f3b5ed93a3cc08605c59fab7fa4",
+    "src/audio/remaster/nativePeaks.ts": "68d8589a3da4f8fa852e7c01a3f215709942f682593d49898062d25f2caa7819",
+    "src/audio/remaster/nativeRepair.ts": "429fcb615842973076763dc8760fce445f963f426d9e901d76817afa06972e19",
+    "src/audio/remaster/numerics.ts": "e7b6a366741cb1564a47ce5dea8acee2f4269dc2b1a7f051a25ee00de3483aaa",
+    "src/audio/remaster/presets.ts": "0c8f372f62ef57149e1fecd81620c659f3833c74b25201812baa8e9acdf0cb25",
+    "src/audio/remaster/referenceFft.ts": "e65c0b0895635678c8021dbbf8f5156b3158dde9e18f64281fa226b7f6ff6d2c",
+    "src/audio/remaster/remaster.worker.ts": "8f8c0812a1379ee869fe481f80fb2b85513d0a1b3b4adf2f3b58c1cff6d35983",
+    "src/audio/remaster/renderRemaster.ts": "8a3dfa70e4c953e26ba67b73693d7aed9f3457416420ec9007936063329001e9",
+    "src/audio/remaster/tonal.ts": "41944ef68ae767c17b06398dd2283ba61394b0bbe1da4e7f96e0a63e75726700",
+    "src/audio/remaster/wasm/alignment-kernel.cpp": "af1cb1218999baca70b1dc204514c481043a463c2702e4c89fdbca111b5c39d7",
+    "src/audio/remaster/wasm/fft-kernel.cpp": "d0e9592da7cdf665abd0e75beed7148483116c74a4aa541b4f8fe1a6d49b558f",
+    "src/audio/remaster/wasm/fft-kernel.wasm": "b383bf482a097c3b30bd3146d5e9472cd7dbb6972766529559f4eb19a9abaf96",
+    "src/audio/remaster/wasm/limiter-kernel.cpp": "dd298a4c5bffaaa43a6479f7ea17b54da2893578634343fd50657d0258173c99",
+    "src/audio/remaster/wasm/repair-kernel.cpp": "4417f352991893c5e1ecd50c5a4230ad5afdf4a5eddd36d6105025f5fd714395",
+    "src/audio/remaster/wasm/tonal-kernel.cpp": "93e5f2da18ccf2bd962297c1c2ce064cf0562fc564207637304db8b93e77c329",
+    "src/audio/remaster/wav.ts": "719e5922f257dd5573415b8c7dd138aed4f5c9c6c4e6fb95fdc37400b820368d",
+    "src/audio/vocals/jobStore.ts": "e1a1887774188e85020a191b18ab0ba6c17dc4664e9e5150628b4dd5e6c77304",
+    "src/audio/vocals/useVocalLipSync.ts": "b281e658e594b13e9652af8d6b0644c304c9ea34ff9f337bb546314468fd3733",
+    "tests/architecture.test.mjs": "984dac056880c9804d83368f96de43b3ec127b04d70feba53c1aa1e6b98d00e2",
+    "tests/remaster.test.mjs": "44064669ab28de16d1ea50b184edbe953f7da19b1197fe3bcbb1e45dd9e2d7fd",
+    "tests/vocal-jobs.test.mjs": "a13fbbcc31176d5aa93abab33c0d7e0fd83b2c443bcac6a4c7dfc81ac1e33e76"
+  },
+  "checks": {
+    "npmRunCheck": {
+      "tests": 77,
+      "pass": 77,
+      "fail": 0
+    },
+    "nativeSanitizer": {
+      "cases": 96,
+      "addressSanitizer": true,
+      "undefinedBehaviorSanitizer": true,
+      "leakSanitizer": false,
+      "result": "PASS 96 native sanitizer cases; ASan/UBSan"
+    }
+  },
+  "browser": {
+    "electron": "43.3.0",
+    "samples": [
+      {
+        "label": "A loaded",
+        "heap": {
+          "backingStorageSize": 173726107,
+          "embedderHeapUsedSize": 3051656,
+          "totalSize": 8880128,
+          "usedSize": 7915220
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 0,
+          "endedWorkers": 0,
+          "decoded": 1,
+          "aliveBuffers": 1,
+          "urls": 1
+        },
+        "processMemory": {
+          "workingSetSize": 554656,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "success 0",
+        "heap": {
+          "backingStorageSize": 194917091,
+          "embedderHeapUsedSize": 4114544,
+          "totalSize": 9666560,
+          "usedSize": 9044368
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 1,
+          "endedWorkers": 1,
+          "decoded": 2,
+          "aliveBuffers": 2,
+          "urls": 1
+        },
+        "processMemory": {
+          "workingSetSize": 671056,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "success 1",
+        "heap": {
+          "backingStorageSize": 194917146,
+          "embedderHeapUsedSize": 4444632,
+          "totalSize": 10452992,
+          "usedSize": 9404292
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 2,
+          "endedWorkers": 2,
+          "decoded": 3,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 647152,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "success 2",
+        "heap": {
+          "backingStorageSize": 194894562,
+          "embedderHeapUsedSize": 3872832,
+          "totalSize": 10190848,
+          "usedSize": 9200092
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 3,
+          "endedWorkers": 3,
+          "decoded": 4,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 689616,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "success 3",
+        "heap": {
+          "backingStorageSize": 194917146,
+          "embedderHeapUsedSize": 4260016,
+          "totalSize": 10715136,
+          "usedSize": 9588124
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 4,
+          "endedWorkers": 4,
+          "decoded": 5,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 690144,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "success 4",
+        "heap": {
+          "backingStorageSize": 194894562,
+          "embedderHeapUsedSize": 4074144,
+          "totalSize": 10452992,
+          "usedSize": 9224872
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 5,
+          "endedWorkers": 5,
+          "decoded": 6,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 690944,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "success 5",
+        "heap": {
+          "backingStorageSize": 194917146,
+          "embedderHeapUsedSize": 4424320,
+          "totalSize": 10715136,
+          "usedSize": 9638552
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 6,
+          "endedWorkers": 6,
+          "decoded": 7,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 692560,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "init send failure",
+        "heap": {
+          "backingStorageSize": 194917202,
+          "embedderHeapUsedSize": 4424480,
+          "totalSize": 10715136,
+          "usedSize": 9636916
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 7,
+          "endedWorkers": 7,
+          "decoded": 7,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 684432,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "cancel 0",
+        "heap": {
+          "backingStorageSize": 194894637,
+          "embedderHeapUsedSize": 4091656,
+          "totalSize": 10452992,
+          "usedSize": 9256164
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 8,
+          "endedWorkers": 8,
+          "decoded": 7,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 677056,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "cancel 1",
+        "heap": {
+          "backingStorageSize": 194917221,
+          "embedderHeapUsedSize": 4382936,
+          "totalSize": 10715136,
+          "usedSize": 9654932
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 9,
+          "endedWorkers": 9,
+          "decoded": 7,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 669408,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "cancel 2",
+        "heap": {
+          "backingStorageSize": 194917221,
+          "embedderHeapUsedSize": 4266624,
+          "totalSize": 10715136,
+          "usedSize": 9662360
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 10,
+          "endedWorkers": 10,
+          "decoded": 7,
+          "aliveBuffers": 2,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 660272,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "B removed",
+        "heap": {
+          "backingStorageSize": 173749255,
+          "embedderHeapUsedSize": 4052704,
+          "totalSize": 10452992,
+          "usedSize": 9573416
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 10,
+          "endedWorkers": 10,
+          "decoded": 7,
+          "aliveBuffers": 1,
+          "urls": 2
+        },
+        "processMemory": {
+          "workingSetSize": 633232,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "queue cleared",
+        "heap": {
+          "backingStorageSize": 152501384,
+          "embedderHeapUsedSize": 3803736,
+          "totalSize": 10715136,
+          "usedSize": 9538196
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 10,
+          "endedWorkers": 10,
+          "decoded": 7,
+          "aliveBuffers": 0,
+          "urls": 0
+        },
+        "processMemory": {
+          "workingSetSize": 613232,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "A/B restored",
+        "heap": {
+          "backingStorageSize": 194895629,
+          "embedderHeapUsedSize": 4203040,
+          "totalSize": 10452992,
+          "usedSize": 9355960
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 11,
+          "endedWorkers": 11,
+          "decoded": 9,
+          "aliveBuffers": 2,
+          "urls": 1
+        },
+        "processMemory": {
+          "workingSetSize": 763520,
+          "peakWorkingSetSize": 1368800
+        }
+      },
+      {
+        "label": "library reset",
+        "heap": {
+          "backingStorageSize": 152479680,
+          "embedderHeapUsedSize": 2687096,
+          "totalSize": 10190848,
+          "usedSize": 9020180
+        },
+        "resources": {
+          "activeWorkers": 0,
+          "createdWorkers": 11,
+          "endedWorkers": 11,
+          "decoded": 9,
+          "aliveBuffers": 0,
+          "urls": 0
+        },
+        "processMemory": {
+          "workingSetSize": 712272,
+          "peakWorkingSetSize": 1532368
+        }
+      }
+    ]
+  },
+  "native": {
+    "node": "25.2.1",
+    "samples": [
+      {
+        "label": "initialized",
+        "wasmMiB": 2,
+        "rss": 162791424,
+        "heapTotal": 64520192,
+        "heapUsed": 53477336,
+        "external": 5575616,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "boundary 8000/1",
+        "wasmMiB": 2,
+        "rss": 163463168,
+        "heapTotal": 64782336,
+        "heapUsed": 53501672,
+        "external": 5575656,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "boundary 8000/2",
+        "wasmMiB": 2,
+        "rss": 163495936,
+        "heapTotal": 64782336,
+        "heapUsed": 53516704,
+        "external": 5575656,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "boundary 96000/1",
+        "wasmMiB": 2,
+        "rss": 163512320,
+        "heapTotal": 64782336,
+        "heapUsed": 53534384,
+        "external": 5575656,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "boundary 96000/2",
+        "wasmMiB": 2,
+        "rss": 163151872,
+        "heapTotal": 64307200,
+        "heapUsed": 51444528,
+        "external": 5573058,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "peaks 0",
+        "wasmMiB": 2,
+        "rss": 247873536,
+        "heapTotal": 64307200,
+        "heapUsed": 50381176,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "spectral fault 0",
+        "wasmMiB": 2,
+        "rss": 248152064,
+        "heapTotal": 64307200,
+        "heapUsed": 50433720,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "limiter fault 0",
+        "wasmMiB": 2,
+        "rss": 332857344,
+        "heapTotal": 63520768,
+        "heapUsed": 50438984,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "peaks 1",
+        "wasmMiB": 2,
+        "rss": 332857344,
+        "heapTotal": 63520768,
+        "heapUsed": 50450056,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "spectral fault 1",
+        "wasmMiB": 2,
+        "rss": 332873728,
+        "heapTotal": 63520768,
+        "heapUsed": 50461808,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "limiter fault 1",
+        "wasmMiB": 2,
+        "rss": 332873728,
+        "heapTotal": 63520768,
+        "heapUsed": 50459688,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "peaks 2",
+        "wasmMiB": 2,
+        "rss": 332873728,
+        "heapTotal": 63782912,
+        "heapUsed": 50460800,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "spectral fault 2",
+        "wasmMiB": 2,
+        "rss": 357629952,
+        "heapTotal": 88162304,
+        "heapUsed": 50465296,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "limiter fault 2",
+        "wasmMiB": 2,
+        "rss": 357335040,
+        "heapTotal": 87900160,
+        "heapUsed": 50472120,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "peaks 3",
+        "wasmMiB": 2,
+        "rss": 357335040,
+        "heapTotal": 87900160,
+        "heapUsed": 50472472,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "spectral fault 3",
+        "wasmMiB": 2,
+        "rss": 357384192,
+        "heapTotal": 87900160,
+        "heapUsed": 50474856,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      },
+      {
+        "label": "limiter fault 3",
+        "wasmMiB": 2,
+        "rss": 357384192,
+        "heapTotal": 87900160,
+        "heapUsed": 50475192,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      }
+    ],
+    "allocationBoundaries": [
+      {
+        "rate": 8000,
+        "channels": 1,
+        "length": 5760000,
+        "wasmMiB": 88.75
+      },
+      {
+        "rate": 8000,
+        "channels": 2,
+        "length": 5760000,
+        "wasmMiB": 176.6875
+      },
+      {
+        "rate": 96000,
+        "channels": 1,
+        "length": 33554432,
+        "wasmMiB": 384.8125
+      },
+      {
+        "rate": 96000,
+        "channels": 2,
+        "length": 16777216,
+        "wasmMiB": 384.8125
+      }
+    ]
+  },
+  "fourMinuteFullSafe": {
+    "node": "25.2.1",
+    "rate": 44100,
+    "channels": 2,
+    "seconds": 240,
+    "maxWasmBytes": 344129536,
+    "samples": [
+      {
+        "phase": "before input",
+        "rss": 259735552,
+        "heapTotal": 116768768,
+        "heapUsed": 97214792,
+        "external": 2044824,
+        "arrayBuffers": 24811
+      },
+      {
+        "phase": "Balancing stereo",
+        "progress": 0.001485996226962705,
+        "wasmBytes": 344129536,
+        "rss": 779288576,
+        "heapTotal": 118341632,
+        "heapUsed": 102499520,
+        "external": 517021732,
+        "arrayBuffers": 169441243
+      },
+      {
+        "phase": "Estimating noise",
+        "progress": 0.061733662264789824,
+        "wasmBytes": 344129536,
+        "rss": 779321344,
+        "heapTotal": 118341632,
+        "heapUsed": 99454712,
+        "external": 517021732,
+        "arrayBuffers": 169379751
+      },
+      {
+        "phase": "Repairing spectrum",
+        "progress": 0.13414840613360424,
+        "wasmBytes": 344129536,
+        "rss": 779436032,
+        "heapTotal": 118341632,
+        "heapUsed": 99510456,
+        "external": 517021732,
+        "arrayBuffers": 169379751
+      },
+      {
+        "phase": "Reconstructing 1/3",
+        "progress": 0.3016484061336042,
+        "wasmBytes": 344129536,
+        "rss": 779468800,
+        "heapTotal": 118341632,
+        "heapUsed": 99565480,
+        "external": 517021732,
+        "arrayBuffers": 169379751
+      },
+      {
+        "phase": "Reconstructing 2/3",
+        "progress": 0.46914840613360426,
+        "wasmBytes": 344129536,
+        "rss": 779468800,
+        "heapTotal": 118341632,
+        "heapUsed": 99619136,
+        "external": 517021732,
+        "arrayBuffers": 169379751
+      },
+      {
+        "phase": "Reconstructing 3/3",
+        "progress": 0.6366484061336043,
+        "wasmBytes": 344129536,
+        "rss": 779468800,
+        "heapTotal": 118341632,
+        "heapUsed": 99672792,
+        "external": 517021732,
+        "arrayBuffers": 169379751
+      },
+      {
+        "phase": "Repairing tonal coherence",
+        "progress": 0.81,
+        "wasmBytes": 2097152,
+        "rss": 863977472,
+        "heapTotal": 101875712,
+        "heapUsed": 97296056,
+        "external": 519057440,
+        "arrayBuffers": 169379799
+      },
+      {
+        "phase": "native repair released",
+        "wasmBytes": 2097152,
+        "rss": 675725312,
+        "heapTotal": 187760640,
+        "heapUsed": 130339600,
+        "external": 261169205,
+        "arrayBuffers": 169379911
+      },
+      {
+        "phase": "WAV ready",
+        "rss": 675119104,
+        "heapTotal": 187334656,
+        "heapUsed": 130920624,
+        "external": 259869753,
+        "arrayBuffers": 254325835
+      },
+      {
+        "phase": "job references released",
+        "wasmBytes": 2097152,
+        "rss": 675135488,
+        "heapTotal": 168198144,
+        "heapUsed": 96888176,
+        "external": 5571469,
+        "arrayBuffers": 27551
+      }
+    ]
+  },
+  "workerParity": {
+    "electron": "43.3.0",
+    "node": "24.18.1",
+    "checks": [
+      {
+        "fixture": "shimmer",
+        "preset": "bypass",
+        "sha256": "edaf7d99c28cc06544cfc94a11cbaf478f931f38b217508f3f88e70d847cdf12",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "default",
+        "sha256": "950e348bb7e2b4cdb0de3b96615bd86651e039cd589e765b36be9aab16bc2916",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "gentle",
+        "sha256": "bb68e401d88586ebe3f4b1658d0dd8bd83cb681bb6efaf40a0dd95b9ac2da9ef",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "aggressive",
+        "sha256": "38ce729055a9144e85789db49ac96b182ab1736a76a7f40c758a67757c6ccdab",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "decrystallize",
+        "sha256": "c0a7330e27a128e525ba78112b7e88852ba8d5b5fd98c03071ad65b3696b6bbd",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "light-denoise",
+        "sha256": "920d14b2d446ddbb38fc9d6282a5f2366c55222e818ab6b586673ab7ce093b97",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "strong-denoise",
+        "sha256": "2f9152eb69bb332598152a8327cbb8166255625968900b70acf237edeb095ab3",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "gentle-resonance",
+        "sha256": "1cc8a6c0876940a6d4f2b06cf0a328fc4ce941df311a63e739eb147bbe538a3b",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "strong-resonance",
+        "sha256": "cf6e8383d0051a633b1aebb0a27e3d6f8980459487a19327697a586a18b1398a",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "full-safe",
+        "sha256": "117c8ab1db7b0eb38e56b9345926c35682436487f6953e08cebbbbf824ac4d9d",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "full-strong",
+        "sha256": "637d7f660e1e3b8db5700128adcd8a78a1d3f779291d412b1102e7c452260fe0",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "delivery",
+        "sha256": "59de6f11e37c05c215324e9ed0b9817fc14647e2ebebf480dc07b1f4001c140a",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "delivery-loud",
+        "sha256": "f819e8ed18dc565d93f7aa7c621ed30783e912ad65ea33fa160fe5d2d831e55e",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "presence",
+        "sha256": "41dbde5bd210e8b9525afac7792925e30062eb65347e48fb599013165206b918",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "upper",
+        "sha256": "a694a66beb13ad7e73c26c96f6fb89aa6eadca62aacc32b91ffceb1b5cbdf13b",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "whine",
+        "sha256": "a964c88fff288e3d8fb5129093a7fcbcd120c1209fd7b99f70a05ce385d27244",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "shimmer",
+        "preset": "crickets",
+        "sha256": "3a7907c795c1df483b52185ab5ff76ffef4e2f5e6c77897bec113337335b4c3b",
+        "byteLength": 576044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "bypass",
+        "sha256": "eadf90d2bf9ff1f8e006c551ca38f9b71b967383f8ada40e63ed33a4847cedcc",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "default",
+        "sha256": "6db2bd0282f122da97b425872065d3c2cbea60528997ab2ea948889349bd9a03",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "gentle",
+        "sha256": "a637d1ff471904be9d08debea2a27f6493dc60425cc6017be6f247be948fb981",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "aggressive",
+        "sha256": "58dc24c9fcf3db46f8d9ce79ffc18a1227c8c7e80f3097e7cfa6ffa6aad7574c",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "decrystallize",
+        "sha256": "a29de1f248ec4248ed2d0852641967ff6ce4a6794e8e1cd7307ba51d0f559201",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "light-denoise",
+        "sha256": "b70535ea6739cdc75aa1a208e07b5abee622e4cf6759822b76533299cf59b48a",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "strong-denoise",
+        "sha256": "018f1044eefb31e1c628633a68f55cb4e48275da4111334192064313c7a83564",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "gentle-resonance",
+        "sha256": "c6432528ee9cac1fe132b452caeedb4a0bec7c1f2ac09eec5a0d3b8b19c368ea",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "strong-resonance",
+        "sha256": "27838790333c5ddb6847e694e4548d29ec61da7bc36750e6237ffd1b5661da50",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "full-safe",
+        "sha256": "bc441f795bf3ddf61fb7bf4b2c9d4481dd9280e97d9ff623c20ddfde1eb75d7b",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "full-strong",
+        "sha256": "b0744526c7f0de62ce54e4e40812d50c1157162258026176767a48a1bfe41fe2",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "delivery",
+        "sha256": "e11841c054c2677afe4016b248c4c36efdf6f9781498082c5a536d3482f72107",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "delivery-loud",
+        "sha256": "2387fe1f64497d78debe07a0562ded3728a78bb169d1478c01833b3305442b26",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "presence",
+        "sha256": "7d253f8b2fd72ff1c8bd322cbb71e9c73ee760bb0085457eb9ac37e10a57664f",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "upper",
+        "sha256": "e03d30ee5c9e8be16ca41bdb5aa0bcf212b2aae7aff2669f064f3b81c69a93c5",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "whine",
+        "sha256": "d435cd135bd45204c11d65d6060a85bc02bfae2409ef1036732b0f9b5bf997b7",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "stereo-whine",
+        "preset": "crickets",
+        "sha256": "b5101bc4da52c2f95168d9072d19995c386297cfae4df33827339b3270ec6fd5",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "bypass",
+        "sha256": "e6764a21128643e048a63dbd9fbdd7700eb583766acf18d0c4030ee29de314e8",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "default",
+        "sha256": "afbbaf1ffb4d6225b5e8fb3a38a6efed76da823339992a8f7c2770e474ee4d3c",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "gentle",
+        "sha256": "afbbaf1ffb4d6225b5e8fb3a38a6efed76da823339992a8f7c2770e474ee4d3c",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "aggressive",
+        "sha256": "afbbaf1ffb4d6225b5e8fb3a38a6efed76da823339992a8f7c2770e474ee4d3c",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "decrystallize",
+        "sha256": "99c72429736b6845e980c05da503d3e28dce7b9321a437e1ed78811385eadda9",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "light-denoise",
+        "sha256": "e761c1e70435daa10c504c2e123edb16e97bf6baf1ea34d3ff7376fecf54d435",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "strong-denoise",
+        "sha256": "454fabb3619a505b4a63cb0169e75b3e134422adde3cc43f6e79b8e41fc25e63",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "gentle-resonance",
+        "sha256": "2d6a30a1cc07a6f4b29243903a02e293227c4afd4b0118781c9bf6862ed33d40",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "strong-resonance",
+        "sha256": "95354d71b6e2010224de9d0047a2edc48edc785b31d08c8b7937ccdf3051f5e8",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "full-safe",
+        "sha256": "401482c259cdcee95eb49598cc8094e26ebc9b9190e5ea8a2a1b7f871cde76f7",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "full-strong",
+        "sha256": "9045616e79a3ae1157033dbac22c424eacc135647667d25694b255289961be0f",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "delivery",
+        "sha256": "37f84d7b65496d96f2e536787ff8d18dee18fa74430aa9bf940d3d780c01e87e",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "delivery-loud",
+        "sha256": "14247142f5ea5d107411928728f86dbf5c0ee97a38d27b59a35c15f9110eecff",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "presence",
+        "sha256": "afbbaf1ffb4d6225b5e8fb3a38a6efed76da823339992a8f7c2770e474ee4d3c",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "upper",
+        "sha256": "afbbaf1ffb4d6225b5e8fb3a38a6efed76da823339992a8f7c2770e474ee4d3c",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "whine",
+        "sha256": "8e2624df9c1b85100a8266552245b64ac0eacb774448defbd9305f50b0240384",
+        "byteLength": 1152044
+      },
+      {
+        "fixture": "delivery-stress",
+        "preset": "crickets",
+        "sha256": "7ad8094d7c772dffc135db7812b511082ff01a334dbf3a1ef48431d1281d200e",
+        "byteLength": 1152044
+      }
+    ]
+  },
+  "logHashes": {
+    "check.log": "f0301ea2f67490e17692fefd289b657b55c215dc6a562b4d3df9f97206d4ac84",
+    "browser-memory.log": "bdea9a44d84ca5bc82d2ea7fcb350963ed3331e8c7bad19fc9f93a4155bea4d0",
+    "native-memory.log": "02a313446fc5849fc16d05bb57802792d12de40102473dfa470fa85697a7b14f",
+    "long-memory.log": "71207cd84ee0cbb36669297d21d03024613cf5dfaeee3a3ae0285a43e6b2dfc4",
+    "sanitizer.log": "899e42f89a127bd8c8db008461c5646f50ed76c25912976aee94f24f91fb7239",
+    "worker-parity.log": "f332a1c8cd0839ed8faf8454519f4d749728da32177d5e97ba4bfa333095a506"
+  },
+  "measurementNotes": [
+    "Browser fixture: 60s, 44100Hz stereo full-safe, isolated profile, 6 replacements and one restored remaster. Actual PCM24 download, init postMessage fault and three cancellations.",
+    "AudioBuffer counters use WeakRef; all checkpoints force multiple Chromium/V8 GC cycles to measure reclaimability.",
+    "Browser heap includes Live2D, rendering and app resources; processMemory workingSetSize and peakWorkingSetSize are KiB.",
+    "Node native allocation boundary tests create native banks without processing the full maximum-length song.",
+    "4-minute native heap high-water is not whole-process peak. Node RSS is sampled at phase changes and includes the TS loader and allocator reservations.",
+    "No mobile, real-song exhaustive stress, simultaneous active Demucs combination or universal leak-freedom claim.",
+    "DSP binary unchanged. Worker comparison uses pre-existing Node outputs; npm check also tests independent frozen Python fixtures.",
+    "Active vocal-job reset/forget behavior tested using deferred injected jobs; browser sequence does not run Demucs."
+  ]
+}

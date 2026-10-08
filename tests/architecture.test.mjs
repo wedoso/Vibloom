@@ -157,6 +157,10 @@ test("schedules A and B against one clock and preserves the pause position", asy
   assert.equal(engine.isPlaying, false);
   assert.equal(engine.getTimelineTime(), 7);
   assert.equal(starts.length, 2, "cancelled resume does not schedule either source");
+  await engine.close();
+  assert.equal(engine.getBuffer(0), null);
+  assert.equal(engine.getBuffer(1), null);
+  assert.equal(context.state, "closed");
 });
 
 test("keeps the desktop renderer sandboxed and packages both operating systems", async () => {
