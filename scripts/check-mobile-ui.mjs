@@ -129,6 +129,11 @@ async function checkFlow(engineName,browser){
   await page.getByRole('button',{name:'Pause',exact:true}).click();
   const range=page.getByRole('slider',{name:'Playback position',exact:true});
   await range.focus();await page.keyboard.press('Home');await page.waitForFunction(()=>document.querySelector('.m-direct-seek output')?.textContent==='0:00');
+  const tapBounds=await range.boundingBox();
+  await page.touchscreen.tap(tapBounds.x+tapBounds.width*.75,tapBounds.y+tapBounds.height/2);
+  await page.waitForFunction(()=>{const [minutes,seconds]=document.querySelector('.m-direct-seek output').textContent.split(':').map(Number);return minutes*60+seconds>=21&&minutes*60+seconds<=24;});
+  assert.ok((await page.title()).startsWith('Ready'),'one touch track tap seeks while paused');
+  await range.focus();await page.keyboard.press('Home');
   await page.getByRole('button',{name:'Play',exact:true}).click();await page.waitForFunction(()=>document.title.startsWith('Playing'));
   const bounds=await range.boundingBox();
   await page.mouse.move(bounds.x+8,bounds.y+bounds.height/2);await page.mouse.down();
@@ -180,7 +185,16 @@ async function checkFlow(engineName,browser){
 
   await page.locator('[aria-label="Playback position"]').evaluate(input=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'12');input.dispatchEvent(new Event('input',{bubbles:true}));});await close(page);
   await page.waitForFunction(()=>{const box=document.querySelector('.m-content .m-lyrics-viewport'),row=box.querySelector('[aria-current="true"]');if(!row?.textContent.includes('A much longer'))return false;const a=box.getBoundingClientRect(),b=row.getBoundingClientRect();return Math.abs((a.top+a.bottom-b.top-b.bottom)/2)<3;});
-  await page.locator('.m-content .m-lyrics-viewport').dispatchEvent('pointerdown');assert.equal(await page.getByRole('button',{name:'Follow current lyric',exact:true}).count(),1);await page.getByRole('button',{name:'Follow current lyric',exact:true}).click();
+  assert.equal(await page.locator('.m-content > .m-live-lyrics > header').count(),0,'room lyrics have no toolbar');
+  assert.equal(await page.locator('.m-playback-footer').count(),1,'lyrics panel transitions preserve a single transport');
+  await page.locator('.m-content .m-lyrics-viewport').dispatchEvent('pointerdown');
+  await page.locator('.m-content .m-lyrics .is-current').click();
+  await page.waitForFunction(()=>{const box=document.querySelector('.m-content .m-lyrics-viewport'),row=box.querySelector('[aria-current="true"]');const a=box.getBoundingClientRect(),b=row.getBoundingClientRect();return Math.abs((a.top+a.bottom-b.top-b.bottom)/2)<3;});
+  assert.equal(await page.getByRole('slider',{name:'Playback position',exact:true}).evaluate(input=>getComputedStyle(input).webkitTapHighlightColor),'rgba(0, 0, 0, 0)','direct seek has no dark tap highlight');
+  await options(page);await page.getByRole('button',{name:'Lyrics',exact:true}).click();
+  await page.getByRole('dialog').locator('.m-lyrics-viewport').dispatchEvent('pointerdown');
+  await page.getByRole('button',{name:'Follow current lyric',exact:true}).click();
+  await close(page);
   await page.getByRole('button',{name:'Play',exact:true}).click();
 
   await page.getByRole('button',{name:'Pause',exact:true}).click();

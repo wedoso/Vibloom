@@ -49,7 +49,7 @@ for (const [engine,type] of Object.entries({chromium,webkit})) {
   await page.waitForFunction(t=>Math.abs(Number(document.querySelector('.live2d-stage').style.getPropertyValue('--camera-zoom'))-t)<.025,Math.min(4,current*1.5),{timeout:15000});
   assert.equal(await page.evaluate(()=>window.visualViewport.scale),1,'pinch must not zoom the page');
  }
- const open=async()=>{await page.getByRole('button',{name:'Expand lyrics',exact:true}).click(); await page.getByRole('button',{name:'Edit lyric timing',exact:true}).click();};
+ const open=async()=>{await page.getByRole('button',{name:'Listening options',exact:true}).click(); await page.getByRole('dialog').getByRole('button',{name:'Lyrics',exact:true}).click(); await page.getByRole('button',{name:'Edit lyric timing',exact:true}).click();};
  await open(); const dialog=page.getByRole('dialog'); assert.equal(await dialog.locator('textarea').count(),0);
  await dialog.getByRole('button',{name:'Edit lyric line 1',exact:true}).click(); await dialog.getByRole('textbox',{name:'Lyric line 1',exact:true}).fill('修改歌词 · compact editor');
  await dialog.getByRole('button',{name:'Done editing line',exact:true}).click();
@@ -57,6 +57,7 @@ for (const [engine,type] of Object.entries({chromium,webkit})) {
  assert.match(await dialog.getByRole('button',{name:'Select lyric line 1',exact:true}).textContent(),/He-ya/);
  await dialog.getByRole('button',{name:'Edit lyric line 1',exact:true}).click(); await dialog.getByRole('textbox',{name:'Lyric line 1',exact:true}).fill('修改歌词 · compact editor');
  await dialog.getByRole('button',{name:'Save lyrics',exact:true}).click(); await open();
+ assert.equal(await page.locator('.m-playback-footer').count(),1,'save and reopen never duplicate transport');
  assert.match(await dialog.getByRole('button',{name:'Select lyric line 1',exact:true}).textContent(),/修改歌词/);
  await dialog.getByRole('button',{name:'Select lyric line 2',exact:true}).click();
  await dialog.getByRole('slider',{name:'Playback position',exact:true}).fill('4'); await page.waitForTimeout(250);

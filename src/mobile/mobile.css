@@ -18,7 +18,7 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 .mobile-app button, .mobile-app a, .mobile-app input, .mobile-app textarea, .mobile-app select { outline-offset: 3px; }
 .mobile-app :focus-visible { outline: 2px solid var(--m-accent); }
 .mobile-app button[aria-pressed="true"] { color: var(--m-accent); }
-.mobile-app input[type="range"] { width: 100%; min-width: 0; height: 44px; margin: 0; accent-color: var(--m-accent); touch-action: pan-y; }
+.mobile-app input[type="range"] { width: 100%; min-width: 0; height: 44px; margin: 0; accent-color: var(--m-accent); touch-action: pan-y; -webkit-tap-highlight-color:transparent; }
 .mobile-app input[type="checkbox"] { width: 24px; height: 24px; flex: 0 0 24px; margin: 0; accent-color: var(--m-accent); }
 .mobile-app svg { flex-shrink: 0; }
 .mobile-app h1, .mobile-app h2, .mobile-app h3, .mobile-app p { margin: 0; }

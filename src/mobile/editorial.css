@@ -7,18 +7,20 @@
 .mobile-app .m-brand { gap:8px; }
 .mobile-app .m-header-leading { gap:6px; }
 .mobile-app .m-header-actions .m-bordered { background:transparent; }
-.mobile-app.is-room .m-content { grid-template-rows:minmax(260px,1.65fr) minmax(144px,1fr); gap:4px; padding-top:16px; }
-.mobile-app .m-room-title { padding:0 2px 10px; }
+.mobile-app.is-room .m-content { grid-template-rows:minmax(0,2.8fr) minmax(128px,1fr); gap:0; padding-top:8px; }
+.mobile-app .m-room-title { padding:0 2px 2px; }
 .mobile-app .m-room-title h1 { font:500 clamp(26px,7.4vw,36px)/1.18 var(--m-serif); letter-spacing:-.035em; -webkit-line-clamp:2; }
 .mobile-app .m-room-title p { display:flex; align-items:center; gap:7px; font-size:11px; letter-spacing:.035em; margin-top:8px; }
 .mobile-app .m-room-title p::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--m-a); flex:none; }
-.mobile-app .m-room-orbit { width:100%; min-height:190px; max-width:640px; margin-inline:auto; }
+.mobile-app .m-room-orbit { width:100%; min-height:0; max-width:640px; margin-inline:auto; }
 /* Fade the model's lower edge into the room, including the artwork's own cutoff.
    The host contains only the rendered character; camera/source controls stay crisp. */
 .mobile-app .m-room-orbit .live2d-host {
-  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 62%,rgba(0,0,0,.9) 74%,rgba(0,0,0,.35) 84%,transparent 92%);
-  mask-image:linear-gradient(to bottom,#000 0%,#000 62%,rgba(0,0,0,.9) 74%,rgba(0,0,0,.35) 84%,transparent 92%);
+  inset:-20px -16px 0;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 74%,rgba(0,0,0,.85) 84%,transparent 98%);
+  mask-image:linear-gradient(to bottom,#000 0%,#000 74%,rgba(0,0,0,.85) 84%,transparent 98%);
 }
+.mobile-app .m-room-orbit .stage-music-disc { width:94%; left:50%; top:52%; border:0; background:radial-gradient(circle,rgb(var(--stage-light-rgb) / .34),rgb(var(--stage-light-rgb) / .15) 65%,transparent); }
 .mobile-app .m-room-hero.is-away { right:20px; }
 .mobile-app .camera-capsule > i { display:none; }
 /* Keep all three native framing callbacks. Only their mobile presentation changes. */
@@ -36,8 +38,6 @@
 .mobile-app .m-orbit-track { box-shadow:none; }
 .mobile-app .m-orbit-track[aria-pressed="true"] { box-shadow:0 0 0 4px color-mix(in srgb,var(--m-a) 12%,transparent); }
 .mobile-app .m-content > .m-live-lyrics { border-top:0; padding-top:0; }
-.mobile-app .m-content > .m-live-lyrics > header { min-height:44px; }
-.mobile-app .m-content > .m-live-lyrics > header > span { font-size:10px; letter-spacing:.04em; }
 /* Lyrics use one regular system face in both the room and the expanded sheet.
    Keep emphasis in the timed color fill, without changing glyph weight or width. */
 .mobile-app .m-live-lyrics .m-lyrics button,
@@ -95,10 +95,10 @@
 .mobile-app .m-import-option, .mobile-app .m-companion-options > button, .mobile-app .m-vocal-source { background:color-mix(in srgb,var(--m-paper) 55%,transparent); border-radius:16px; }
 .mobile-app .m-companion-options > button[aria-pressed="true"] { background:color-mix(in srgb,var(--m-a) 8%,transparent); border-color:color-mix(in srgb,var(--m-a) 40%,var(--m-line)); }
 @media (max-width:350px), (max-height:700px) {
-  .mobile-app.is-room .m-content { padding-top:8px; grid-template-rows:minmax(248px,1.4fr) minmax(120px,1fr); }
+  .mobile-app.is-room .m-content { padding-top:8px; grid-template-rows:minmax(0,2.8fr) minmax(112px,1fr); }
   .mobile-app .m-room-title h1 { font-size:25px; }
   .mobile-app .m-room-title { padding-bottom:6px; }
-  .mobile-app .m-room-orbit { min-height:158px; }
+  .mobile-app .m-room-orbit { min-height:0; }
   .mobile-app .m-room-title p { margin-top:5px; }
   .mobile-app .m-live-lyrics .m-lyrics button, .mobile-app .m-live-lyrics .m-plain-lyrics p { font-size:18px; }
 }
@@ -111,7 +111,7 @@
   .mobile-app .m-content > .m-live-lyrics .m-lyrics button { text-align:left; }
   .mobile-app .m-album-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
 }
-.mobile-app.is-focus .m-content { grid-template-rows:minmax(248px,1.6fr) minmax(120px,1fr); }
+.mobile-app.is-focus .m-content { grid-template-rows:minmax(0,3.2fr) minmax(112px,1fr); }
 @media (orientation:landscape) and (min-width:600px) { .mobile-app.is-focus .m-content { grid-template-rows:minmax(200px,1fr); } }
 
 /* A single selected line unfolds; playback and commit actions stay reachable. */

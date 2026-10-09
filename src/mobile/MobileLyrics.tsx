@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { FileText, LocateFixed, Maximize2 } from "lucide-react";
+import { FileText, LocateFixed } from "lucide-react";
 import type { MobileLibrary } from "./useMobileLibrary";
 
 /** Desktop lyric centering/progress, with touch browsing and tap-to-seek. */
-export default function MobileLyrics({ library, onAttach, onEdit, onExpand, expanded = false }: {
-  library: MobileLibrary; onAttach: () => void; onEdit: () => void; onExpand?: () => void; expanded?: boolean;
+export default function MobileLyrics({ library, onAttach, onEdit, expanded = false }: {
+  library: MobileLibrary; onAttach: () => void; onEdit: () => void; expanded?: boolean;
 }) {
   const viewport = useRef<HTMLDivElement>(null), rows = useRef<Array<HTMLButtonElement | null>>([]);
   const [following, setFollowing] = useState(true);
@@ -26,7 +26,7 @@ export default function MobileLyrics({ library, onAttach, onEdit, onExpand, expa
     return () => observer.disconnect();
   }, [active, following, expanded]);
   return <section className={`m-live-lyrics ${expanded ? "is-expanded" : ""} ${library.source ? "is-comparison" : ""}`} aria-label="Scrolling lyrics">
-    <header><span><FileText size={14} />{lines.length ? "Words, in time" : timing.length ? "Lyrics · add timing" : "Words, in time"}</span><div>{!following && lines.length > 0 && <button className="m-icon" aria-label="Follow current lyric" onClick={() => setFollowing(true)}><LocateFixed size={17} /></button>}{onExpand && <button className="m-icon" aria-label="Expand lyrics" onClick={onExpand}><Maximize2 size={16} /></button>}<button className="m-icon" aria-label="Attach lyrics" onClick={onAttach}><FileText size={17} /></button></div></header>
+    {expanded && <header><span><FileText size={14} />{timing.length && !lines.length ? "Lyrics · add timing" : "Words, in time"}</span><div>{!following && lines.length > 0 && <button className="m-icon" aria-label="Follow current lyric" onClick={() => setFollowing(true)}><LocateFixed size={17} /></button>}<button className="m-icon" aria-label="Attach lyrics" onClick={onAttach}><FileText size={17} /></button></div></header>}
     {lines.length ? <div className="m-lyrics-viewport" ref={viewport} onPointerDown={() => setFollowing(false)} onWheel={() => setFollowing(false)} tabIndex={0} aria-label="Synced lyric lines"><div className="m-lyrics">{lines.map((item, index) => <button key={`${item.time}-${index}`} ref={node => { rows.current[index] = node; }} className={index === active ? "is-current" : index < active ? "is-past" : ""} aria-current={index === active ? "true" : undefined} style={{ "--lyric-progress": `${index === active ? progress : 0}%` } as CSSProperties} onClick={() => { setFollowing(true); void library.seek(item.time); }}><span>{item.text || "♪"}</span></button>)}</div></div> : timing.length ? <div className="m-lyrics-viewport m-plain-lyrics">{timing.map((item, index) => <p key={index}>{item.text}</p>)}</div> : <button className="m-lyrics-empty" onClick={onAttach}>Attach LRC / TXT lyrics<br /><small>Your words belong in the room.</small></button>}
     {expanded && (lines.length > 0 || timing.length > 0) && <button className="m-text-button" onClick={onEdit}><FileText size={17} />Edit lyric timing</button>}
   </section>;

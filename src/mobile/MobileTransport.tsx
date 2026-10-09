@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { ListMusic, Maximize2, Minimize2, MoreHorizontal, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2 } from "lucide-react";
 import { albumForTrack, withoutExtension } from "../domain/library";
 import type { MobileLibrary } from "./useMobileLibrary";
@@ -9,8 +9,16 @@ import { formatTime } from "./format";
 export function MobileDirectSeek({ library }: { library: MobileLibrary }) {
   const [scrub, setScrub] = useState<number | null>(null);
   const dragging = useRef(false), draft = useRef<number | null>(null);
+  const pointer = useRef<number | null>(null);
   const position = scrub ?? library.time, maximum = Math.max(1, library.duration);
-  const cancel = () => { dragging.current = false; draft.current = null; setScrub(null); };
+  const cancel = () => { dragging.current = false; pointer.current = null; draft.current = null; setScrub(null); };
+  const preview = (event: PointerEvent<HTMLInputElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    // Match the 18px native thumb's travel and make track taps work on iOS.
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left - 9) / Math.max(1, rect.width - 18)));
+    draft.current = Math.round(ratio * maximum * 100) / 100;
+    setScrub(draft.current);
+  };
   const finish = () => {
     if (!dragging.current) return;
     const target = draft.current; cancel(); if (target !== null) void library.seek(target);
@@ -18,9 +26,16 @@ export function MobileDirectSeek({ library }: { library: MobileLibrary }) {
   return <div className="m-direct-seek" style={{ "--seek-progress": `${Math.min(100, position / maximum * 100)}%` } as CSSProperties}>
     <output aria-label="Elapsed time">{formatTime(position)}</output>
     <input aria-label="Playback position" aria-valuetext={`${formatTime(position)} of ${formatTime(library.duration)}`} type="range" min="0" max={maximum} step="0.01" value={Math.min(position, maximum)} disabled={!library.current || !!library.busy}
-      onPointerDown={() => { dragging.current = true; draft.current = library.time; setScrub(library.time); }}
+      onPointerDown={event => {
+        if (event.button !== 0 || dragging.current) return;
+        event.preventDefault(); dragging.current = true; pointer.current = event.pointerId;
+        event.currentTarget.focus({ preventScroll: true });
+        if (event.nativeEvent.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
+        preview(event);
+      }}
+      onPointerMove={event => { if (dragging.current && pointer.current === event.pointerId) preview(event); }}
       onChange={event => { const value = Number(event.target.value); if (dragging.current) { draft.current = value; setScrub(value); } else void library.seek(value); }}
-      onPointerUp={finish} onLostPointerCapture={finish} onPointerCancel={cancel} />
+      onPointerUp={event => { if (dragging.current && pointer.current === event.pointerId) { preview(event); finish(); } }} onLostPointerCapture={finish} onPointerCancel={cancel} />
     <output aria-label="Track duration">{formatTime(library.duration)}</output>
   </div>;
 }
