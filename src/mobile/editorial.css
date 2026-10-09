@@ -105,9 +105,16 @@
 @media (orientation:landscape) and (min-width:600px) {
   .mobile-app.is-room .m-content { grid-template-rows:minmax(200px,1fr); gap:24px; padding-top:8px; }
   .mobile-app .m-room-orbit { min-height:200px; }
-  /* Fit the whole circle into the shorter dimension, including the shared
-     rhythm's maximum 1.24 scale. Its radial gradient supplies the edge fade. */
-  .mobile-app .m-room-orbit .stage-disc-viewport { container-type:size; -webkit-mask-image:none; mask-image:none; }
+  /* Use the open space above the landscape stage for a larger, higher subject.
+     Resize the renderer's host so camera presets and pinch keep native framing. */
+  .mobile-app .m-room-orbit .live2d-host { top:-100px; }
+  .mobile-app .m-header, .mobile-app .m-focus-header { position:relative; z-index:7; }
+  /* Open framing choices down the side, clear of the enlarged face. */
+  .mobile-app .is-camera-open .camera-capsule > button:nth-of-type(1) { right:48px; top:46px; }
+  .mobile-app .is-camera-open .camera-capsule > button:nth-of-type(2) { right:48px; top:90px; }
+  .mobile-app .is-camera-open .camera-capsule > button:nth-of-type(3) { right:48px; top:134px; }
+  /* Expand the backdrop upwards too, reserving room for the 1.24 rhythm scale. */
+  .mobile-app .m-room-orbit .stage-disc-viewport { inset:-56px 0 0; container-type:size; -webkit-mask-image:none; mask-image:none; }
   .mobile-app .m-room-orbit .stage-music-disc { width:min(76cqw,76cqh); top:50%; }
   .mobile-app .m-room-hero.is-away { right:20px; }
   .mobile-app .m-content > .m-live-lyrics { padding-inline:8px; }
