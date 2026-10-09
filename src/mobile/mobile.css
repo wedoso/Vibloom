@@ -134,8 +134,9 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 .m-companion-options > button[aria-pressed="true"] { border-color: var(--m-accent); color: var(--m-ink); }
 .m-companion-options button > span:nth-child(2) { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .m-companion-options small { font-size: 12px; color: var(--m-muted); }
-.m-theme-swatch { width: 36px; height: 36px; border: 1px solid var(--m-line); flex: 0 0 36px; border-radius: 50%; background: linear-gradient(135deg,#f9f3e9 50%,#b65c3f 50%); }
-.m-theme-swatch.hong-xi { background: linear-gradient(135deg,#edf3fa 50%,#486b99 50%); }
+/* Explicitly clip the gradient in WebKit, including its antialiased border edge. */
+.m-theme-swatch { display: block; width: 36px; height: 36px; border: 1px solid var(--m-line); flex: 0 0 36px; border-radius: 50%; overflow: hidden; clip-path: circle(50%); background: linear-gradient(135deg,#f9f3e9 50%,#b65c3f 50%) padding-box; }
+.m-theme-swatch.hong-xi { background-image: linear-gradient(135deg,#edf3fa 50%,#486b99 50%); }
 .m-settings-card { border: 1px solid var(--m-line); border-radius: 18px; background: var(--m-paper); overflow: hidden; }
 .m-setting-row { min-height: 62px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--m-line); }
 .m-setting-row > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
