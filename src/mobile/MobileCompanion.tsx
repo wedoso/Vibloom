@@ -21,11 +21,14 @@ export default function MobileCompanion({ library, focus }: { library: MobileLib
     const observer = new MutationObserver(update); observer.observe(node, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-pressed", "data-status"] }); update();
     return () => observer.disconnect();
   }, []);
+  const { sampleVocals } = library.vocals;
   const visual = useRef({ ...EMPTY_AUDIO_VISUAL }), vocals = useRef(SILENT_VOCAL_POSE);
   useEffect(() => {
     let frame = 0;
     const frequency = new Uint8Array(512), samples = new Uint8Array(1024);
     const tick = () => {
+      const active = library.playing && library.engine.getContext()?.state === "running";
+      vocals.current = active ? sampleVocals(library.engine.getTimelineTime(), library.session.volume) : SILENT_VOCAL_POSE;
       const analyser = library.engine.getAnalyser(library.engine.audibleSource);
       visual.current = library.playing && analyser
         ? sampleAnalyser(analyser, frequency, samples, visual.current, library.engine.getTimelineTime(), library.source)
@@ -35,6 +38,6 @@ export default function MobileCompanion({ library, focus }: { library: MobileLib
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [library.engine, library.playing, library.source, library.comparisons.slots]);
+  }, [library.engine, library.playing, library.source, library.comparisons.slots, sampleVocals, library.session.volume]);
   return <div ref={host} className="m-companion"><Suspense fallback={<p className="m-muted">Opening your listening room…</p>}><Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" /></Suspense></div>;
 }

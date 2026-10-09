@@ -5,16 +5,19 @@ import { albumForTrack, comparisonCacheKey, comparisonsOf, createShuffleBag, EMP
 import { decodeLrc, parseLyricsFile } from "../lrc";
 import { useMediaSession } from "../platform/useMediaSession";
 import { mobilePlatform } from "./platform";
+import { VocalJobStore, vocalJobKey } from "../audio/vocals/jobStore";
+import { useMobileVocals } from "./useMobileVocals";
 import type { LibraryPlatform, StorageState } from "../platform/libraryPlatform";
 
 const AUDIO_EXTENSIONS = /\.(mp3|wav|wave|m4a|aac|ogg|oga|flac|opus|webm|aiff|aif)$/iu;
 export const MOBILE_MAX_FILE_BYTES = 300 * 1024 * 1024;
 const emptyStorage: StorageState = { usage: 0, quota: 0, persistent: false };
-const ignoreVocals = () => {};
 export type MobileImportSummary = { accepted: number; reconnected: number; lyrics: number; ignored: number; errors: string[] };
 
 export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   const [engine] = useState(() => new SynchronizedAudioEngine());
+  const [vocalJobs] = useState(() => new VocalJobStore());
+  const forgetVocals = useCallback((track: LibraryTrack, source: number) => vocalJobs.forget(vocalJobKey(track, source)), [vocalJobs]);
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
   const [albums, setAlbums] = useState<LibraryAlbum[]>([]);
   const [session, setSession] = useState<LibrarySession>({ ...EMPTY_SESSION, queue: [], history: [] });
@@ -41,10 +44,27 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   const readRoot = useCallback(() => tracksRef.current.find(track => track.id === sessionRef.current.currentTrackId) ?? null, []);
   const readTracks = useCallback(() => tracksRef.current, []);
   const cacheEnabled = useCallback(() => sessionRef.current.cacheEnabled, []);
-  const comparisons = useComparisonWorkspace({ rootId: session.currentTrackId, readRoot, readTracks, patchTracks, engine, platform, cacheEnabled, onMessage: setMessage, onSelect: setSource, forgetVocals: ignoreVocals });
-  const { reset: resetComparisons, clearFiles: clearComparisonFiles } = comparisons;
+  const comparisons = useComparisonWorkspace({ rootId: session.currentTrackId, readRoot, readTracks, patchTracks, engine, platform, cacheEnabled, onMessage: setMessage, onSelect: setSource, forgetVocals });
+  const { reset: resetComparisons, clearFiles: clearComparisonFiles, ensureBuffer: ensureComparisonBuffer } = comparisons;
   const current = tracks.find(track => track.id === session.currentTrackId) ?? null;
   const duration = Math.max(current?.duration ?? 0, ...comparisonsOf(current ?? { comparison: null } as LibraryTrack).map(item => item.duration));
+
+  const readVocalBuffer = useCallback(async (track: LibraryTrack, vocalSource: number) => {
+    if (vocalSource > 0) {
+      if (readRoot()?.id !== track.id) throw new Error("Open this song in Player to prepare its comparison tracks.");
+      return ensureComparisonBuffer(vocalSource);
+    }
+    const warm = loaded.current === track.id ? engine.getBuffer(0) : null;
+    if (warm) return warm;
+    const file = files.current.get(track.id) ?? await platform.audioFiles.get(track.id);
+    if (!file) throw new Error("Reconnect this song's original file, then retry lip sync.");
+    // Decode background library preparation independently: never load/pause the player.
+    const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(await file.arrayBuffer());
+    patchTracks(items => items.map(item => item.id === track.id && item.fingerprint === track.fingerprint ? { ...item, duration: buffer.duration } : item));
+    return buffer;
+  }, [readRoot, ensureComparisonBuffer, engine, platform, patchTracks]);
+  const vocals = useMobileVocals({ store: vocalJobs, engine, current, tracks, readTracks, patchTracks, readBuffer: readVocalBuffer });
+  const { forgetTrack: forgetVocalTrack, reset: resetVocals, cancelAll: cancelVocalJobs } = vocals;
 
   const refreshStorage = useCallback(async () => {
     try { const state = await platform.storage.readState(); if (mounted.current) setStorage(state); }
@@ -233,14 +253,16 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   const removeTrack = useCallback(async (id: string) => {
     const track = tracksRef.current.find(item => item.id === id); if (!track) return;
     if (sessionRef.current.currentTrackId === id) { pause(); resetComparisons(); engine.clearBuffers(); loaded.current = ""; setSource(0); }
+    forgetVocalTrack(track);
     patchTracks(items => items.filter(item => item.id !== id));
     setAlbums(items => items.map(album => ({ ...album, trackIds: album.trackIds.filter(trackId => trackId !== id) })));
     patchSession({ queue: sessionRef.current.queue.filter(trackId => trackId !== id), currentTrackId: sessionRef.current.currentTrackId === id ? "" : sessionRef.current.currentTrackId, currentTime: sessionRef.current.currentTrackId === id ? 0 : sessionRef.current.currentTime });
     files.current.delete(id);
     await Promise.allSettled([id, ...comparisonsOf(track).map(version => comparisonCacheKey(id, version))].map(key => platform.audioFiles.remove(key)));
     await refreshStorage();
-  }, [pause, resetComparisons, engine, patchTracks, patchSession, platform, refreshStorage]);
+  }, [pause, resetComparisons, engine, patchTracks, patchSession, platform, refreshStorage, forgetVocalTrack]);
   const clearLibrary = useCallback(async () => {
+    resetVocals();
     pause(); clearComparisonFiles(); engine.clearBuffers(); loaded.current = ""; files.current.clear();
     patchTracks(() => []); setAlbums([]); patchSession({ ...EMPTY_SESSION, queue: [], history: [] }); setTime(0); setSource(0);
     // Serialize reset behind any pending save. Only the mobile namespace is touched.
@@ -248,8 +270,9 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     try { await saveTail.current; await platform.audioFiles.clear(); setMessage("Mobile library cleared. Desktop library is unchanged."); }
     catch { setMessage("Some mobile files could not be removed. Try clearing again."); saveTail.current = Promise.resolve(); }
     await refreshStorage();
-  }, [pause, clearComparisonFiles, engine, patchTracks, patchSession, platform, refreshStorage]);
+  }, [pause, clearComparisonFiles, engine, patchTracks, patchSession, platform, refreshStorage, resetVocals]);
   const clearAudioCache = useCallback(async () => {
+    cancelVocalJobs();
     setBusy("Clearing cached audio…");
     try {
       const track = readRoot();
@@ -265,8 +288,8 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
       setMessage("Cached audio cleared. Albums, queue and lyrics were kept.");
     } catch { setMessage("Could not clear all cached audio. Try again."); }
     finally { setBusy(""); await refreshStorage(); }
-  }, [comparisons, platform, patchTracks, patchSession, refreshStorage, readRoot]);
+  }, [comparisons, platform, patchTracks, patchSession, refreshStorage, readRoot, cancelVocalJobs]);
   const setVolume = useCallback((volume: number) => { engine.setVolume(volume); patchSession({ volume }); }, [engine, patchSession]);
-  return { platform, engine, tracks, albums, setAlbums, session, patchSession, patchTracks, ready, busy, importing, message, setMessage, summary, setSummary, playing, time, source, storage, refreshStorage, current, duration, comparisons, load, play, pause, seek, next, previous, importFiles, attachLyrics, playAll, removeTrack, clearLibrary, clearAudioCache, setVolume };
+  return { vocals, platform, engine, tracks, albums, setAlbums, session, patchSession, patchTracks, ready, busy, importing, message, setMessage, summary, setSummary, playing, time, source, storage, refreshStorage, current, duration, comparisons, load, play, pause, seek, next, previous, importFiles, attachLyrics, playAll, removeTrack, clearLibrary, clearAudioCache, setVolume };
 }
 export type MobileLibrary = ReturnType<typeof useMobileLibrary>;

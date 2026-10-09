@@ -511,3 +511,16 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 .mobile-app .m-nav-sheet[open] { animation-name:m-drawer-left-enter; }
 @media (orientation:landscape) and (min-width:600px) { .mobile-app .m-side-sheet:not(.m-nav-sheet)[open] { animation-name:m-drawer-right-enter; } }
 @media (prefers-reduced-motion:reduce) { .mobile-app *, .mobile-app *::before, .mobile-app *::after { animation:none !important; transition:none !important; } }
+
+.m-vocal-sources { display:flex; flex-direction:column; gap:16px; }
+.m-vocal-source { border:1px solid var(--m-line); border-radius:18px; padding:16px; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.m-vocal-heading { display:flex; align-items:center; gap:12px; min-width:0; }
+.m-vocal-heading > div { min-width:0; flex:1; display:flex; flex-direction:column; gap:4px; }
+.m-vocal-heading strong { font-size:14px; overflow-wrap:anywhere; }
+.m-vocal-heading small, .m-vocal-progress { color:var(--m-muted); font-size:12px; }
+.m-vocal-number { flex:none; width:36px; height:36px; display:grid; place-items:center; border:1px solid var(--m-line); border-radius:50%; color:var(--m-accent); }
+.m-vocal-progress { display:flex; flex-direction:column; gap:8px; overflow-wrap:anywhere; }
+.m-vocal-progress progress { width:100%; height:5px; accent-color:var(--m-accent); }
+.m-vocal-source .m-button { justify-content:center; min-height:44px; }
+.m-vocal-task { position:relative; color:var(--m-accent); flex:none; }
+.m-vocal-task > small { position:absolute; top:0; right:0; min-width:16px; height:16px; border-radius:50%; background:var(--m-accent); color:var(--m-surface); font-size:9px; display:grid; place-items:center; }
