@@ -105,6 +105,10 @@
 @media (orientation:landscape) and (min-width:600px) {
   .mobile-app.is-room .m-content { grid-template-rows:minmax(200px,1fr); gap:24px; padding-top:8px; }
   .mobile-app .m-room-orbit { min-height:200px; }
+  /* Fit the whole circle into the shorter dimension, including the shared
+     rhythm's maximum 1.24 scale. Its radial gradient supplies the edge fade. */
+  .mobile-app .m-room-orbit .stage-disc-viewport { container-type:size; -webkit-mask-image:none; mask-image:none; }
+  .mobile-app .m-room-orbit .stage-music-disc { width:min(76cqw,76cqh); top:50%; }
   .mobile-app .m-room-hero.is-away { right:20px; }
   .mobile-app .m-content > .m-live-lyrics { padding-inline:8px; }
   .mobile-app .m-live-lyrics .m-lyrics button, .mobile-app .m-live-lyrics .m-plain-lyrics p { font-size:clamp(18px,2.5vw,26px); }
