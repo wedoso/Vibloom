@@ -13,6 +13,12 @@
 .mobile-app .m-room-title p { display:flex; align-items:center; gap:7px; font-size:11px; letter-spacing:.035em; margin-top:8px; }
 .mobile-app .m-room-title p::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--m-a); flex:none; }
 .mobile-app .m-room-orbit { width:100%; min-height:190px; max-width:640px; margin-inline:auto; }
+/* Fade the model's lower edge into the room, including the artwork's own cutoff.
+   The host contains only the rendered character; camera/source controls stay crisp. */
+.mobile-app .m-room-orbit .live2d-host {
+  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 62%,rgba(0,0,0,.9) 74%,rgba(0,0,0,.35) 84%,transparent 92%);
+  mask-image:linear-gradient(to bottom,#000 0%,#000 62%,rgba(0,0,0,.9) 74%,rgba(0,0,0,.35) 84%,transparent 92%);
+}
 .mobile-app .m-room-hero.is-away { right:20px; }
 .mobile-app .camera-capsule > i { display:none; }
 /* Keep all three native framing callbacks. Only their mobile presentation changes. */
