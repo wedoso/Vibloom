@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import type { MobileLibrary } from "./useMobileLibrary";
 
-const compactQuery = "(max-height: 700px)";
+const compactQuery = "(max-height: 850px)";
 const subscribeViewport = (changed: () => void) => { const query = window.matchMedia(compactQuery); query.addEventListener("change", changed); return () => query.removeEventListener("change", changed); };
 
 /** Track controls live around the companion, outside the central face area. */

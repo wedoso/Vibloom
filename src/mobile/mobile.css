@@ -315,3 +315,86 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 
 .mobile-app .m-orbit-track[aria-pressed="true"]:not(.m-orbit-original) { background:var(--m-b); border-color:var(--m-b); }
 @media (max-height:450px) and (orientation:landscape) { .mobile-app .m-room-hero.is-away { width:calc((100% - 64px) * .583333); right:auto; top:8px; } }
+
+/* Desktop's two workspaces, listening lyrics, camera and auxiliary drawers. */
+.m-header-actions { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.m-brand small { letter-spacing:.02em; }
+.mobile-app .m-room-orbit { height:clamp(200px,calc(100svh - 585px),430px); }
+.m-camera-toolbar { position:relative; z-index:5; display:flex; width:176px; margin:-44px auto 0; border:1px solid var(--m-line); border-radius:24px; background:var(--m-paper); backdrop-filter:blur(12px); }
+.m-camera-toolbar button { flex:1; min-width:44px; min-height:44px; border:0; border-radius:22px; background:transparent; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:var(--m-muted); }
+.m-camera-toolbar span { font-size:9px; line-height:1.1; }
+.m-camera-toolbar button[aria-pressed="true"] { background:var(--m-soft); }
+.mobile-app .m-content > .m-player-controls { order:1; }
+.mobile-app .m-content > .m-live-lyrics { order:2; }
+.mobile-app .m-content > .m-job { order:3; }
+.m-live-lyrics { min-width:0; border-top:1px solid var(--m-line); }
+.m-live-lyrics > header { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.m-live-lyrics > header > span { display:flex; align-items:center; gap:7px; color:var(--m-muted); font-size:11px; white-space:nowrap; }
+.m-live-lyrics > header > div { display:flex; align-items:center; }
+.m-lyrics-viewport { height:clamp(96px,12svh,150px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; -webkit-mask-image:linear-gradient(transparent,#000 16%,#000 84%,transparent); mask-image:linear-gradient(transparent,#000 16%,#000 84%,transparent); }
+.m-lyrics-viewport::-webkit-scrollbar { display:none; }
+.m-lyrics-viewport .m-lyrics { padding-block:calc(clamp(96px,12svh,150px) / 2 - 24px); gap:4px; }
+.m-lyrics-viewport .m-lyrics button { text-align:center; padding:10px 8px; font-size:16px; font-weight:500; color:var(--m-muted); line-height:1.6; flex-shrink:0; transition:opacity .25s; }
+.m-lyrics-viewport .m-lyrics button.is-past { opacity:.55; }
+.m-lyrics-viewport .m-lyrics button.is-current { color:var(--m-a); font-weight:700; opacity:1; }
+.m-lyrics-viewport .m-lyrics button.is-current > span { background:linear-gradient(90deg,var(--m-a) var(--lyric-progress),color-mix(in srgb,var(--m-a) 62%,var(--m-muted)) var(--lyric-progress)); background-clip:text; -webkit-background-clip:text; color:transparent; }
+.m-live-lyrics.is-comparison .m-lyrics-viewport .m-lyrics button.is-current > span { --m-a:var(--m-b); }
+.m-lyrics-empty { width:100%; min-height:96px; padding:12px; border:0; background:transparent; color:var(--m-muted); text-align:center; line-height:1.7; }
+.m-lyrics-empty small { font-size:11px; }
+.m-live-lyrics.is-expanded .m-lyrics-viewport { height:min(55svh,450px); }
+.m-live-lyrics.is-expanded .m-lyrics { padding-block:calc(min(55svh,450px) / 2 - 24px); }
+.m-transport-track, .m-player-extras { display:none; }
+.m-queue-row.is-current { border-radius:12px; background:var(--m-soft); }
+.mobile-app.is-focus .m-room-orbits { visibility:hidden; pointer-events:none; }
+.mobile-app.is-focus .m-room-title > p { visibility:hidden; }
+.mobile-app.is-focus .m-room-orbits button { pointer-events:none; }
+@media (max-width:350px) { .m-brand strong { font-size:21px; } .m-brand small { font-size:9px; } .m-header { gap:4px; } .m-live-lyrics > header > span { font-size:10px; } }
+@media (min-width:700px) { .mobile-app .m-room-orbit { max-width:640px; } .m-live-lyrics { max-width:640px; width:100%; margin-inline:auto; } }
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app { --m-dock-space:90px; }
+  .mobile-app.has-mini { --m-dock-space:80px; }
+  .mobile-app .m-header { min-height:60px; height:calc(60px + env(safe-area-inset-top)); padding-block:8px; }
+  .mobile-app .m-content { margin-left:68px; max-width:none; width:calc(100% - 68px); padding:14px max(18px,env(safe-area-inset-right)) 104px 18px; }
+  .mobile-app.is-room .m-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); grid-template-areas:"lyrics hero" "jobs jobs"; align-items:start; gap:12px 20px; padding:8px max(18px,env(safe-area-inset-right)) 100px 18px; }
+  .mobile-app.is-room .m-room-hero { grid-area:hero; grid-row:auto; min-width:0; }
+  .mobile-app.is-room .m-room-title { display:none; }
+  .mobile-app .m-room-orbit { height:clamp(200px,calc(100svh - 196px),500px); max-width:none; }
+  .mobile-app .m-room-hero.is-away { top:8px; left:calc(47.619% + 10px); right:max(18px,env(safe-area-inset-right)); width:auto; }
+  .mobile-app .m-room-hero.is-away .m-room-title { display:none; }
+  .mobile-app .m-live-lyrics { grid-area:lyrics; max-width:none; margin:0; border:0; padding-top:0; }
+  .mobile-app .m-content > .m-live-lyrics:not(.is-expanded) .m-lyrics-viewport { height:clamp(156px,calc(100svh - 206px),450px); }
+  .mobile-app .m-live-lyrics:not(.is-expanded) .m-lyrics { padding-block:calc(clamp(156px,calc(100svh - 206px),450px) / 2 - 24px); }
+  .mobile-app .m-live-lyrics:not(.is-expanded) .m-lyrics button { font-size:18px; text-align:left; }
+  .mobile-app .m-dock { left:0; top:calc(60px + env(safe-area-inset-top)); bottom:0; right:auto; width:68px; padding:8px 4px env(safe-area-inset-bottom) max(4px,env(safe-area-inset-left)); border-top:0; border-right:1px solid var(--m-line); background:transparent; }
+  .mobile-app .m-bottom-nav { display:flex; flex-direction:column; gap:6px; min-height:0; }
+  .mobile-app .m-bottom-nav button { margin:0; min-height:54px; flex-direction:column; gap:3px; border-radius:12px; }
+  .mobile-app .m-bottom-nav button span { font-size:9px; }
+  .mobile-app.is-room .m-player-controls { position:fixed; z-index:20; left:68px; bottom:0; width:calc(100% - 68px); max-width:none; margin:0; border-top:1px solid var(--m-line); background:var(--m-paper); backdrop-filter:blur(18px); padding:4px max(18px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) 18px; display:grid; grid-template-columns:minmax(0,1fr) 244px minmax(0,1fr); grid-template-rows:54px 26px; gap:0 14px; }
+  .mobile-app.is-room .m-player-controls .m-transport { grid-column:2; grid-row:1; justify-content:space-between; gap:4px; }
+  .mobile-app.is-room .m-player-controls .m-play-main { width:50px; height:50px; }
+  .mobile-app.is-room .m-time-control { grid-column:2; grid-row:2; min-height:26px; }
+  .m-transport-track { grid-column:1; grid-row:1 / 3; display:flex; align-items:center; gap:10px; min-width:0; }
+  .m-transport-track > span:last-child { min-width:0; display:flex; flex-direction:column; gap:4px; }
+  .m-transport-track strong { font-size:12px; line-height:1.5; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .m-transport-track small { color:var(--m-muted); font-size:10px; }
+  .m-player-extras { grid-column:3; grid-row:1 / 3; display:flex; flex-wrap:wrap; align-content:center; justify-content:center; column-gap:0; min-width:0; }
+  .m-player-extras .m-volume { width:100%; height:32px; margin:0; }
+  .m-player-extras input[type="range"] { height:32px; }
+  .mobile-app .m-mini { position:fixed; bottom:0; left:68px; right:0; padding:0 16px; background:var(--m-paper); border-top:1px solid var(--m-line); }
+  .mobile-app .m-side-sheet { inset:env(safe-area-inset-top) 0 var(--m-vv-bottom) auto; margin:0; width:min(420px,calc(100% - 80px)); height:var(--m-vv-height); max-height:var(--m-vv-height); border:1px solid var(--m-line); border-radius:20px 0 0 20px; }
+  .mobile-app .m-content > .m-job { grid-area:jobs; }
+  .mobile-app.is-focus .m-live-lyrics { border:0; }
+}
+@media (orientation:landscape) and (min-width:600px) and (max-width:740px) {
+  .mobile-app.is-room .m-player-controls { grid-template-columns:minmax(0,1fr) 224px 110px; gap:0 8px; padding-inline:12px; }
+  .m-player-extras .m-icon { width:36px; min-width:36px; }
+  .m-transport-track .m-mini-art { display:none; }
+}
+/* Let lyric browsing use the remaining portrait space rather than a blank gap. */
+.mobile-app.is-room .m-content { min-height:calc(100svh - 64px); }
+.mobile-app .m-content > .m-live-lyrics { flex:none; display:block; }
+.mobile-app .m-content > .m-live-lyrics .m-lyrics-viewport { height:clamp(96px,calc(100svh - 370px - clamp(200px,calc(100svh - 585px),430px)),360px); min-height:96px; }
+.m-lyrics-viewport .m-lyrics, .m-live-lyrics.is-expanded .m-lyrics { padding-block:var(--m-lyric-pad,48px); }
+@media (orientation:landscape) and (min-width:600px) { .mobile-app.is-room .m-content { min-height:calc(100svh - 60px); } .mobile-app .m-content > .m-live-lyrics { display:block; flex:none; } .mobile-app .m-live-lyrics:not(.is-expanded) .m-lyrics { padding-block:var(--m-lyric-pad,78px); } }
+
+@media (orientation:landscape) and (min-width:600px) { .mobile-app .m-content > .m-live-lyrics:not(.is-expanded) .m-lyrics-viewport { height:clamp(156px,calc(100svh - 206px),450px); } }

@@ -249,7 +249,24 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     catch { setMessage("Some mobile files could not be removed. Try clearing again."); saveTail.current = Promise.resolve(); }
     await refreshStorage();
   }, [pause, clearComparisonFiles, engine, patchTracks, patchSession, platform, refreshStorage]);
+  const clearAudioCache = useCallback(async () => {
+    setBusy("Clearing cached audio…");
+    try {
+      const track = readRoot();
+      if (track?.persistence === "cached" && !files.current.has(track.id)) {
+        const cached = await platform.audioFiles.get(track.id);
+        if (cached) files.current.set(track.id, new File([await cached.arrayBuffer()], track.name, { type: cached.type, lastModified: track.lastModified }));
+      }
+      await comparisons.preserveCachedFiles();
+      await platform.audioFiles.clear();
+      patchTracks(items => items.map(track => ({ ...track, persistence: "indexed", availability: files.current.has(track.id) ? "session" : "reconnect" })));
+      comparisons.updateCacheStatus(false);
+      patchSession({ cacheEnabled: false });
+      setMessage("Cached audio cleared. Albums, queue and lyrics were kept.");
+    } catch { setMessage("Could not clear all cached audio. Try again."); }
+    finally { setBusy(""); await refreshStorage(); }
+  }, [comparisons, platform, patchTracks, patchSession, refreshStorage, readRoot]);
   const setVolume = useCallback((volume: number) => { engine.setVolume(volume); patchSession({ volume }); }, [engine, patchSession]);
-  return { platform, engine, tracks, albums, setAlbums, session, patchSession, patchTracks, ready, busy, importing, message, setMessage, summary, setSummary, playing, time, source, storage, refreshStorage, current, duration, comparisons, load, play, pause, seek, next, previous, importFiles, attachLyrics, playAll, removeTrack, clearLibrary, setVolume };
+  return { platform, engine, tracks, albums, setAlbums, session, patchSession, patchTracks, ready, busy, importing, message, setMessage, summary, setSummary, playing, time, source, storage, refreshStorage, current, duration, comparisons, load, play, pause, seek, next, previous, importFiles, attachLyrics, playAll, removeTrack, clearLibrary, clearAudioCache, setVolume };
 }
 export type MobileLibrary = ReturnType<typeof useMobileLibrary>;
