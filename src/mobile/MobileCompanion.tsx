@@ -4,12 +4,26 @@ import { MicVocal, ScanFace } from "lucide-react";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "../audioVisual";
 import { SILENT_VOCAL_POSE } from "../audio/vocals/envelope";
 import type { MobileLibrary } from "./useMobileLibrary";
+import { bindMobileModelPinch } from "./modelPinch";
 const Live2DStage = lazy(() => import("../Live2DStage"));
 
 export default function MobileCompanion({ library, focus, onVocals }: { library: MobileLibrary; focus: boolean; onVocals: () => void }) {
   const host = useRef<HTMLDivElement>(null);
+  const zoomReadout = useRef<HTMLOutputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [capsule, setCapsule] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const node = host.current, readout = zoomReadout.current; if (!node || !readout) return;
+    let canvas: HTMLCanvasElement | null = null, unbind = () => {};
+    const update = () => {
+      const next = node.querySelector<HTMLCanvasElement>(".live2d-canvas");
+      if (next === canvas) return;
+      unbind(); canvas = next;
+      unbind = next ? bindMobileModelPinch(next, readout) : () => {};
+    };
+    const observer = new MutationObserver(update); observer.observe(node, { childList: true, subtree: true }); update();
+    return () => { observer.disconnect(); unbind(); };
+  }, []);
   useEffect(() => {
     const node = host.current; if (!node) return;
     const update = () => {
@@ -62,6 +76,7 @@ export default function MobileCompanion({ library, focus, onVocals }: { library:
     <Suspense fallback={<p className="m-muted">Opening your listening room…</p>}>
       <Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" />
     </Suspense>
+    <output ref={zoomReadout} className="m-pinch-readout" aria-label="Model zoom" hidden />
     {capsule && createPortal(<>
       <button type="button" className="m-stage-camera" aria-label="Camera controls" aria-expanded={cameraOpen} title="Camera framing" onClick={() => setCameraOpen(value => !value)}><ScanFace size={19} strokeWidth={1.7} /></button>
       <button type="button" className={vocalStatus?.enabled ? "m-stage-vocals is-active" : "m-stage-vocals"} aria-label="Vocal lip sync" aria-haspopup="dialog" aria-pressed={vocalStatus?.enabled ?? false} aria-busy={vocalStatus?.working ?? false} title={vocalStatus?.working ? "Preparing vocal lip sync" : vocalStatus?.enabled ? "Vocal lip sync is on" : "Prepare or enable vocal lip sync"} disabled={!library.current} onClick={onVocals}><MicVocal size={19} strokeWidth={1.7} /></button>

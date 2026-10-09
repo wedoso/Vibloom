@@ -104,3 +104,36 @@
 }
 .mobile-app.is-focus .m-content { grid-template-rows:minmax(248px,1.6fr) minmax(120px,1fr); }
 @media (orientation:landscape) and (min-width:600px) { .mobile-app.is-focus .m-content { grid-template-rows:minmax(200px,1fr); } }
+
+/* A single selected line unfolds; playback and commit actions stay reachable. */
+.mobile-app .m-sheet.m-lyrics-sheet { height:min(720px,calc(var(--m-vv-height) - 12px),calc(100dvh - 12px)); overflow:hidden; display:flex; flex-direction:column; }
+.mobile-app .m-lyrics-sheet:not([open]) { display:none; }
+.mobile-app .m-lyrics-sheet > header { position:relative; flex:none; padding:8px 12px 8px 16px; }
+.mobile-app .m-lyrics-sheet > header h2 { font-size:25px; }
+.mobile-app .m-lyrics-sheet > .m-sheet-content { flex:1; min-height:0; overflow:hidden; padding:0 16px; gap:0; }
+.mobile-app .m-lyrics-editor-toolbar { display:flex; align-items:center; gap:8px; flex:none; min-height:52px; }
+.mobile-app .m-lyrics-editor-toolbar .m-direct-seek { flex:1; min-width:0; column-gap:8px; }
+.mobile-app .m-lyrics-editor-caption { display:flex; justify-content:space-between; gap:8px; flex:none; padding:0 0 10px; font-size:11px; color:var(--m-muted); }
+.mobile-app .m-lyrics-editor-caption output { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.mobile-app .m-lyrics-editor-list { flex:1; min-height:44px; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.mobile-app .m-lyrics-editor-row { border-bottom:1px solid var(--m-line); border-radius:10px; }
+.mobile-app .m-lyrics-editor-row.is-selected { background:color-mix(in srgb,var(--m-a) 9%,transparent); }
+.mobile-app .m-lyrics-editor-line { display:flex; align-items:center; gap:0; min-width:0; }
+.mobile-app .m-lyrics-editor-select { flex:1; min-width:0; min-height:48px; display:flex; align-items:center; gap:10px; text-align:left; padding:8px 6px; border:0; background:transparent; }
+.mobile-app .m-lyrics-editor-select time { flex:none; width:64px; font-size:11px; font-variant-numeric:tabular-nums; color:var(--m-muted); white-space:nowrap; }
+.mobile-app .m-lyrics-editor-select > span { min-width:0; font-size:14px; font-weight:400; line-height:1.45; overflow-wrap:anywhere; white-space:pre-line; }
+.mobile-app .m-lyrics-editor-fields { padding:0 10px 10px; }
+.mobile-app .m-lyrics-editor-fields textarea { display:block; width:100%; min-height:72px; resize:vertical; border:1px solid var(--m-line); border-radius:10px; padding:10px; background:var(--m-paper); font-size:16px; line-height:1.5; }
+.mobile-app .m-lyrics-editor-field-actions { display:flex; align-items:center; gap:4px; margin-top:6px; }
+.mobile-app .m-lyrics-editor-field-actions label { display:flex; align-items:center; gap:6px; flex:1; min-width:0; font-size:11px; color:var(--m-muted); }
+.mobile-app .m-lyrics-editor-field-actions input { min-width:0; width:100%; min-height:44px; padding:6px 8px; border:1px solid var(--m-line); border-radius:10px; background:var(--m-paper); font-size:16px; }
+.mobile-app .m-lyrics-editor-bottom { flex:none; position:relative; padding:10px 0 max(12px,env(safe-area-inset-bottom)); background:var(--m-surface); }
+.mobile-app .m-lyrics-editor-bottom .m-error { margin-bottom:8px; font-size:12px; }
+.mobile-app .m-lyrics-editor-controls { display:flex; align-items:center; gap:8px; }
+.mobile-app .m-lyrics-editor-controls > .m-button { min-height:44px; padding:8px 10px; font-size:13px; gap:6px; }
+.mobile-app .m-lyrics-editor-controls > .m-button:not(.m-primary) { flex:1; min-width:0; }
+.mobile-app .m-lyrics-actions { position:absolute; bottom:100%; left:0; width:min(240px,100%); border:1px solid var(--m-line); background:var(--m-surface); border-radius:14px; padding:4px 12px; box-shadow:0 -6px 24px rgb(36 33 27 / .1); }
+.mobile-app .m-lyrics-actions .m-menu-action:last-child { border:0; }
+.mobile-app .m-lyrics-discard { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.mobile-app .m-lyrics-discard > span { flex-basis:100%; font-size:12px; color:var(--m-muted); }
+.mobile-app .m-lyrics-discard > button { flex:1; min-width:0; min-height:44px; font-size:13px; padding:8px; }

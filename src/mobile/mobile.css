@@ -274,7 +274,9 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 .mobile-app .m-room-orbit .live2d-stage { overflow:hidden; }
 .mobile-app .m-room-orbit .live2d-host { z-index:2; }
 .mobile-app .m-room-orbit .camera-capsule, .mobile-app .m-room-orbit .stage-topline { display:none; }
-.mobile-app .m-room-orbit .live2d-canvas { touch-action:pan-y !important; }
+.mobile-app .m-room-orbit .live2d-canvas { touch-action:none !important; }
+.mobile-app .m-pinch-readout { position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:5; padding:4px 10px; border:1px solid var(--m-line); border-radius:14px; background:var(--m-paper); color:var(--m-muted); font-size:11px; font-variant-numeric:tabular-nums; pointer-events:none; }
+.mobile-app .m-pinch-readout[hidden] { display:none; }
 .m-room-orbits { position:absolute; inset:0; z-index:4; pointer-events:none; }
 .m-orbit-primary { position:absolute; left:0; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:8px; }
 .m-orbit-primary > span { font-size:10px; color:var(--m-muted); letter-spacing:.03em; }
