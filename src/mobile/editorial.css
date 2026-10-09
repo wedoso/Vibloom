@@ -80,6 +80,15 @@
 .mobile-app .m-setting-row strong { font-weight:550; font-size:14px; }
 .mobile-app .m-setting-row small { line-height:1.6; }
 .mobile-app .m-queue-song strong { font-size:14px; font-weight:550; }
+/* Song names keep the same type and weight across views and playback states. */
+.mobile-app .m-room-title h1.m-song-title,
+.mobile-app .m-song-copy strong,
+.mobile-app .m-footer-track strong,
+.mobile-app .m-queue-song strong,
+.mobile-app .m-focus-header > span,
+.mobile-app .m-version-heading strong,
+.mobile-app .m-managed-track > strong,
+.mobile-app .m-vocal-heading strong { font-family:var(--m-sans); font-weight:500; font-synthesis:none; }
 .mobile-app .m-queue-row.is-current { padding-inline:8px; }
 .mobile-app .m-navigation button { border-radius:14px; }
 .mobile-app .m-navigation button[aria-current="page"] { color:var(--m-a); background:color-mix(in srgb,var(--m-a) 14%,transparent); }
