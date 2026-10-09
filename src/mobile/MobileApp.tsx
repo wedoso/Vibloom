@@ -17,6 +17,7 @@ import MobileLyricsEditor from "./MobileLyricsEditor";
 import { useMobileLibrary, type MobileLibrary } from "./useMobileLibrary";
 import { bindMobileViewport } from "./viewport";
 import "./mobile.css";
+import "./editorial.css";
 
 type Page = "library" | "player";
 type Panel = { kind: "vocals"; id?: string } | { kind: "import" | "queue" | "clear" | "lyrics" | "words" | "volume" | "room" | "navigation" | "versions" | "storage" | "companion" | "clear-cache" | "clear-queue" } | { kind: "track" | "remove"; id: string } | { kind: "version"; source: number } | { kind: "album"; album?: LibraryAlbum } | null;
@@ -84,7 +85,7 @@ export default function MobileApp() {
   useEffect(() => {
     if (!focus || !roomPage) return;
     focusExit.current?.focus();
-    const exit = (event: KeyboardEvent) => { if (event.key === "Escape" && !root.current?.querySelector("dialog[open]")) setFocus(false); };
+    const exit = (event: KeyboardEvent) => { if (event.key === "Escape" && !root.current?.querySelector("dialog[open], .is-camera-open")) setFocus(false); };
     window.addEventListener("keydown", exit);
     return () => window.removeEventListener("keydown", exit);
   }, [focus, roomPage]);
@@ -136,7 +137,7 @@ export default function MobileApp() {
       </section>
       {roomPage && library.current && <MobileLyrics key={library.current.id} library={library} onAttach={() => pickLyrics(library.current!.id)} onEdit={() => setPanel({ kind: "lyrics" })} onExpand={() => setPanel({ kind: "words" })} />}
       {!library.ready ? <div className="m-empty"><p className="m-kicker">ON THIS DEVICE</p><h1>Opening your <em>room.</em></h1><p>Restoring your mobile library…</p></div> : page === "library" ? <section className="m-library-page" key={`${view}-${albumId}`} aria-label="Music library">
-        <div className="m-page-heading"><div><p className="m-kicker">{activeAlbum ? "YOUR COLLECTION" : "LOCAL LIBRARY"}</p><h1>{activeAlbum ? activeAlbum.name : view === "albums" ? <>Virtual <em>albums.</em></> : <>Collected <em>manuscripts.</em></>}</h1><p>{activeAlbum ? `${visibleTracks.length} songs` : `${library.tracks.length} tracks · ${library.albums.length} albums`}</p></div>{activeAlbum && <button className="m-icon" aria-label="Edit this album" onClick={() => setPanel({ kind: "album", album: activeAlbum })}><MoreHorizontal size={22} /></button>}</div>
+        <div className="m-page-heading"><div><p className="m-kicker">{activeAlbum ? "YOUR COLLECTION" : "LOCAL LIBRARY"}</p><h1>{activeAlbum ? activeAlbum.name : view === "albums" ? <>Your <em>albums.</em></> : <>Your <em>collection.</em></>}</h1><p>{activeAlbum ? `${visibleTracks.length} songs` : `${library.tracks.length} tracks · ${library.albums.length} albums`}</p></div>{activeAlbum && <button className="m-icon" aria-label="Edit this album" onClick={() => setPanel({ kind: "album", album: activeAlbum })}><MoreHorizontal size={22} /></button>}</div>
         {activeAlbum ? <button className="m-text-button" onClick={() => { setAlbumId(""); setView("albums"); setSearch(""); }}><ChevronLeft size={18} />Back to albums</button> : <div className="m-segment" aria-label="Library view"><button aria-pressed={view === "tracks"} onClick={() => setView("tracks")}>Tracks</button><button aria-pressed={view === "albums"} onClick={() => setView("albums")}>Albums</button></div>}
         {!library.tracks.length ? <section className="m-welcome"><div className="m-welcome-disc" aria-hidden="true"><Music2 size={44} strokeWidth={1.1} /></div><h2>Bring your music.<br /><em>Let it bloom.</em></h2><p>Your songs, lyrics, and companion.<br />A listening room that stays on this device.</p><button className="m-button m-primary" onClick={() => setPanel({ kind: "import" })}><Upload size={18} />Import your music</button><span className="m-privacy"><ShieldCheck size={15} />No uploads · No account</span></section> : view === "albums" && !activeAlbum ? <>
           <button className="m-button" onClick={() => setPanel({ kind: "album" })}><Plus size={18} />New album</button>

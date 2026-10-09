@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MicVocal } from "lucide-react";
+import { MicVocal, ScanFace } from "lucide-react";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "../audioVisual";
 import { SILENT_VOCAL_POSE } from "../audio/vocals/envelope";
 import type { MobileLibrary } from "./useMobileLibrary";
@@ -8,6 +8,7 @@ const Live2DStage = lazy(() => import("../Live2DStage"));
 
 export default function MobileCompanion({ library, focus, onVocals }: { library: MobileLibrary; focus: boolean; onVocals: () => void }) {
   const host = useRef<HTMLDivElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [capsule, setCapsule] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const node = host.current; if (!node) return;
@@ -26,6 +27,13 @@ export default function MobileCompanion({ library, focus, onVocals }: { library:
     const observer = new MutationObserver(update); observer.observe(node, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-pressed", "data-status"] }); update();
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    if (!cameraOpen) return;
+    const dismiss = (event: PointerEvent) => { if (!(event.target instanceof Node) || !capsule?.contains(event.target)) setCameraOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setCameraOpen(false); capsule?.querySelector<HTMLButtonElement>(".m-stage-camera")?.focus(); } };
+    document.addEventListener("pointerdown", dismiss); document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
+  }, [cameraOpen, capsule]);
   const { sampleVocals } = library.vocals;
   const visual = useRef({ ...EMPTY_AUDIO_VISUAL }), vocals = useRef(SILENT_VOCAL_POSE);
   useEffect(() => {
@@ -45,5 +53,18 @@ export default function MobileCompanion({ library, focus, onVocals }: { library:
     return () => cancelAnimationFrame(frame);
   }, [library.engine, library.playing, library.source, library.comparisons.slots, sampleVocals, library.session.volume]);
   const vocalStatus = library.current ? library.vocals.state(library.current, library.source) : null;
-  return <div ref={host} className="m-companion"><Suspense fallback={<p className="m-muted">Opening your listening room…</p>}><Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" /></Suspense>{capsule && createPortal(<button type="button" className={vocalStatus?.enabled ? "m-stage-vocals is-active" : "m-stage-vocals"} aria-label="Vocal lip sync" aria-haspopup="dialog" aria-pressed={vocalStatus?.enabled ?? false} aria-busy={vocalStatus?.working ?? false} title={vocalStatus?.working ? "Preparing vocal lip sync" : vocalStatus?.enabled ? "Vocal lip sync is on" : "Prepare or enable vocal lip sync"} disabled={!library.current} onClick={onVocals}><MicVocal size={19} strokeWidth={1.7} /></button>, capsule)}</div>;
+  return <div ref={host} className={`m-companion ${cameraOpen ? "is-camera-open" : ""}`} onClickCapture={event => {
+    const button = (event.target as Element).closest("button");
+    if (!button?.closest(".camera-capsule") || button.classList.contains("m-stage-camera")) return;
+    setCameraOpen(false);
+    if (!button.classList.contains("m-stage-vocals")) requestAnimationFrame(() => capsule?.querySelector<HTMLButtonElement>(".m-stage-camera")?.focus());
+  }}>
+    <Suspense fallback={<p className="m-muted">Opening your listening room…</p>}>
+      <Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" />
+    </Suspense>
+    {capsule && createPortal(<>
+      <button type="button" className="m-stage-camera" aria-label="Camera controls" aria-expanded={cameraOpen} title="Camera framing" onClick={() => setCameraOpen(value => !value)}><ScanFace size={19} strokeWidth={1.7} /></button>
+      <button type="button" className={vocalStatus?.enabled ? "m-stage-vocals is-active" : "m-stage-vocals"} aria-label="Vocal lip sync" aria-haspopup="dialog" aria-pressed={vocalStatus?.enabled ?? false} aria-busy={vocalStatus?.working ?? false} title={vocalStatus?.working ? "Preparing vocal lip sync" : vocalStatus?.enabled ? "Vocal lip sync is on" : "Prepare or enable vocal lip sync"} disabled={!library.current} onClick={onVocals}><MicVocal size={19} strokeWidth={1.7} /></button>
+    </>, capsule)}
+  </div>;
 }
