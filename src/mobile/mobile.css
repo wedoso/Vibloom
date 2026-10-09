@@ -480,3 +480,34 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 @media (orientation:landscape) and (min-width:600px) and (max-width:740px) { .mobile-app .m-playback-footer { grid-template-columns:minmax(0,1fr) 224px 120px; padding-inline:12px; column-gap:8px; } .m-footer-extras .m-icon { width:40px; min-width:40px; } .m-footer-track .m-mini-art { display:none; } }
 
 .mobile-app.is-room .m-header { padding-block:env(safe-area-inset-top) 0; }
+
+/* Focus is a distinct listening view; the same stage, lyrics and audio remain alive. */
+.m-library-page { display:flex; flex-direction:column; min-width:0; gap:20px; }
+.m-source-controls { position:absolute; inset:0; pointer-events:none; }
+.m-focus-header { height:calc(48px + env(safe-area-inset-top)); padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) 0 max(20px,env(safe-area-inset-left)); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.m-focus-header > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; color:var(--m-muted); }
+.mobile-app.is-focus { --m-header-space:48px; }
+.mobile-app.is-focus .m-header { display:none; }
+.mobile-app.is-focus .m-room-title { display:none; }
+.mobile-app.is-focus .m-source-controls { visibility:hidden; pointer-events:none; }
+.mobile-app.is-focus .m-content { grid-template-rows:minmax(248px,1.4fr) minmax(120px,.6fr); }
+.mobile-app.is-focus .m-room-orbit { min-height:248px; }
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app.is-focus .m-content { grid-template-rows:minmax(200px,1fr); }
+  .mobile-app.is-focus .m-room-orbit { min-height:200px; }
+}
+
+/* Entry motion never remounts the companion/engine and does not delay picker taps. */
+@keyframes m-page-enter { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes m-fade-enter { from { opacity:0; } to { opacity:1; } }
+@keyframes m-sheet-enter { from { opacity:0; transform:translateY(28px); } to { opacity:1; transform:translateY(0); } }
+@keyframes m-drawer-left-enter { from { opacity:0; transform:translateX(-32px); } to { opacity:1; transform:translateX(0); } }
+@keyframes m-drawer-right-enter { from { opacity:0; transform:translateX(32px); } to { opacity:1; transform:translateX(0); } }
+.mobile-app .m-library-page, .mobile-app .m-sheet-content { animation:m-page-enter 220ms cubic-bezier(.2,.7,.2,1); }
+.mobile-app .m-room-hero:not(.is-away), .mobile-app .m-content > .m-live-lyrics, .mobile-app .m-focus-header { animation:m-fade-enter 260ms ease-out; }
+.mobile-app .m-orbit-comparisons > .m-orbit-track { animation:m-fade-enter 180ms ease-out; }
+.mobile-app .m-sheet[open] { animation:m-sheet-enter 220ms cubic-bezier(.2,.7,.2,1); }
+.mobile-app .m-sheet[open]::backdrop { animation:m-fade-enter 180ms ease-out; }
+.mobile-app .m-nav-sheet[open] { animation-name:m-drawer-left-enter; }
+@media (orientation:landscape) and (min-width:600px) { .mobile-app .m-side-sheet:not(.m-nav-sheet)[open] { animation-name:m-drawer-right-enter; } }
+@media (prefers-reduced-motion:reduce) { .mobile-app *, .mobile-app *::before, .mobile-app *::after { animation:none !important; transition:none !important; } }

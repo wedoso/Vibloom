@@ -13,6 +13,6 @@ export default function MobileSheet({ title, onClose, children, side = false }: 
     if (event.target === event.currentTarget && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) onClose();
   }}>
     <header><h2 id={id}>{title}</h2><button className="m-icon" type="button" aria-label="Close panel" onClick={onClose}><X size={20} /></button></header>
-    <div className="m-sheet-content">{children}</div>
+    <div key={title} className="m-sheet-content">{children}</div>
   </dialog>;
 }

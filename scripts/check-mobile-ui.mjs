@@ -91,6 +91,7 @@ const evaluateLayout=async page=>page.evaluate(()=>{
 });
 async function capture(page,engine,width,height,theme,state){
   await page.evaluate(()=>document.fonts.ready);
+  await page.waitForTimeout(280); // Let entry transforms settle before geometry checks.
   if(['empty','player','nine-versions'].includes(state)){await page.waitForSelector('.live2d-stage[data-status="ready"]',{timeout:20000});await page.waitForTimeout(300);}
   const layout=await evaluateLayout(page);
   const file=`${engine}-${width}x${height}-${theme}-${state}.jpg`;
@@ -142,6 +143,22 @@ async function checkFlow(engineName,browser){
   await page.getByRole('button',{name:'Open navigation',exact:true}).click();
   assert.equal(await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Compare',exact:true}).count(),0,'comparison is part of Player');
   assert.equal(await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Settings',exact:true}).count(),0,'storage is a drawer');await page.keyboard.press('Escape');assert.equal(await page.getByRole('button',{name:'Open navigation',exact:true}).evaluate(button=>button===document.activeElement),true,'Escape restores menu trigger focus');
+  // Focus must be a real stage/layout state, preserve audio, and always be escapable.
+  const beforeFocusStarts=await page.evaluate(()=>{window.__focusCanvas=document.querySelector('.live2d-host canvas');return window.__mobileStarts.length;});
+  await options(page);assert.equal(await page.getByRole('dialog').evaluate(node=>getComputedStyle(node).animationName),'m-sheet-enter');
+  await page.getByRole('dialog').getByRole('button',{name:'Focus mode',exact:true}).click();
+  await page.waitForSelector('.mobile-app.is-focus .live2d-stage.is-focused');
+  assert.equal(await page.locator('.m-source-controls').getAttribute('inert'),'');
+  assert.equal(await page.locator('.m-header').isVisible(),false);
+  assert.equal(await page.locator('.m-focus-header').getByRole('button',{name:'Exit focus mode',exact:true}).isVisible(),true);
+  assert.equal(await page.evaluate(()=>document.querySelector('.live2d-host canvas')===window.__focusCanvas),true,'focus keeps model instance');
+  assert.equal(await page.evaluate(()=>window.__mobileStarts.length),beforeFocusStarts,'focus keeps paused audio state');
+  await options(page);await page.keyboard.press('Escape');assert.equal(await page.locator('.mobile-app.is-focus').count(),1,'Escape dismisses panel before focus');
+  await page.locator('.m-focus-header').getByRole('button',{name:'Exit focus mode',exact:true}).click();assert.equal(await page.locator('.live2d-stage.is-focused').count(),0);
+  await navigate(page,'Library');assert.equal(await page.locator('.m-library-page').evaluate(node=>getComputedStyle(node).animationName),'m-page-enter');
+  await options(page);await page.getByRole('dialog').getByRole('button',{name:'Focus mode',exact:true}).click();await page.waitForSelector('.mobile-app.is-focus .live2d-stage.is-focused');assert.equal(await page.locator('main').getAttribute('data-workspace'),'player','Library focus opens Player');
+  await page.keyboard.press('Escape');assert.equal(await page.locator('.mobile-app.is-focus').count(),0);
+  await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'Open navigation',exact:true}).click();assert.equal(await page.getByRole('dialog').evaluate(node=>getComputedStyle(node).animationName),'none','reduced motion disables entry animation');await close(page);await page.emulateMedia({reducedMotion:'no-preference'});
   for(const [button,preset] of [['Portrait camera','portrait'],['Wide camera','wide'],['Automatic camera','director']]) {
     await page.getByRole('button',{name:button,exact:true}).click();
     await page.waitForFunction(preset=>document.querySelector('.camera-capsule > button.is-active')?.textContent.trim().toLowerCase()===preset,preset);
@@ -207,7 +224,7 @@ async function checkFlow(engineName,browser){
   const sentinel=await page.evaluate(async()=>{
     const db=await new Promise(resolve=>{const request=indexedDB.open('vibloom-library',1);request.onsuccess=()=>resolve(request.result);});const value=await new Promise(resolve=>{const request=db.transaction('state').objectStore('state').get('library');request.onsuccess=()=>resolve(request.result);});db.close();let opfs=null;try{const file=await(await(await navigator.storage.getDirectory()).getDirectoryHandle('tracks')).getFileHandle('desktop-sentinel.audio');opfs=await(await file.getFile()).text();}catch{ /* Disabled OPFS. */ }return [value.sentinel,opfs];
   });assert.deepEqual(sentinel,['desktop-untouched',expectedOpfs],'mobile reset preserves desktop DB and any available OPFS sentinel');
-  assert.deepEqual(errors,[],'no page errors');results.flows.push({engine:engineName,status:'passed',warmSwitchUiMs:switchTimes,clockOffsets:{before:offsetBefore,after:offsetAfter},coldClockOffsets:{before:coldOffsetBefore,after:coldOffsetAfter},rhythmDisc:{samples:rhythmDisc.length,minScale:Math.min(...rhythmDisc.map(sample=>sample.scale)),maxScale:Math.max(...rhythmDisc.map(sample=>sample.scale)),reducedScale},checks:['automatic routing','collapsed navigation + Escape focus return','persistent bottom transport in both workspaces','direct pointer drag seeks once on release','scrub previews time without restarting audio','cancelled drag preserves timeline','paused keyboard seek stays paused','two workspaces + queue/storage drawers','real Director/Portrait/Wide camera controls','paused seek centers current lyric','touch lyric browsing + follow','clear queue only','clear cache preserves songs/albums/lyrics','CSS isolation','file chooser tap','music+LRC import','play/pause','real audio-driven circular background','reduced motion','rapid switching without modal or playback restart','same audio clock','cold read keeps old audio playing','superseded cold reads never select late','EQ render','rotation retains source','album creation','cache restore','desktop DB sentinel isolation',...(sentinel[1]===null?['OPFS unavailable in this engine']:['desktop OPFS sentinel isolation'])]});
+  assert.deepEqual(errors,[],'no page errors');results.flows.push({engine:engineName,status:'passed',warmSwitchUiMs:switchTimes,clockOffsets:{before:offsetBefore,after:offsetAfter},coldClockOffsets:{before:coldOffsetBefore,after:coldOffsetAfter},rhythmDisc:{samples:rhythmDisc.length,minScale:Math.min(...rhythmDisc.map(sample=>sample.scale)),maxScale:Math.max(...rhythmDisc.map(sample=>sample.scale)),reducedScale},checks:['automatic routing','collapsed navigation + Escape focus return','persistent bottom transport in both workspaces','direct pointer drag seeks once on release','scrub previews time without restarting audio','cancelled drag preserves timeline','paused keyboard seek stays paused','two workspaces + queue/storage drawers','real Focus stage/layout + visible exit','Library focus enters Player','Focus preserves model and paused audio','Escape closes panel before focus','workspace/sheet entry motion + reduced motion','real Director/Portrait/Wide camera controls','paused seek centers current lyric','touch lyric browsing + follow','clear queue only','clear cache preserves songs/albums/lyrics','CSS isolation','file chooser tap','music+LRC import','play/pause','real audio-driven circular background','reduced motion','rapid switching without modal or playback restart','same audio clock','cold read keeps old audio playing','superseded cold reads never select late','EQ render','rotation retains source','album creation','cache restore','desktop DB sentinel isolation',...(sentinel[1]===null?['OPFS unavailable in this engine']:['desktop OPFS sentinel isolation'])]});
   await context.close();
 }
 async function checkRenders(engineName,browser){

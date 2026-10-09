@@ -66,7 +66,7 @@ export default function MobileApp() {
   });
   const filesInput = useRef<HTMLInputElement>(null), folderInput = useRef<HTMLInputElement>(null), compareInput = useRef<HTMLInputElement>(null), lyricsInput = useRef<HTMLInputElement>(null);
   const lyricsTarget = useRef(""), comparisonTarget = useRef<number | null>(null);
-  const root = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null), focusExit = useRef<HTMLButtonElement>(null);
   const switchRequest = useRef(0);
   const [focus, setFocus] = useState(false);
   const [switchingSource, setSwitchingSource] = useState<number | null>(null);
@@ -78,7 +78,15 @@ export default function MobileApp() {
   const roomPage = page === "player";
   const mini = !!library.current && !roomPage;
   const close = () => setPanel(null);
-  const navigate = (next: Page) => { close(); setPage(next); window.scrollTo({ top: 0 }); };
+  const navigate = (next: Page) => { close(); setFocus(false); setPage(next); window.scrollTo({ top: 0 }); };
+  const toggleFocus = () => { close(); setPage("player"); setFocus(value => !value || !roomPage); window.scrollTo({ top: 0 }); };
+  useEffect(() => {
+    if (!focus || !roomPage) return;
+    focusExit.current?.focus();
+    const exit = (event: KeyboardEvent) => { if (event.key === "Escape" && !root.current?.querySelector("dialog[open]")) setFocus(false); };
+    window.addEventListener("keydown", exit);
+    return () => window.removeEventListener("keydown", exit);
+  }, [focus, roomPage]);
   const pickFiles = (folder = false) => { close(); (folder && policy.supportsDirectories ? folderInput : filesInput).current?.click(); };
   const pickLyrics = (trackId: string) => { lyricsTarget.current = trackId; close(); lyricsInput.current?.click(); };
   const pickComparison = (target = library.comparisons.nextTarget()) => {
@@ -116,15 +124,16 @@ export default function MobileApp() {
       void (async () => { if (library.current && !library.engine.getBuffer(0) && !await library.load(library.current.id, false, library.time)) return; await library.comparisons.importFile(file, target); })();
     } }} />
     <input ref={lyricsInput} type="file" accept={policy.lyricsAccept} hidden data-picker="lyrics" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void library.attachLyrics(lyricsTarget.current, file); }} />
-    <header className="m-header"><div className="m-header-leading"><button className="m-icon" aria-label="Open navigation" aria-expanded={panel?.kind === "navigation"} onClick={event => { event.currentTarget.focus(); setPanel({ kind: "navigation" }); }}><Menu size={22} /></button><button className="m-brand" aria-label="Vibloom home" onClick={() => navigate("player")}><BrandMark /><span><strong>Vibloom</strong><small>Local listening room</small></span></button></div><button className="m-icon m-bordered" disabled={!library.ready || library.importing} aria-label="Import music" onClick={() => setPanel({ kind: "import" })}><Plus size={22} /></button></header>
-    <main className="m-content" id="mobile-content" aria-busy={!library.ready || library.importing}>
+    <header className="m-header" inert={focus && roomPage} aria-hidden={focus && roomPage}><div className="m-header-leading"><button className="m-icon" aria-label="Open navigation" aria-expanded={panel?.kind === "navigation"} onClick={event => { event.currentTarget.focus(); setPanel({ kind: "navigation" }); }}><Menu size={22} /></button><button className="m-brand" aria-label="Vibloom home" onClick={() => navigate("player")}><BrandMark /><span><strong>Vibloom</strong><small>Local listening room</small></span></button></div><button className="m-icon m-bordered" disabled={!library.ready || library.importing} aria-label="Import music" onClick={() => setPanel({ kind: "import" })}><Plus size={22} /></button></header>
+    {focus && roomPage && <header className="m-focus-header"><span>{library.current ? trackName(library.current) : "Your listening room"}</span><button ref={focusExit} className="m-icon m-bordered" aria-label="Exit focus mode" onClick={() => setFocus(false)}><Minimize2 size={20} /></button></header>}
+    <main data-workspace={page} className="m-content" id="mobile-content" aria-busy={!library.ready || library.importing}>
       <section className={`m-room-hero ${!roomPage ? "is-away" : ""}`} inert={!roomPage} aria-hidden={!roomPage} aria-label="Live2D listening room">
         <div className="m-room-title"><h1>{library.current ? trackName(library.current) : <>A little <em>company.</em></>}</h1><p>{library.current ? `${library.source === 0 ? "Original" : `Track ${library.source + 1}`} · ${library.playing ? "Playing" : "Ready to listen"}` : "Bring your music. Let it bloom."}</p></div>
-        <div className="m-room-orbit"><MobileCompanion library={library} />{library.current && <MobileRoomOrbit key={library.current.id} library={library} pendingSource={switchingSource} onSelect={source => void selectSource(source)} onAdd={() => pickComparison()} />}</div>
+        <div className="m-room-orbit"><MobileCompanion library={library} focus={focus && roomPage} /><div className="m-source-controls" inert={focus && roomPage} aria-hidden={focus && roomPage}>{library.current && <MobileRoomOrbit key={library.current.id} library={library} pendingSource={switchingSource} onSelect={source => void selectSource(source)} onAdd={() => pickComparison()} />}</div></div>
 
       </section>
       {roomPage && library.current && <MobileLyrics key={library.current.id} library={library} onAttach={() => pickLyrics(library.current!.id)} onEdit={() => setPanel({ kind: "lyrics" })} onExpand={() => setPanel({ kind: "words" })} />}
-      {!library.ready ? <div className="m-empty"><p className="m-kicker">ON THIS DEVICE</p><h1>Opening your <em>room.</em></h1><p>Restoring your mobile library…</p></div> : page === "library" ? <>
+      {!library.ready ? <div className="m-empty"><p className="m-kicker">ON THIS DEVICE</p><h1>Opening your <em>room.</em></h1><p>Restoring your mobile library…</p></div> : page === "library" ? <section className="m-library-page" key={`${view}-${albumId}`} aria-label="Music library">
         <div className="m-page-heading"><div><p className="m-kicker">{activeAlbum ? "YOUR COLLECTION" : "LOCAL LIBRARY"}</p><h1>{activeAlbum ? activeAlbum.name : view === "albums" ? <>Virtual <em>albums.</em></> : <>Collected <em>manuscripts.</em></>}</h1><p>{activeAlbum ? `${visibleTracks.length} songs` : `${library.tracks.length} tracks · ${library.albums.length} albums`}</p></div>{activeAlbum && <button className="m-icon" aria-label="Edit this album" onClick={() => setPanel({ kind: "album", album: activeAlbum })}><MoreHorizontal size={22} /></button>}</div>
         {activeAlbum ? <button className="m-text-button" onClick={() => { setAlbumId(""); setView("albums"); setSearch(""); }}><ChevronLeft size={18} />Back to albums</button> : <div className="m-segment" aria-label="Library view"><button aria-pressed={view === "tracks"} onClick={() => setView("tracks")}>Tracks</button><button aria-pressed={view === "albums"} onClick={() => setView("albums")}>Albums</button></div>}
         {!library.tracks.length ? <section className="m-welcome"><div className="m-welcome-disc" aria-hidden="true"><Music2 size={44} strokeWidth={1.1} /></div><h2>Bring your music.<br /><em>Let it bloom.</em></h2><p>Your songs, lyrics, and companion.<br />A listening room that stays on this device.</p><button className="m-button m-primary" onClick={() => setPanel({ kind: "import" })}><Upload size={18} />Import your music</button><span className="m-privacy"><ShieldCheck size={15} />No uploads · No account</span></section> : view === "albums" && !activeAlbum ? <>
@@ -137,12 +146,12 @@ export default function MobileApp() {
           <SongRows tracks={visibleTracks} library={library} onOptions={id => setPanel({ kind: "track", id })} />
           {!visibleTracks.length && <p className="m-muted">{search ? "No songs match your search." : "This album is empty. Edit it to add songs."}</p>}
         </>}
-      </> : roomPage ? library.current ? <>
+      </section> : roomPage ? library.current ? <>
         {Object.values(library.comparisons.jobs).map(job => <div className="m-job" role="status" key={job.source}><span>Track {job.source + 1} → {job.target + 1} · {job.phase}</span><progress max="1" value={job.progress} /><button className="m-button" onClick={() => library.comparisons.cancel(job.source)}>Cancel processing</button></div>)}
       </> : <div className="m-room-empty"><button className="m-button m-primary" onClick={() => setPanel({ kind: "import" })}><Upload size={18} />Import your music</button><span className="m-privacy"><ShieldCheck size={15} />No uploads · No account</span></div> : null}
       {(library.busy || library.importing) && <div className="m-loading" role="status"><span />{library.importing ? "Importing your music…" : library.busy}</div>}
     </main>
-    <MobileTransport key={library.current?.id ?? "empty"} library={library} inPlayer={roomPage} onPlayer={() => navigate("player")} onQueue={() => setPanel({ kind: "queue" })} onOptions={() => setPanel({ kind: "room" })} focus={focus} onFocus={() => setFocus(value => !value)} />
+    <MobileTransport key={library.current?.id ?? "empty"} library={library} inPlayer={roomPage} onPlayer={() => navigate("player")} onQueue={() => setPanel({ kind: "queue" })} onOptions={() => setPanel({ kind: "room" })} focus={focus} onFocus={toggleFocus} />
     {panel?.kind === "navigation" && <MobileSheet title="Your room" side="left" onClose={close}><nav className="m-navigation" aria-label="Main navigation">{([{ id: "player", label: "Player", icon: Headphones }, { id: "library", label: "Library", icon: Library }] as const).map(item => <button key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => navigate(item.id)}><item.icon size={21} /><span>{item.label}</span></button>)}<button aria-label="Queue" onClick={() => setPanel({ kind: "queue" })}><ListMusic size={21} /><span>Queue</span><small>{library.session.queue.length}</small></button><button aria-label="Storage" onClick={() => { setPanel({ kind: "storage" }); void library.refreshStorage(); }}><Database size={21} /><span>Storage</span></button><button aria-label="Music companion" onClick={() => setPanel({ kind: "companion" })}><ScanFace size={21} /><span>Companion</span></button></nav></MobileSheet>}
     {library.message && <div className="m-toast" role="status">{library.message}</div>}
     {panel?.kind === "import" && <MobileSheet title="Bring your music" onClose={close}><p className="m-muted">Music and matching LRC / TXT lyrics stay on your device.</p><button className="m-import-option" onClick={() => pickFiles()}><FileAudio size={24} /><span><strong>Choose files</strong><small>{policy.isIOS ? "Browse iCloud Drive or On My iPhone in Files" : "Select music and lyric files together"}</small></span><ChevronRight size={20} /></button><button className="m-import-option" onClick={() => pickFiles(true)}><FolderOpen size={24} /><span><strong>{policy.supportsDirectories ? "Choose a folder" : "Choose files from a folder"}</strong><small>{policy.supportsDirectories ? "Include its music and matching lyrics" : "Open the folder, then select its files"}</small></span><ChevronRight size={20} /></button>{policy.isIOS && <p className="m-picker-hint">In the Files picker, use Browse → iCloud Drive. Select the music you want, then tap Open.</p>}<span className="m-privacy"><ShieldCheck size={16} />Nothing is uploaded.</span></MobileSheet>}
@@ -158,7 +167,7 @@ export default function MobileApp() {
       <button className="m-menu-action" onClick={() => setPanel({ kind: "versions" })}><ListMusic size={19} />Manage tracks</button>
       <button className="m-menu-action" aria-label="Add a comparison file" disabled={versions.length >= 9 || !!library.busy} onClick={() => { close(); pickComparison(); }}><Plus size={19} />Add comparison file</button>
       <button className="m-menu-action" onClick={() => setPanel({ kind: "words" })}><FileText size={19} />Lyrics</button><button className="m-menu-action" aria-label="Adjust volume" onClick={() => setPanel({ kind: "volume" })}><Volume2 size={19} />Volume</button>
-      <button className="m-menu-action" onClick={() => { setFocus(value => !value); close(); }}>{focus ? <Minimize2 size={19} /> : <Maximize2 size={19} />}{focus ? "Exit focus mode" : "Focus mode"}</button>
+      <button className="m-menu-action" aria-pressed={focus && roomPage} onClick={toggleFocus}>{focus ? <Minimize2 size={19} /> : <Maximize2 size={19} />}{focus ? "Exit focus mode" : "Focus mode"}</button>
       <button className="m-menu-action" onClick={() => setPanel({ kind: "companion" })}><ScanFace size={19} />Choose companion</button>
     </MobileSheet>}
     {panel?.kind === "volume" && <MobileSheet title="Volume" onClose={close}>            <label className="m-volume"><Volume2 size={17} /><input aria-label="Volume" type="range" min="0" max="1" step="0.01" value={library.session.volume} onChange={event => library.setVolume(Number(event.target.value))} /></label></MobileSheet>}

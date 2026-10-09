@@ -4,7 +4,7 @@ import { SILENT_VOCAL_POSE } from "../audio/vocals/envelope";
 import type { MobileLibrary } from "./useMobileLibrary";
 const Live2DStage = lazy(() => import("../Live2DStage"));
 
-export default function MobileCompanion({ library }: { library: MobileLibrary }) {
+export default function MobileCompanion({ library, focus }: { library: MobileLibrary; focus: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = host.current; if (!node) return;
@@ -36,5 +36,5 @@ export default function MobileCompanion({ library }: { library: MobileLibrary })
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [library.engine, library.playing, library.source, library.comparisons.slots]);
-  return <div ref={host} className="m-companion"><Suspense fallback={<p className="m-muted">Opening your listening room…</p>}><Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={false} containModel layoutKey="mobile" /></Suspense></div>;
+  return <div ref={host} className="m-companion"><Suspense fallback={<p className="m-muted">Opening your listening room…</p>}><Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" /></Suspense></div>;
 }
