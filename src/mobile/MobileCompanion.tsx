@@ -1,14 +1,19 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { MicVocal } from "lucide-react";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "../audioVisual";
 import { SILENT_VOCAL_POSE } from "../audio/vocals/envelope";
 import type { MobileLibrary } from "./useMobileLibrary";
 const Live2DStage = lazy(() => import("../Live2DStage"));
 
-export default function MobileCompanion({ library, focus }: { library: MobileLibrary; focus: boolean }) {
+export default function MobileCompanion({ library, focus, onVocals }: { library: MobileLibrary; focus: boolean; onVocals: () => void }) {
   const host = useRef<HTMLDivElement>(null);
+  const [capsule, setCapsule] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const node = host.current; if (!node) return;
     const update = () => {
+      const controls = node.querySelector<HTMLElement>(".camera-capsule");
+      setCapsule(previous => previous === controls ? previous : controls);
       node.querySelector<HTMLButtonElement>('[title="Toggle automatic phrase-level framing"]')?.setAttribute("aria-label", "Automatic camera");
       for (const [label, name] of [["Portrait upper-body framing", "Portrait camera"], ["Wide full-body framing", "Wide camera"]]) {
         const button = node.querySelector<HTMLButtonElement>(`[aria-label="${label}"], [aria-label="${name}"]`);
@@ -39,5 +44,6 @@ export default function MobileCompanion({ library, focus }: { library: MobileLib
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [library.engine, library.playing, library.source, library.comparisons.slots, sampleVocals, library.session.volume]);
-  return <div ref={host} className="m-companion"><Suspense fallback={<p className="m-muted">Opening your listening room…</p>}><Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" /></Suspense></div>;
+  const vocalStatus = library.current ? library.vocals.state(library.current, library.source) : null;
+  return <div ref={host} className="m-companion"><Suspense fallback={<p className="m-muted">Opening your listening room…</p>}><Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" /></Suspense>{capsule && createPortal(<button type="button" className={vocalStatus?.enabled ? "m-stage-vocals is-active" : "m-stage-vocals"} aria-label="Vocal lip sync" aria-haspopup="dialog" aria-pressed={vocalStatus?.enabled ?? false} aria-busy={vocalStatus?.working ?? false} title={vocalStatus?.working ? "Preparing vocal lip sync" : vocalStatus?.enabled ? "Vocal lip sync is on" : "Prepare or enable vocal lip sync"} disabled={!library.current} onClick={onVocals}><MicVocal size={19} strokeWidth={1.7} /></button>, capsule)}</div>;
 }

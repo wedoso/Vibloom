@@ -131,7 +131,7 @@ export default function MobileApp() {
     <main data-workspace={page} className="m-content" id="mobile-content" aria-busy={!library.ready || library.importing}>
       <section className={`m-room-hero ${!roomPage ? "is-away" : ""}`} inert={!roomPage} aria-hidden={!roomPage} aria-label="Live2D listening room">
         <div className="m-room-title"><h1>{library.current ? trackName(library.current) : <>A little <em>company.</em></>}</h1><p>{library.current ? `${library.source === 0 ? "Original" : `Track ${mobileTrackLabel(library.source)}`} · ${library.playing ? "Playing" : "Ready to listen"}` : "Bring your music. Let it bloom."}</p></div>
-        <div className="m-room-orbit"><MobileCompanion library={library} focus={focus && roomPage} /><div className="m-source-controls" inert={focus && roomPage} aria-hidden={focus && roomPage}>{library.current && <MobileRoomOrbit key={library.current.id} library={library} pendingSource={switchingSource} onSelect={source => void selectSource(source)} onAdd={() => pickComparison()} />}</div></div>
+        <div className="m-room-orbit"><MobileCompanion library={library} focus={focus && roomPage} onVocals={() => setPanel({ kind: "vocals" })} /><div className="m-source-controls" inert={focus && roomPage} aria-hidden={focus && roomPage}>{library.current && <MobileRoomOrbit key={library.current.id} library={library} pendingSource={switchingSource} onSelect={source => void selectSource(source)} onAdd={() => pickComparison()} />}</div></div>
 
       </section>
       {roomPage && library.current && <MobileLyrics key={library.current.id} library={library} onAttach={() => pickLyrics(library.current!.id)} onEdit={() => setPanel({ kind: "lyrics" })} onExpand={() => setPanel({ kind: "words" })} />}
