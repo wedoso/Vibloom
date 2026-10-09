@@ -11,7 +11,7 @@ const MobileCompanion = forwardRef<MobileCompanionControls, { library: MobileLib
   const host = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => ({
     frame: mode => {
-      const button = host.current?.querySelector<HTMLButtonElement>(mode === "director" ? '[title="Toggle automatic phrase-level framing"]' : mode === "portrait" ? '[aria-label="Portrait upper-body framing"]' : '[aria-label="Wide full-body framing"]');
+      const button = host.current?.querySelector<HTMLButtonElement>(mode === "director" ? '[title="Toggle automatic phrase-level framing"]' : mode === "portrait" ? '[aria-label="Portrait camera"]' : '[aria-label="Wide camera"]');
       if (mode !== "director" || button?.getAttribute("aria-pressed") !== "true") button?.click();
     },
     interact: () => host.current?.querySelector<HTMLButtonElement>('[aria-label^="Interact with"]')?.click(),
@@ -20,6 +20,14 @@ const MobileCompanion = forwardRef<MobileCompanionControls, { library: MobileLib
     const node = host.current; if (!node) return;
     let previous = "";
     const update = () => {
+      node.querySelector<HTMLButtonElement>('[title="Toggle automatic phrase-level framing"]')?.setAttribute("aria-label", "Automatic camera");
+      for (const [label, name] of [["Portrait upper-body framing", "Portrait camera"], ["Wide full-body framing", "Wide camera"]]) {
+        const button = node.querySelector<HTMLButtonElement>(`[aria-label="${label}"], [aria-label="${name}"]`);
+        if (!button) continue;
+        button.setAttribute("aria-label", name);
+        const selected = String(button.classList.contains("is-active"));
+        if (button.getAttribute("aria-pressed") !== selected) button.setAttribute("aria-pressed", selected);
+      }
       const preset = node.querySelector('.camera-capsule > button.is-active')?.textContent?.trim().toLowerCase();
       const state: MobileCameraState = { preset: preset === "director" || preset === "portrait" || preset === "wide" ? preset : "manual", ready: node.querySelector('.live2d-stage')?.getAttribute("data-status") === "ready" };
       const key = `${state.preset}:${state.ready}`; if (key !== previous) { previous = key; onCameraChange(state); }

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { ArrowDown, ArrowUp, AudioLines, Check, ChevronLeft, ChevronRight, Database, Download, FileAudio, FileText, FolderOpen, Headphones, Library, ListMusic, MoreHorizontal, Music2, Pause, Play, Plus, Maximize2, Minimize2, Repeat, Repeat1, ScanFace, ScanLine, Search, Sparkles, ShieldCheck, Shuffle, SkipBack, SkipForward, SlidersHorizontal, Trash2, Upload, Volume2, WandSparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, AudioLines, Check, ChevronLeft, ChevronRight, Database, Download, FileAudio, FileText, FolderOpen, Headphones, Library, ListMusic, MoreHorizontal, Music2, Play, Plus, Maximize2, Minimize2, Repeat, Repeat1, ScanFace, Search, Menu, ShieldCheck, Shuffle, SlidersHorizontal, Trash2, Upload, Volume2, WandSparkles } from "lucide-react";
 import BrandMark from "../BrandMark";
 import { APP_VERSION } from "../appVersion";
-import { albumForTrack, comparisonsOf, withoutExtension, type LibraryAlbum, type LibraryTrack } from "../domain/library";
+import { comparisonsOf, withoutExtension, type LibraryAlbum, type LibraryTrack } from "../domain/library";
 import { COMPANIONS, type CompanionId } from "../live2d/models";
 import { filePickerPolicy } from "../platform/filePickerPolicy";
 import MobileSheet from "./MobileSheet";
 import MobileCompanion, { type MobileCompanionControls, type MobileCameraState } from "./MobileCompanion";
+import MobileTransport from "./MobileTransport";
+import { formatTime } from "./format";
 import MobileLyrics from "./MobileLyrics";
 import MobileRoomOrbit from "./MobileRoomOrbit";
 import MobileTools from "./MobileTools";
@@ -16,21 +18,9 @@ import { bindMobileViewport } from "./viewport";
 import "./mobile.css";
 
 type Page = "library" | "player";
-type Panel = { kind: "import" | "queue" | "clear" | "lyrics" | "words" | "volume" | "room" | "position" | "versions" | "storage" | "companion" | "clear-cache" | "clear-queue" } | { kind: "track" | "remove"; id: string } | { kind: "version"; source: number } | { kind: "album"; album?: LibraryAlbum } | { kind: "tools"; source: number; tool: "sound" | "repair" } | null;
-export const formatTime = (seconds: number) => `${Math.floor(Math.max(0, seconds) / 60)}:${String(Math.floor(Math.max(0, seconds) % 60)).padStart(2, "0")}`;
+type Panel = { kind: "import" | "queue" | "clear" | "lyrics" | "words" | "volume" | "room" | "navigation" | "versions" | "storage" | "companion" | "clear-cache" | "clear-queue" } | { kind: "track" | "remove"; id: string } | { kind: "version"; source: number } | { kind: "album"; album?: LibraryAlbum } | { kind: "tools"; source: number; tool: "sound" | "repair" } | null;
 const sizeLabel = (bytes: number) => bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const trackName = (track: { name: string }) => withoutExtension(track.name);
-
-function SeekControl({ library }: { library: MobileLibrary }) {
-  const [scrub, setScrub] = useState<number | null>(null);
-  const dragging = useRef(false);
-  const commit = (value: number) => { dragging.current = false; setScrub(null); void library.seek(value); };
-  const position = scrub ?? library.time;
-  return <div className="m-seek">
-    <input aria-label="Playback position" type="range" min="0" max={Math.max(1, library.duration)} step="0.01" value={Math.min(position, Math.max(1, library.duration))} disabled={!library.current || !!library.busy} onPointerDown={() => { dragging.current = true; setScrub(library.time); }} onChange={event => { const value = Number(event.target.value); setScrub(value); if (!dragging.current) commit(value); }} onPointerUp={event => commit(Number(event.currentTarget.value))} onPointerCancel={event => commit(Number(event.currentTarget.value))} />
-    <div><output>{formatTime(position)}</output><span /><output>{formatTime(library.duration)}</output></div>
-  </div>;
-}
 
 function SongRows({ tracks, library, onOptions }: { tracks: LibraryTrack[]; library: MobileLibrary; onOptions: (id: string) => void }) {
   return <div className="m-song-list">{tracks.map((track, index) => <div className={`m-song-row ${library.current?.id === track.id ? "is-current" : ""}`} key={track.id}>
@@ -86,11 +76,10 @@ export default function MobileApp() {
     const rows = activeAlbum ? activeAlbum.trackIds.flatMap(id => library.tracks.find(track => track.id === id) ?? []) : library.tracks;
     const query = search.trim().toLocaleLowerCase(); return rows.filter(track => `${track.name} ${track.relativePath}`.toLocaleLowerCase().includes(query));
   }, [activeAlbum, library.tracks, search]);
-  const playbackAlbum = albumForTrack(library.albums, library.current?.id ?? "", library.session.playbackAlbumId);
   const roomPage = page === "player";
   const mini = !!library.current && !roomPage;
   const close = () => setPanel(null);
-  const navigate = (next: Page) => { setPage(next); window.scrollTo({ top: 0 }); };
+  const navigate = (next: Page) => { close(); setPage(next); window.scrollTo({ top: 0 }); };
   const pickFiles = (folder = false) => { close(); (folder && policy.supportsDirectories ? folderInput : filesInput).current?.click(); };
   const pickLyrics = (trackId: string) => { lyricsTarget.current = trackId; close(); lyricsInput.current?.click(); };
   const pickComparison = (target = library.comparisons.nextTarget()) => {
@@ -115,13 +104,12 @@ export default function MobileApp() {
   useEffect(() => {
     if (announcement) { const timer = window.setTimeout(() => setAnnouncement(""), 6500); return () => window.clearTimeout(timer); }
   }, [announcement, setAnnouncement]);
-  const togglePlay = () => library.playing ? library.pause() : void library.play();
   const importSelection = (event: ChangeEvent<HTMLInputElement>) => { const selected = Array.from(event.target.files ?? []); event.target.value = ""; void library.importFiles(selected, albumId); };
   const versions = [{ slot: 0, name: library.current?.name ?? "Original", duration: library.current?.duration ?? 0, status: library.busy ? "loading" : "ready" }, ...Object.values(library.comparisons.slots).sort((a, b) => a.slot - b.slot)];
   const optionVersion = panel?.kind === "version" ? versions.find(version => version.slot === panel.source) : null;
   const optionTrack = panel?.kind === "track" || panel?.kind === "remove" ? library.tracks.find(track => track.id === panel.id) : null;
 
-  return <div ref={root} className={`mobile-app ${mini ? "has-mini" : ""} ${roomPage ? "is-room" : ""} ${focus && roomPage ? "is-focus" : ""}`} data-companion={library.session.companionId}>
+  return <div ref={root} className={`mobile-app ${library.current ? "has-playback" : ""} ${mini ? "has-library-playback" : ""} ${roomPage ? "is-room" : ""} ${focus && roomPage ? "is-focus" : ""}`} data-companion={library.session.companionId}>
     <input ref={filesInput} type="file" accept={policy.libraryAccept} multiple hidden data-picker="files" onChange={importSelection} />
     <input ref={folderInput} type="file" accept={policy.libraryAccept} multiple hidden data-picker="folder" onChange={importSelection} />
     <input ref={compareInput} type="file" accept={policy.audioAccept} hidden data-picker="comparison" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; const target = comparisonTarget.current; if (file && target !== null) {
@@ -129,12 +117,12 @@ export default function MobileApp() {
       void (async () => { if (library.current && !library.engine.getBuffer(0) && !await library.load(library.current.id, false, library.time)) return; await library.comparisons.importFile(file, target); })();
     } }} />
     <input ref={lyricsInput} type="file" accept={policy.lyricsAccept} hidden data-picker="lyrics" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void library.attachLyrics(lyricsTarget.current, file); }} />
-    <header className="m-header"><button className="m-brand" aria-label="Vibloom home" onClick={() => navigate("player")}><BrandMark /><span><strong>Vibloom</strong><small>Local listening room</small></span></button><div className="m-header-actions"><button className="m-icon" aria-label="Music companion" onClick={() => setPanel({ kind: "companion" })}><ScanFace size={20} /></button><button className="m-icon m-bordered" disabled={!library.ready || library.importing} aria-label="Import music" onClick={() => setPanel({ kind: "import" })}><Plus size={22} /></button></div></header>
+    <header className="m-header"><div className="m-header-leading"><button className="m-icon" aria-label="Open navigation" aria-expanded={panel?.kind === "navigation"} onClick={event => { event.currentTarget.focus(); setPanel({ kind: "navigation" }); }}><Menu size={22} /></button><button className="m-brand" aria-label="Vibloom home" onClick={() => navigate("player")}><BrandMark /><span><strong>Vibloom</strong><small>Local listening room</small></span></button></div><button className="m-icon m-bordered" disabled={!library.ready || library.importing} aria-label="Import music" onClick={() => setPanel({ kind: "import" })}><Plus size={22} /></button></header>
     <main className="m-content" id="mobile-content" aria-busy={!library.ready || library.importing}>
       <section className={`m-room-hero ${!roomPage ? "is-away" : ""}`} inert={!roomPage} aria-hidden={!roomPage} aria-label="Live2D listening room">
         <div className="m-room-title"><h1>{library.current ? trackName(library.current) : <>A little <em>company.</em></>}</h1><p>{library.current ? `${library.source === 0 ? "Original" : `Track ${library.source + 1}`} · ${library.playing ? "Playing" : "Ready to listen"}` : "Bring your music. Let it bloom."}</p></div>
         <div className="m-room-orbit"><MobileCompanion ref={companion} library={library} onCameraChange={setCamera} />{library.current && <MobileRoomOrbit key={library.current.id} library={library} pendingSource={switchingSource} onSelect={source => void selectSource(source)} onAdd={() => pickComparison()} />}</div>
-        <div className="m-camera-toolbar" aria-label="Companion camera"><button aria-label="Automatic camera" aria-pressed={camera.preset === "director"} disabled={!camera.ready} onClick={() => companion.current?.frame("director")}><Sparkles size={15} /><span>Director</span></button><button aria-label="Portrait camera" aria-pressed={camera.preset === "portrait"} disabled={!camera.ready} onClick={() => companion.current?.frame("portrait")}><ScanFace size={15} /><span>Portrait</span></button><button aria-label="Wide camera" aria-pressed={camera.preset === "wide"} disabled={!camera.ready} onClick={() => companion.current?.frame("wide")}><ScanLine size={15} /><span>Wide</span></button></div>
+
       </section>
       {roomPage && library.current && <MobileLyrics key={library.current.id} library={library} onAttach={() => pickLyrics(library.current!.id)} onEdit={() => setPanel({ kind: "lyrics" })} onExpand={() => setPanel({ kind: "words" })} />}
       {!library.ready ? <div className="m-empty"><p className="m-kicker">ON THIS DEVICE</p><h1>Opening your <em>room.</em></h1><p>Restoring your mobile library…</p></div> : page === "library" ? <>
@@ -151,19 +139,12 @@ export default function MobileApp() {
           {!visibleTracks.length && <p className="m-muted">{search ? "No songs match your search." : "This album is empty. Edit it to add songs."}</p>}
         </>}
       </> : roomPage ? library.current ? <>
-        <section className="m-player-controls" aria-label="Playback controls">
-          <div className="m-transport-track"><span className="m-mini-art">{playbackAlbum?.cover ? <img src={playbackAlbum.cover} alt="" /> : <Music2 size={20} />}</span><span><strong>{trackName(library.current)}</strong><small>{library.source === 0 ? "Original" : `Track ${library.source + 1}`} · {library.playing ? "Playing" : "Ready"}</small></span></div>
-          <div className="m-transport"><button className="m-icon m-bordered" aria-label="Open queue" onClick={() => setPanel({ kind: "queue" })}><ListMusic size={19} /></button><button className="m-icon" aria-label="Previous track" onClick={() => void library.previous()}><SkipBack size={23} /></button><button className="m-play-main" aria-label={library.playing ? "Pause" : "Play"} disabled={!!library.busy} onClick={togglePlay}>{library.playing ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}</button><button className="m-icon" aria-label="Next track" onClick={() => void library.next()}><SkipForward size={23} /></button><button className="m-icon m-bordered" aria-label="Listening options" onClick={() => setPanel({ kind: "room" })}><MoreHorizontal size={21} /></button></div>
-          <button className="m-time-control" aria-label="Open playback position" onClick={() => setPanel({ kind: "position" })}><output>{formatTime(library.time)}</output><span className="m-time-line"><i style={{ width: `${Math.min(100, library.time / Math.max(1, library.duration) * 100)}%` }} /></span><output>{formatTime(library.duration)}</output></button>
-          <div className="m-player-extras"><button className="m-icon" aria-label="Shuffle" aria-pressed={library.session.shuffle} onClick={() => library.patchSession({ shuffle: !library.session.shuffle })}><Shuffle size={17} /></button><button className="m-icon" aria-label={`Repeat: ${library.session.repeat}`} aria-pressed={library.session.repeat !== "off"} onClick={() => library.patchSession({ repeat: library.session.repeat === "off" ? "all" : library.session.repeat === "all" ? "one" : "off" })}>{library.session.repeat === "one" ? <Repeat1 size={17} /> : <Repeat size={17} />}</button><button className="m-icon" aria-label={focus ? "Exit focus mode" : "Focus mode"} aria-pressed={focus} onClick={() => setFocus(value => !value)}>{focus ? <Minimize2 size={17} /> : <Maximize2 size={17} />}</button><label className="m-volume"><Volume2 size={17} /><input aria-label="Player volume" type="range" min="0" max="1" step="0.01" value={library.session.volume} onChange={event => library.setVolume(Number(event.target.value))} /></label></div>
-        </section>
         {Object.values(library.comparisons.jobs).map(job => <div className="m-job" role="status" key={job.source}><span>Track {job.source + 1} → {job.target + 1} · {job.phase}</span><progress max="1" value={job.progress} /><button className="m-button" onClick={() => library.comparisons.cancel(job.source)}>Cancel processing</button></div>)}
       </> : <div className="m-room-empty"><button className="m-button m-primary" onClick={() => setPanel({ kind: "import" })}><Upload size={18} />Import your music</button><span className="m-privacy"><ShieldCheck size={15} />No uploads · No account</span></div> : null}
       {(library.busy || library.importing) && <div className="m-loading" role="status"><span />{library.importing ? "Importing your music…" : library.busy}</div>}
     </main>
-    <div className="m-dock">{mini && <div className="m-mini"><button className="m-mini-track" aria-label="Open full player" onClick={() => navigate("player")}><span className="m-mini-art">{playbackAlbum?.cover ? <img src={playbackAlbum.cover} alt="" /> : <Music2 size={20} />}</span><span><strong>{trackName(library.current!)}</strong><small>{library.playing ? "Now playing" : "Ready to listen"} · Track {library.source + 1}</small></span></button><button className="m-icon" aria-label={library.playing ? "Pause" : "Play"} disabled={!!library.busy} onClick={togglePlay}>{library.playing ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}</button><button className="m-icon" aria-label="Open queue" onClick={() => setPanel({ kind: "queue" })}><ListMusic size={20} /></button></div>}
-      <nav className="m-bottom-nav" aria-label="Main navigation">{([{ id: "player", label: "Player", icon: Headphones }, { id: "library", label: "Library", icon: Library }] as const).map(item => <button key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => navigate(item.id)}><item.icon size={21} strokeWidth={1.7} /><span>{item.label}</span></button>)}<button aria-label="Queue" onClick={() => setPanel({ kind: "queue" })}><ListMusic size={21} strokeWidth={1.7} /><span>Queue</span></button><button aria-label="Storage" onClick={() => { setPanel({ kind: "storage" }); void library.refreshStorage(); }}><Database size={21} strokeWidth={1.7} /><span>Storage</span></button></nav>
-    </div>
+    <MobileTransport key={library.current?.id ?? "empty"} library={library} inPlayer={roomPage} onPlayer={() => navigate("player")} onQueue={() => setPanel({ kind: "queue" })} onOptions={() => setPanel({ kind: "room" })} focus={focus} onFocus={() => setFocus(value => !value)} />
+    {panel?.kind === "navigation" && <MobileSheet title="Your room" side="left" onClose={close}><nav className="m-navigation" aria-label="Main navigation">{([{ id: "player", label: "Player", icon: Headphones }, { id: "library", label: "Library", icon: Library }] as const).map(item => <button key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => navigate(item.id)}><item.icon size={21} /><span>{item.label}</span></button>)}<button aria-label="Queue" onClick={() => setPanel({ kind: "queue" })}><ListMusic size={21} /><span>Queue</span><small>{library.session.queue.length}</small></button><button aria-label="Storage" onClick={() => { setPanel({ kind: "storage" }); void library.refreshStorage(); }}><Database size={21} /><span>Storage</span></button><button aria-label="Music companion" onClick={() => setPanel({ kind: "companion" })}><ScanFace size={21} /><span>Companion</span></button></nav></MobileSheet>}
     {library.message && <div className="m-toast" role="status">{library.message}</div>}
     {panel?.kind === "import" && <MobileSheet title="Bring your music" onClose={close}><p className="m-muted">Music and matching LRC / TXT lyrics stay on your device.</p><button className="m-import-option" onClick={() => pickFiles()}><FileAudio size={24} /><span><strong>Choose files</strong><small>{policy.isIOS ? "Browse iCloud Drive or On My iPhone in Files" : "Select music and lyric files together"}</small></span><ChevronRight size={20} /></button><button className="m-import-option" onClick={() => pickFiles(true)}><FolderOpen size={24} /><span><strong>{policy.supportsDirectories ? "Choose a folder" : "Choose files from a folder"}</strong><small>{policy.supportsDirectories ? "Include its music and matching lyrics" : "Open the folder, then select its files"}</small></span><ChevronRight size={20} /></button>{policy.isIOS && <p className="m-picker-hint">In the Files picker, use Browse → iCloud Drive. Select the music you want, then tap Open.</p>}<span className="m-privacy"><ShieldCheck size={16} />Nothing is uploaded.</span></MobileSheet>}
     {library.summary && <MobileSheet title="Import complete" onClose={() => library.setSummary(null)}><div className="m-import-stats"><span><strong>{library.summary.accepted}</strong>New songs</span><span><strong>{library.summary.reconnected}</strong>Reconnected</span><span><strong>{library.summary.lyrics}</strong>Lyrics</span><span><strong>{library.summary.ignored}</strong>Ignored</span></div>{library.summary.errors.length > 0 && <div className="m-import-errors"><h3>Some files need attention</h3><ul>{library.summary.errors.map((error, i) => <li key={i}>{error}</li>)}</ul></div>}<button className="m-button m-primary m-full" onClick={() => library.setSummary(null)}>Continue to library</button></MobileSheet>}
@@ -172,7 +153,6 @@ export default function MobileApp() {
     {panel?.kind === "remove" && optionTrack && <MobileSheet title="Remove this song?" onClose={close}><p className="m-muted">{trackName(optionTrack)} and its comparison versions will be removed from your mobile library. Your original source file stays intact.</p><div className="m-sheet-actions"><button className="m-button" onClick={close}>Cancel</button><button className="m-button m-danger" onClick={() => { close(); void library.removeTrack(optionTrack.id); }}>Remove song</button></div></MobileSheet>}
     {panel?.kind === "album" && <AlbumEditor key={panel.album?.id ?? "new"} library={library} album={panel.album} onClose={close} />}
     {panel?.kind === "versions" && <MobileSheet title="Your tracks" onClose={close}><p className="m-muted">Track circles switch the audio. Open a track here for sound, files and other tools.</p><div className="m-track-manager">{versions.map(version => <button className="m-managed-track" key={version.slot} aria-label={`Open track ${version.slot + 1} controls`} onClick={() => setPanel({ kind: "version", source: version.slot })}><span>{version.slot + 1}</span><strong>{trackName(version)}</strong><ChevronRight size={18} /></button>)}</div></MobileSheet>}
-    {panel?.kind === "position" && <MobileSheet title="Playback position" onClose={close}><SeekControl library={library} /></MobileSheet>}
     {panel?.kind === "room" && <MobileSheet title="Listening options" onClose={close}>
       <div className="m-listening-toggles"><button className="m-button" aria-label="Shuffle" aria-pressed={library.session.shuffle} onClick={() => library.patchSession({ shuffle: !library.session.shuffle })}><Shuffle size={18} />Shuffle</button><button className="m-button" aria-label={`Repeat: ${library.session.repeat}`} aria-pressed={library.session.repeat !== "off"} onClick={() => library.patchSession({ repeat: library.session.repeat === "off" ? "all" : library.session.repeat === "all" ? "one" : "off" })}>{library.session.repeat === "one" ? <Repeat1 size={18} /> : <Repeat size={18} />}Repeat · {library.session.repeat}</button></div>
       <button className="m-menu-action" aria-label={`Open track ${library.source + 1} controls`} onClick={() => setPanel({ kind: "version", source: library.source })}><SlidersHorizontal size={19} />Track {library.source + 1} · sound & tools</button>
