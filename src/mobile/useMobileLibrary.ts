@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SynchronizedAudioEngine } from "../audio/SynchronizedAudioEngine";
+import { mobileComparisons } from "./comparison";
 import { useComparisonWorkspace } from "../comparison/useComparisonWorkspace";
 import { albumForTrack, comparisonCacheKey, comparisonsOf, createShuffleBag, EMPTY_SESSION, makeTrackFingerprint, matchLyricFile, migrateLibrarySnapshot, withComparisons, type LibraryAlbum, type LibrarySession, type LibraryTrack } from "../domain/library";
 import { decodeLrc, parseLyricsFile } from "../lrc";
@@ -44,10 +45,25 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   const readRoot = useCallback(() => tracksRef.current.find(track => track.id === sessionRef.current.currentTrackId) ?? null, []);
   const readTracks = useCallback(() => tracksRef.current, []);
   const cacheEnabled = useCallback(() => sessionRef.current.cacheEnabled, []);
-  const comparisons = useComparisonWorkspace({ rootId: session.currentTrackId, readRoot, readTracks, patchTracks, engine, platform, cacheEnabled, onMessage: setMessage, onSelect: setSource, forgetVocals });
-  const { reset: resetComparisons, clearFiles: clearComparisonFiles, ensureBuffer: ensureComparisonBuffer } = comparisons;
+  const readComparisonRoot = useCallback(() => { const track = readRoot(); return track ? withComparisons(track, mobileComparisons(track)) : null; }, [readRoot]);
+  const workspace = useComparisonWorkspace({ rootId: session.currentTrackId, readRoot: readComparisonRoot, readTracks, patchTracks, engine, platform, cacheEnabled, onMessage: setMessage, onSelect: setSource, forgetVocals });
+  const { reset: resetComparisons, clearFiles: clearComparisonFiles, ensureBuffer: ensureComparisonBuffer, preserveCachedFiles, updateCacheStatus } = workspace;
+  const comparisonTarget = () => mobileComparisons(readRoot())[0]?.slot ?? 1;
+  const comparisons = {
+    slots: workspace.slots, jobs: workspace.jobs, cancel: workspace.cancel,
+    nextTarget: comparisonTarget,
+    select: async (index: number) => { if (index === 0 || mobileComparisons(readRoot()).some(item => item.slot === index)) await workspace.select(index); },
+    importFile: async (file: File, target: number) => {
+      if (target !== comparisonTarget()) return;
+      if (engine.selectedSource === target) { setMessage("Switch to A before replacing B."); return; }
+      await workspace.importFile(file, target);
+    },
+    remove: async (index: number) => { if (index === 1) await workspace.remove(index); },
+    download: async (index: number) => { if (index === 1) await workspace.download(index); },
+    preserveCachedFiles: workspace.preserveCachedFiles, updateCacheStatus: workspace.updateCacheStatus,
+  };
   const current = tracks.find(track => track.id === session.currentTrackId) ?? null;
-  const duration = Math.max(current?.duration ?? 0, ...comparisonsOf(current ?? { comparison: null } as LibraryTrack).map(item => item.duration));
+  const duration = Math.max(current?.duration ?? 0, ...mobileComparisons(current).map(item => item.duration));
 
   const readVocalBuffer = useCallback(async (track: LibraryTrack, vocalSource: number) => {
     if (vocalSource > 0) {
@@ -131,7 +147,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
         if (loaded.current !== trackId) {
           if (sessionRef.current.currentTrackId !== trackId) resetComparisons();
           engine.clearBuffers(); engine.selectSourceImmediately(0); setSource(0);
-          for (const version of comparisonsOf(track)) engine.setDuration(version.slot!, version.duration);
+          for (const version of mobileComparisons(track)) engine.setDuration(version.slot!, version.duration);
         }
         engine.setBuffer(0, buffer); loaded.current = trackId;
         patchTracks(items => items.map(item => item.id === trackId ? { ...item, duration: buffer!.duration, availability: item.persistence === "cached" ? "available" : "session" } : item));
@@ -280,15 +296,15 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
         const cached = await platform.audioFiles.get(track.id);
         if (cached) files.current.set(track.id, new File([await cached.arrayBuffer()], track.name, { type: cached.type, lastModified: track.lastModified }));
       }
-      await comparisons.preserveCachedFiles();
+      await preserveCachedFiles();
       await platform.audioFiles.clear();
       patchTracks(items => items.map(track => ({ ...track, persistence: "indexed", availability: files.current.has(track.id) ? "session" : "reconnect" })));
-      comparisons.updateCacheStatus(false);
+      updateCacheStatus(false);
       patchSession({ cacheEnabled: false });
       setMessage("Cached audio cleared. Albums, queue and lyrics were kept.");
     } catch { setMessage("Could not clear all cached audio. Try again."); }
     finally { setBusy(""); await refreshStorage(); }
-  }, [comparisons, platform, patchTracks, patchSession, refreshStorage, readRoot, cancelVocalJobs]);
+  }, [preserveCachedFiles, updateCacheStatus, platform, patchTracks, patchSession, refreshStorage, readRoot, cancelVocalJobs]);
   const setVolume = useCallback((volume: number) => { engine.setVolume(volume); patchSession({ volume }); }, [engine, patchSession]);
   return { vocals, platform, engine, tracks, albums, setAlbums, session, patchSession, patchTracks, ready, busy, importing, message, setMessage, summary, setSummary, playing, time, source, storage, refreshStorage, current, duration, comparisons, load, play, pause, seek, next, previous, importFiles, attachLyrics, playAll, removeTrack, clearLibrary, clearAudioCache, setVolume };
 }

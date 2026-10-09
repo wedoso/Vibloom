@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { mobileComparisons } from "./comparison";
 import { comparisonsOf, isCurrentVocalAnalysis, withComparisons, type LibraryTrack } from "../domain/library";
 import { VocalJobStore, vocalJobKey } from "../audio/vocals/jobStore";
 import { useVocalPlayback } from "../audio/vocals/useVocalPlayback";
@@ -20,7 +21,7 @@ export function useMobileVocals({ store, engine, current, tracks, readTracks, pa
   useEffect(() => () => store.dispose(), [store]);
   const states = useMemo(() => {
     const result = new Map<string, { key: string; ready: boolean; working: boolean; enabled: boolean; analysis: import("../domain/library").VocalAnalysis | undefined; job: import("../audio/vocals/jobStore").VocalJob | undefined }>();
-    for (const track of tracks) for (const source of [0, ...comparisonsOf(track).map(version => version.slot!)]) {
+    for (const track of tracks) for (const source of [0, ...mobileComparisons(track).map(version => version.slot!)]) {
       const key = vocalJobKey(track, source), job = jobs[key];
       const item = source === 0 ? track : comparisonsOf(track).find(version => version.slot === source);
       const analysis = job?.analysis ?? item?.vocalAnalysis;
@@ -34,6 +35,7 @@ export function useMobileVocals({ store, engine, current, tracks, readTracks, pa
     return states.get(key) ?? { key, ready: false, working: false, enabled: false, analysis: undefined, job: undefined };
   }, [states]);
   const prepare = (track: LibraryTrack, source = 0) => {
+    if (source !== 0 && !mobileComparisons(track).some(item => item.slot === source)) return;
     const status = state(track, source);
     if (status.working) { store.cancel(status.key); return; }
     if (status.ready) { setDisabled(old => { const next = new Set(old); if (next.has(status.key)) next.delete(status.key); else next.add(status.key); return next; }); return; }
@@ -66,6 +68,6 @@ export function useMobileVocals({ store, engine, current, tracks, readTracks, pa
   // A source may change inside the engine before React publishes its new selection.
   // Reject mismatched frames so old vocals never animate the newly audible source.
   const sampleVocals = useCallback((time: number, volume: number) => engine.audibleSource === audible ? sample(time, volume) : { open: 0, form: null }, [engine, audible, sample]);
-  const activeJobs = useMemo(() => tracks.flatMap(track => [0, ...comparisonsOf(track).map(version => version.slot!)].flatMap(source => { const status = state(track, source); return status.working || status.job?.status === "error" ? [{ track, source, ...status }] : []; })), [tracks, state]);
+  const activeJobs = useMemo(() => tracks.flatMap(track => [0, ...mobileComparisons(track).map(version => version.slot!)].flatMap(source => { const status = state(track, source); return status.working || status.job?.status === "error" ? [{ track, source, ...status }] : []; })), [tracks, state]);
   return { state, prepare, sampleVocals, activeJobs, forgetTrack, cancelAll, reset };
 }

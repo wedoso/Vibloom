@@ -29,18 +29,14 @@ const android='Mozilla/5.0 (Linux; Android 16; Pixel 9) AppleWebKit/537.36 (KHTM
 const waitReady=page=>page.waitForFunction(()=>document.querySelector('.m-content')?.getAttribute('aria-busy')==='false');
 const navigate=async(page,name)=>{const menu=page.getByRole('navigation',{name:'Main navigation'});if(!await menu.count()){await close(page);await page.getByRole('button',{name:'Open navigation',exact:true}).click();}await menu.getByRole('button',{name,exact:true}).click();};
 const close=async page=>{const button=page.getByRole('button',{name:'Close panel',exact:true});if(await button.count())await button.click();};
+const trackLabel = number => number === 1 ? "A" : "B";
 const listen = async (page, number) => {
-  for(let attempt=0;attempt<3;attempt++) {
-    const circle=page.getByRole('button',{name:`Listen to track ${number}`,exact:true});
-    if(await circle.count()){await circle.click();return;}
-    await page.getByRole('button',{name:'Show other comparison tracks',exact:true}).click();
-  }
-  throw new Error(`Track ${number} is unreachable from the orbit`);
+  await page.getByRole('button',{name:`Listen to track ${trackLabel(number)}`,exact:true}).click();
 };
 const options = page => page.getByRole('button',{name:'Listening options',exact:true}).click();
 const openTools = async (page,number) => {
-  await options(page);await page.getByRole('dialog').getByRole('button',{name:'Manage tracks',exact:true}).click();
-  await page.getByRole('dialog').getByRole('button',{name:`Open track ${number} controls`,exact:true}).click();
+  await options(page);await page.getByRole('dialog').getByRole('button',{name:'A/B tracks',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:`Open track ${trackLabel(number)} controls`,exact:true}).click();
 };
 const wave=waveBytes();
 await writeFile(path.join(output,'test-song.wav'),wave);
@@ -92,7 +88,7 @@ const evaluateLayout=async page=>page.evaluate(()=>{
 async function capture(page,engine,width,height,theme,state){
   await page.evaluate(()=>document.fonts.ready);
   await page.waitForTimeout(280); // Let entry transforms settle before geometry checks.
-  if(['empty','player','nine-versions'].includes(state)){await page.waitForSelector('.live2d-stage[data-status="ready"]',{timeout:20000});await page.waitForTimeout(300);}
+  if(['empty','player','ab-comparison'].includes(state)){await page.waitForSelector('.live2d-stage[data-status="ready"]',{timeout:20000});await page.waitForTimeout(300);}
   const layout=await evaluateLayout(page);
   const file=`${engine}-${width}x${height}-${theme}-${state}.jpg`;
   // Keep representative images; every state still runs geometry assertions.
@@ -179,37 +175,43 @@ async function checkFlow(engineName,browser){
   await page.getByRole('button',{name:'Pause',exact:true}).click();
   await navigate(page,'Player');await page.locator('.m-orbit-add').click({trial:true});
   const comparisonPicker=page.waitForEvent('filechooser');await page.locator('.m-orbit-add').click();await(await comparisonPicker).setFiles({name:'alternate.wav',mimeType:'audio/wav',buffer:waveBytes(30,440)});
-  await page.waitForSelector('[aria-label="Listen to track 2"]');
+  await page.waitForSelector('[aria-label="Listen to track B"]');
   await page.getByRole('button',{name:'Play',exact:true}).click();await page.waitForFunction(()=>document.title.startsWith('Playing'));
-  await listen(page,2);await page.waitForFunction(()=>document.querySelector('[aria-label="Listen to track 2"]')?.getAttribute('aria-pressed')==='true');
+  await listen(page,2);await page.waitForFunction(()=>document.querySelector('[aria-label="Listen to track B"]')?.getAttribute('aria-pressed')==='true');
   assert.equal(await page.locator('dialog[open]').count(),0,'switching does not open tools');
   const offsetBefore=await page.evaluate(()=>window.__mobileStarts.at(-1).offset);
   const switchTimes=[];
   for(const number of [1,2,1,2,1,2]){
-    await page.evaluate(number=>{window.__switchStart=performance.now();document.querySelector(`[aria-label="Listen to track ${number}"]`).addEventListener('click',()=>{window.__switchStart=performance.now();},{once:true});},number);
-    await listen(page,number);await page.waitForFunction(number=>document.querySelector(`[aria-label="Listen to track ${number}"]`)?.getAttribute('aria-pressed')==='true',number,{polling:'raf'});
+    await page.evaluate(number=>{window.__switchStart=performance.now();document.querySelector(`[aria-label="Listen to track ${number === 1 ? "A" : "B"}"]`).addEventListener('click',()=>{window.__switchStart=performance.now();},{once:true});},number);
+    await listen(page,number);await page.waitForFunction(number=>document.querySelector(`[aria-label="Listen to track ${number === 1 ? "A" : "B"}"]`)?.getAttribute('aria-pressed')==='true',number,{polling:'raf'});
     switchTimes.push(await page.evaluate(()=>performance.now()-window.__switchStart));
     assert.ok((await page.title()).startsWith('Playing'),'playback continues during rapid switching');
     assert.equal(await page.locator('dialog[open]').count(),0);
   }
   const offsetAfter=await page.evaluate(()=>window.__mobileStarts.at(-1).offset);assert.ok(offsetAfter>=offsetBefore-.05,'source changes preserve playback clock');
   await page.getByRole('button',{name:'Pause',exact:true}).click();await listen(page,1);await openTools(page,1);
-  await page.getByRole('button',{name:'Sound',exact:true}).click();await page.getByRole('combobox',{name:'EQ preset',exact:true}).selectOption('warm');await page.getByRole('button',{name:'Create comparison version',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.m-orbit-track[aria-pressed]').length===3&&!document.querySelector('dialog[open]'),{timeout:60000});
-  await listen(page,3);await page.waitForFunction(()=>document.querySelector('[aria-label="Listen to track 3"]')?.getAttribute('aria-pressed')==='true');
+  assert.equal(await page.getByRole('button',{name:'Sound',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Repair',exact:true}).count(),0);
+  assert.match(await page.getByRole('dialog').textContent(),/EQ, Mastering, Remaster/);
+  assert.equal(await page.getByRole('link',{name:'Open desktop version',exact:true}).getAttribute('href'),'?ui=desktop');
+  await close(page);await listen(page,2);
   // Rotation/resizing must preserve source selection and playback state.
-  await close(page);await page.setViewportSize({width:844,height:390});assert.equal(await page.locator('[aria-label="Listen to track 3"]').getAttribute('aria-pressed'),'true');await page.setViewportSize({width:390,height:844});
+  await close(page);await page.setViewportSize({width:844,height:390});assert.equal(await page.locator('[aria-label="Listen to track B"]').getAttribute('aria-pressed'),'true');await page.setViewportSize({width:390,height:844});
   const beforeNavigation=await page.evaluate(()=>window.__mobileStarts.length);await navigate(page,'Library');assert.equal(await page.getByRole('slider',{name:'Playback position',exact:true}).count(),1,'library retains direct transport');assert.equal(await page.evaluate(()=>window.__mobileStarts.length),beforeNavigation,'navigation does not recreate audio');await page.getByRole('button',{name:'Albums',exact:true}).click();await page.getByRole('button',{name:'New album',exact:true}).click();await page.getByRole('textbox',{name:'Album name',exact:true}).fill('Evening collection');await page.locator('.m-album-song-selection input').check();await page.getByRole('button',{name:'Save album',exact:true}).click();assert.equal(await page.locator('.m-album-card').count(),1);
   await page.waitForTimeout(500); // Allow the documented metadata-save debounce to commit before reload.
-  await page.reload();await waitReady(page);await navigate(page,'Library');assert.equal(await page.locator('.m-song-row').count(),1,'cached mobile library restored');await page.getByRole('button',{name:'Play test-song',exact:true}).click();await page.waitForFunction(()=>document.title.startsWith('Playing'));await page.getByRole('button',{name:'Pause',exact:true}).click();await navigate(page,'Player');await page.waitForFunction(()=>document.querySelectorAll('.m-orbit-track[aria-pressed]').length===3);
+  await page.reload();await waitReady(page);await navigate(page,'Library');assert.equal(await page.locator('.m-song-row').count(),1,'cached mobile library restored');await page.getByRole('button',{name:'Play test-song',exact:true}).click();await page.waitForFunction(()=>document.title.startsWith('Playing'));await page.getByRole('button',{name:'Pause',exact:true}).click();await navigate(page,'Player');await page.waitForFunction(()=>document.querySelectorAll('.m-orbit-track[aria-pressed]').length===2);
   await page.getByRole('button',{name:'Play',exact:true}).click();await page.waitForFunction(()=>document.title.startsWith('Playing'));
   await page.evaluate(()=>{const read=window.FileReader.prototype.readAsArrayBuffer;window.FileReader.prototype.readAsArrayBuffer=function(blob){window.setTimeout(()=>read.call(this,blob),350);};});
   await listen(page,2);await page.waitForTimeout(60);await listen(page,1);await page.waitForTimeout(500);
-  assert.equal(await page.locator('[aria-label="Listen to track 1"]').getAttribute('aria-pressed'),'true','a superseded cold read cannot change the selected track');
+  assert.equal(await page.locator('[aria-label="Listen to track A"]').getAttribute('aria-pressed'),'true','a superseded cold read cannot change the selected track');
+  // With only B available, reload to evict the decoded buffer from the superseded read.
+  await page.waitForTimeout(400);await page.reload();await waitReady(page);await page.getByRole('button',{name:'Play',exact:true}).click();await page.waitForFunction(()=>document.title.startsWith('Playing'));
+  await page.evaluate(()=>{const read=window.FileReader.prototype.readAsArrayBuffer;window.FileReader.prototype.readAsArrayBuffer=function(blob){window.setTimeout(()=>read.call(this,blob),350);};});
   const coldOffsetBefore=await page.evaluate(()=>window.__mobileStarts.at(-1).offset);
-  await listen(page,3);await page.waitForTimeout(80);assert.equal(await page.locator('[aria-label="Listen to track 3"]').getAttribute('aria-busy'),'true','cold source shows a pending ring');
+  await listen(page,2);await page.waitForTimeout(80);assert.equal(await page.locator('[aria-label="Listen to track B"]').getAttribute('aria-busy'),'true','cold source shows a pending ring');
   assert.ok((await page.title()).startsWith('Playing'),'old audio stays playing during a cold read');
-  assert.equal(await page.locator('[aria-label="Listen to track 1"]').getAttribute('aria-pressed'),'true');
-  await page.waitForFunction(()=>document.querySelector('[aria-label="Listen to track 3"]')?.getAttribute('aria-pressed')==='true');
+  assert.equal(await page.locator('[aria-label="Listen to track A"]').getAttribute('aria-pressed'),'true');
+  await page.waitForFunction(()=>document.querySelector('[aria-label="Listen to track B"]')?.getAttribute('aria-pressed')==='true');
   const coldOffsetAfter=await page.evaluate(()=>window.__mobileStarts.at(-1).offset);assert.ok(coldOffsetAfter>coldOffsetBefore+.3,'cold source starts at the continuing clock');await page.getByRole('button',{name:'Pause',exact:true}).click();
 
   // Desktop sentinel survives mobile reset, including its OPFS directory.
@@ -224,7 +226,7 @@ async function checkFlow(engineName,browser){
   const sentinel=await page.evaluate(async()=>{
     const db=await new Promise(resolve=>{const request=indexedDB.open('vibloom-library',1);request.onsuccess=()=>resolve(request.result);});const value=await new Promise(resolve=>{const request=db.transaction('state').objectStore('state').get('library');request.onsuccess=()=>resolve(request.result);});db.close();let opfs=null;try{const file=await(await(await navigator.storage.getDirectory()).getDirectoryHandle('tracks')).getFileHandle('desktop-sentinel.audio');opfs=await(await file.getFile()).text();}catch{ /* Disabled OPFS. */ }return [value.sentinel,opfs];
   });assert.deepEqual(sentinel,['desktop-untouched',expectedOpfs],'mobile reset preserves desktop DB and any available OPFS sentinel');
-  assert.deepEqual(errors,[],'no page errors');results.flows.push({engine:engineName,status:'passed',warmSwitchUiMs:switchTimes,clockOffsets:{before:offsetBefore,after:offsetAfter},coldClockOffsets:{before:coldOffsetBefore,after:coldOffsetAfter},rhythmDisc:{samples:rhythmDisc.length,minScale:Math.min(...rhythmDisc.map(sample=>sample.scale)),maxScale:Math.max(...rhythmDisc.map(sample=>sample.scale)),reducedScale},checks:['automatic routing','collapsed navigation + Escape focus return','persistent bottom transport in both workspaces','direct pointer drag seeks once on release','scrub previews time without restarting audio','cancelled drag preserves timeline','paused keyboard seek stays paused','two workspaces + queue/storage drawers','real Focus stage/layout + visible exit','Library focus enters Player','Focus preserves model and paused audio','Escape closes panel before focus','workspace/sheet entry motion + reduced motion','real Director/Portrait/Wide camera controls','paused seek centers current lyric','touch lyric browsing + follow','clear queue only','clear cache preserves songs/albums/lyrics','CSS isolation','file chooser tap','music+LRC import','play/pause','real audio-driven circular background','reduced motion','rapid switching without modal or playback restart','same audio clock','cold read keeps old audio playing','superseded cold reads never select late','EQ render','rotation retains source','album creation','cache restore','desktop DB sentinel isolation',...(sentinel[1]===null?['OPFS unavailable in this engine']:['desktop OPFS sentinel isolation'])]});
+  assert.deepEqual(errors,[],'no page errors');results.flows.push({engine:engineName,status:'passed',warmSwitchUiMs:switchTimes,clockOffsets:{before:offsetBefore,after:offsetAfter},coldClockOffsets:{before:coldOffsetBefore,after:coldOffsetAfter},rhythmDisc:{samples:rhythmDisc.length,minScale:Math.min(...rhythmDisc.map(sample=>sample.scale)),maxScale:Math.max(...rhythmDisc.map(sample=>sample.scale)),reducedScale},checks:['automatic routing','collapsed navigation + Escape focus return','persistent bottom transport in both workspaces','direct pointer drag seeks once on release','scrub previews time without restarting audio','cancelled drag preserves timeline','paused keyboard seek stays paused','two workspaces + queue/storage drawers','real Focus stage/layout + visible exit','Library focus enters Player','Focus preserves model and paused audio','Escape closes panel before focus','workspace/sheet entry motion + reduced motion','real Director/Portrait/Wide camera controls','paused seek centers current lyric','touch lyric browsing + follow','clear queue only','clear cache preserves songs/albums/lyrics','CSS isolation','file chooser tap','music+LRC import','play/pause','real audio-driven circular background','reduced motion','rapid switching without modal or playback restart','same audio clock','cold read keeps old audio playing','superseded cold reads never select late','A/B only + desktop processing hint','rotation retains source','album creation','cache restore','desktop DB sentinel isolation',...(sentinel[1]===null?['OPFS unavailable in this engine']:['desktop OPFS sentinel isolation'])]});
   await context.close();
 }
 async function checkRenders(engineName,browser){
@@ -241,8 +243,7 @@ async function checkRenders(engineName,browser){
       await page.getByRole('button',{name:'Open queue',exact:true}).click();await capture(page,engineName,width,height,theme,'queue');await page.getByRole('button',{name:'Clear queue only',exact:true}).click();await capture(page,engineName,width,height,theme,'clear-queue');await close(page);
       await page.getByRole('button',{name:'Albums',exact:true}).click();await capture(page,engineName,width,height,theme,'albums');await page.getByRole('button',{name:/Edit album Evening/}).click();await capture(page,engineName,width,height,theme,'edit-album');await page.getByRole('button',{name:'Delete album',exact:true}).click();await capture(page,engineName,width,height,theme,'delete-album');await close(page);await page.getByRole('button',{name:'New album',exact:true}).click();await page.getByRole('textbox',{name:'Album name',exact:true}).fill('A long album name · 长标题检查');await capture(page,engineName,width,height,theme,'album-editor');await close(page);
       await navigate(page,'Player');await capture(page,engineName,width,height,theme,'player');await page.getByRole('button',{name:'Open navigation',exact:true}).click();await capture(page,engineName,width,height,theme,'navigation');await close(page);await navigate(page,'Music companion');await capture(page,engineName,width,height,theme,'companion-camera');await close(page);await options(page);await page.getByRole('dialog').getByRole('button',{name:'Focus mode',exact:true}).click();await capture(page,engineName,width,height,theme,'focus');await options(page);await page.getByRole('dialog').getByRole('button',{name:'Exit focus mode',exact:true}).click();await options(page);await capture(page,engineName,width,height,theme,'listening-options');await page.getByRole('dialog').getByRole('button',{name:'Vocal lip sync',exact:true}).click();await capture(page,engineName,width,height,theme,'vocal-lip-sync');await close(page);await capture(page,engineName,width,height,theme,'direct-seek');await options(page);await page.getByRole('button',{name:'Adjust volume',exact:true}).click();await capture(page,engineName,width,height,theme,'volume');await close(page);await options(page);await page.getByRole('button',{name:'Lyrics',exact:true}).click();await capture(page,engineName,width,height,theme,'lyrics');await page.getByRole('button',{name:'Edit lyric timing',exact:true}).click();await capture(page,engineName,width,height,theme,'lyrics-editor');await close(page);
-      await navigate(page,'Player');await capture(page,engineName,width,height,theme,'nine-versions');await page.getByRole('button',{name:'Show other comparison tracks',exact:true}).click();await capture(page,engineName,width,height,theme,'track-bank');await options(page);await page.getByRole('dialog').getByRole('button',{name:'Manage tracks',exact:true}).click();assert.equal(await page.locator('.m-managed-track').count(),9);await capture(page,engineName,width,height,theme,'manage-tracks');await close(page);await openTools(page,1);await capture(page,engineName,width,height,theme,'version-controls');await page.getByRole('button',{name:'Sound',exact:true}).click();await capture(page,engineName,width,height,theme,'eq');await page.getByRole('switch',{name:'Include mastering',exact:true}).check();await capture(page,engineName,width,height,theme,'mastering');await close(page);
-      await openTools(page,1);await page.getByRole('button',{name:'Repair',exact:true}).click();await capture(page,engineName,width,height,theme,'repair');await close(page);
+      await navigate(page,'Player');assert.equal(await page.locator('.m-orbit-track[aria-pressed]').count(),2);assert.equal(await page.getByRole('button',{name:'Show other comparison tracks',exact:true}).count(),0);await capture(page,engineName,width,height,theme,'ab-comparison');await options(page);await page.getByRole('dialog').getByRole('button',{name:'A/B tracks',exact:true}).click();assert.equal(await page.locator('.m-managed-track').count(),2);await capture(page,engineName,width,height,theme,'manage-tracks');await close(page);await openTools(page,1);await capture(page,engineName,width,height,theme,'version-controls');assert.equal(await page.getByRole('button',{name:'Sound',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Repair',exact:true}).count(),0);await capture(page,engineName,width,height,theme,'desktop-feature-hint');await close(page);
       await navigate(page,'Storage');await capture(page,engineName,width,height,theme,'storage');await page.getByRole('button',{name:'Clear cached audio',exact:true}).click();await capture(page,engineName,width,height,theme,'clear-cache');await close(page);await navigate(page,'Storage');await page.getByRole('button',{name:'Clear mobile library',exact:true}).click();await capture(page,engineName,width,height,theme,'clear-confirm');await close(page);
       // Narrowed visual viewport approximates available keyboard space; this is not a native keyboard test.
       await navigate(page,'Library');await page.getByRole('button',{name:'Albums',exact:true}).click();await page.getByRole('button',{name:'New album',exact:true}).click();await page.setViewportSize({width,height:Math.min(height,420)});await page.getByRole('textbox',{name:'Album name',exact:true}).focus();await capture(page,engineName,width,Math.min(height,420),theme,'short-input-viewport');await close(page);
@@ -251,6 +252,22 @@ async function checkRenders(engineName,browser){
   }
   // Missing sources and long/unbroken file names remain actionable.
   const missing=snapshot();missing.tracks.forEach(track=>track.persistence='indexed');missing.tracks[0].comparisons.forEach(version=>version.persistence='indexed');await page.setViewportSize({width:390,height:844});await seedMobile(page,missing,wave);await page.reload();await waitReady(page);await navigate(page,'Library');await capture(page,engineName,390,844,'hong-xi','missing-sources');await navigate(page,'Player');await openTools(page,2);await capture(page,engineName,390,844,'hong-xi','missing-version');await close(page);
+  // Old 9-track records survive the new two-track surface, including file replacement/removal.
+  const legacy=snapshot();legacy.tracks[0].comparisons.slice(1).forEach(version=>version.duration=99);
+  await seedMobile(page,legacy,wave);await page.reload();await waitReady(page);
+  await page.getByRole('button',{name:'Play',exact:true}).click();await page.waitForFunction(()=>document.title.startsWith('Playing'));
+  assert.equal(await page.getByRole('slider',{name:'Playback position',exact:true}).getAttribute('max'),'30','hidden legacy tracks do not extend the player clock');
+  await options(page);await page.getByRole('button',{name:'Vocal lip sync',exact:true}).click();assert.equal(await page.locator('.m-vocal-source').count(),2,'lip sync only exposes A/B');await close(page);
+  await listen(page,2);await page.waitForFunction(()=>document.querySelector('[aria-label="Listen to track B"]')?.getAttribute('aria-pressed')==='true');
+  await openTools(page,2);let picker=page.waitForEvent('filechooser');await page.getByRole('button',{name:'Replace B file',exact:true}).click();await(await picker).setFiles({name:'blocked-replacement.wav',mimeType:'audio/wav',buffer:waveBytes(18,330)});
+  await page.waitForFunction(()=>document.querySelector('[role="status"]')?.textContent.includes('Switch to A before replacing B'));
+  await listen(page,1);await openTools(page,2);picker=page.waitForEvent('filechooser');await page.getByRole('button',{name:'Replace B file',exact:true}).click();await(await picker).setFiles({name:'replacement-B.wav',mimeType:'audio/wav',buffer:waveBytes(18,330)});
+  await page.waitForFunction(()=>document.querySelector('[aria-label="Listen to track B"]')?.title==='replacement-B.wav');assert.equal(await page.locator('.m-orbit-track[aria-pressed]').count(),2,'replacement cannot create a third track');assert.ok((await page.title()).startsWith('Playing'),'B replacement preserves A playback');
+  await openTools(page,2);await page.getByRole('button',{name:'Remove this version',exact:true}).click();await page.waitForSelector('.m-orbit-add');assert.equal(await page.locator('.m-orbit-track[aria-pressed]').count(),1,'removing B never promotes a hidden legacy track');
+  await page.waitForTimeout(650);
+  const preserved=await page.evaluate(async()=>{const db=await new Promise(resolve=>{const req=indexedDB.open('vibloom-mobile-library',2);req.onsuccess=()=>resolve(req.result)});const saved=await new Promise(resolve=>{const req=db.transaction('state').objectStore('state').get('library');req.onsuccess=()=>resolve(req.result)});const hidden=saved.tracks[0].comparisons;const bytes=await new Promise(resolve=>{const req=db.transaction('audio').objectStore('audio').get('fixture-version-7');req.onsuccess=()=>resolve(req.result)});db.close();return {hidden,bytes:bytes.bytes.byteLength}});
+  assert.deepEqual(preserved.hidden,legacy.tracks[0].comparisons.slice(1),'hidden metadata is unchanged');assert.equal(preserved.bytes,wave.length,'hidden audio remains stored');
+  results.flows.find(flow=>flow.engine===engineName).checks.push('legacy records and cached audio retained','hidden durations excluded','A/B vocal preparation only','B replace guarded while selected','B replace during A playback','B removal never promotes hidden tracks');
   await context.close();
 }
 async function checkDesktop(browser){
