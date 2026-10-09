@@ -32,7 +32,7 @@ test("ships the local library as the primary application", async () => {
   assert.match(main, /import LibraryApp from "\.\/LibraryApp"/u);
   assert.match(main, /<LibraryApp \/>/u);
   assert.match(app, /multiple hidden/u);
-  assert.match(app, /folderInput\.webkitdirectory = true/u);
+  assert.match(app, /folderInput\.webkitdirectory = pickerPolicy\.supportsDirectories/u);
   assert.match(app, /createShuffleBag/u);
   assert.doesNotMatch(app, /ComparisonApp/u);
   assert.match(app, /const \[workspace, setWorkspace\]/u);
@@ -136,7 +136,7 @@ test("attaches or replaces timestamped LRC lyrics per track", async () => {
   const app = await readFile(new URL("src/LibraryApp.tsx", root), "utf8");
 
   assert.match(app, /ref=\{lyricsInputRef\}/u);
-  assert.match(app, /accept="\.lrc,\.txt,text\/plain"/u);
+  assert.match(app, /accept=\{pickerPolicy\.lyricsAccept\}/u);
   assert.match(app, /openLyricsPicker\(track\.id\)/u);
   assert.match(app, /Attach lyrics \(\.lrc \/ \.txt\)/u);
   assert.match(app, /Replace lyrics \(\.lrc \/ \.txt\)/u);

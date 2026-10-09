@@ -55,6 +55,8 @@ Web and desktop share the same processing implementation. Audio Repair runs in a
 
 Common MP3, WAV, M4A/AAC, FLAC, OGG, Opus, WebM Audio, and AIFF files are accepted when supported by the runtime's decoder, up to 300 MB per file. Lyrics support UTF-8 and BOM-marked UTF-16. Browser storage may be cleared by private browsing, site-data cleanup, or storage pressure; reconnect source files when prompted.
 
+On iPhone/iPad, choose **Import your music → Choose files**, then **Browse → iCloud Drive** (or **On My iPhone**) in the Files picker. Select multiple music files together with their matching LRC/TXT lyrics. iOS pickers are unfiltered to avoid [WebKit's audio file filtering issue](https://bugs.webkit.org/show_bug.cgi?id=242110); the app validates selected files before import. Whole-folder selection requires [iOS 18.4 or later](https://bugs.webkit.org/show_bug.cgi?id=271705). Earlier versions offer **Choose files in a folder** instead; open the folder and select its files. The same fallback is used to reconnect music. Audio decoding still depends on Safari's format support, and physical-device iCloud Drive verification is pending.
+
 Album covers can be changed through **Edit album**. The playback bar follows the song’s album, even when browsing another collection. Companion, output and album menus share the active theme and support keyboard navigation. Focus mode keeps comparison switching independent of the companion’s gaze.
 
 ## Development

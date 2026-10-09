@@ -103,6 +103,7 @@ import LyricsTimingEditor from "./LyricsTimingEditor";
 import AlbumCollections from "./AlbumCollections";
 import FileDropRegion from "./FileDropRegion";
 import { browserLibraryPlatform } from "./platform/browserLibraryPlatform";
+import { filePickerPolicy } from "./platform/filePickerPolicy";
 import type { LibraryPlatform, StorageState } from "./platform/libraryPlatform";
 import { useMediaSession } from "./platform/useMediaSession";
 import "./library.css";
@@ -448,6 +449,7 @@ function usePlaybackTitle(name: string, playing: boolean, count: number) {
 }
 
 export default function LibraryApp({ platform = browserLibraryPlatform }: { platform?: LibraryPlatform }) {
+  const [pickerPolicy] = useState(() => filePickerPolicy(navigator, "webkitdirectory" in document.createElement("input")));
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
   const [albums, setAlbums] = useState<LibraryAlbum[]>([]);
   const [activeAlbumId, setActiveAlbumId] = useState("");
@@ -649,8 +651,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
   useEffect(() => {
     const folderInput = folderInputRef.current as (HTMLInputElement & { webkitdirectory?: boolean }) | null;
-    if (folderInput) folderInput.webkitdirectory = true;
-  }, []);
+    if (folderInput) folderInput.webkitdirectory = pickerPolicy.supportsDirectories;
+  }, [pickerPolicy.supportsDirectories]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1158,6 +1160,11 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   function openFolder(reconnect = false) {
+    if (pickerPolicy.isIOS && !pickerPolicy.supportsDirectories) {
+      setMessage("Select the music and lyric files inside your folder. This browser cannot select a whole folder.");
+      openFiles(reconnect);
+      return;
+    }
     importAlbumIdRef.current = reconnect ? "" : activeAlbumId;
     reconnectModeRef.current = reconnect;
     setImportOpen(false);
@@ -1175,6 +1182,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     const trackId = lyricsTargetTrackIdRef.current;
     event.target.value = "";
     if (!file || !trackId) return;
+    if (pickerPolicy.isIOS && (!/\.(lrc|txt)$/iu.test(file.name) || file.size > 5 * 1024 * 1024)) {
+      setMessage("Choose an LRC or TXT lyric file smaller than 5 MB.");
+      return;
+    }
     try {
       const parsed = parseLyricsFile(decodeLrc(await file.arrayBuffer()), file.name);
       const target = tracksRef.current.find((track) => track.id === trackId);
@@ -1649,10 +1660,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         <span className="scene-curtain-copy scene-curtain-copy-focus-enter"><small>Focus mode</small><strong><span>The noise</span><em>falls away.</em></strong><i>One track · One room · One moment</i></span>
         <span className="scene-curtain-copy scene-curtain-copy-focus-exit"><small>Full room</small><strong><span>The session</span><em>returns.</em></strong><i>Controls and comparison restored</i></span>
       </div>
-      <input ref={filesInputRef} type="file" accept="audio/*,.flac,.aiff,.aif,.lrc,.txt" multiple hidden onChange={handleFilesInput} />
-      <input ref={folderInputRef} type="file" accept="audio/*,.flac,.aiff,.aif,.lrc,.txt" multiple hidden onChange={handleFilesInput} />
-      <input ref={compareInputRef} type="file" accept="audio/*,.flac,.aiff,.aif" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void loadComparisonFile(file); event.target.value = ""; }} />
-      <input ref={lyricsInputRef} type="file" accept=".lrc,.txt,text/plain" hidden onChange={(event) => void handleLyricsInput(event)} />
+      <input ref={filesInputRef} type="file" accept={pickerPolicy.libraryAccept} multiple hidden onChange={handleFilesInput} />
+      <input ref={folderInputRef} type="file" accept={pickerPolicy.libraryAccept} multiple hidden onChange={handleFilesInput} />
+      <input ref={compareInputRef} type="file" accept={pickerPolicy.audioAccept} hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void loadComparisonFile(file); event.target.value = ""; }} />
+      <input ref={lyricsInputRef} type="file" accept={pickerPolicy.lyricsAccept} hidden onChange={(event) => void handleLyricsInput(event)} />
       {focusMode && <button className="focus-exit-control" type="button" aria-label="Exit focus mode (F or Escape)" onClick={() => setFocusWithTransition(false)}><Minimize2 size={15} /><span>Exit focus</span><kbd>Esc</kbd></button>}
 
       <header className="library-header">
@@ -1692,8 +1703,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
             <p>Build a queue from your own music, keep lyrics in sync, and let your companion stay with every track. Nothing is uploaded.</p>
             <div className="welcome-import-surface">
               <button className="welcome-import-primary" type="button" onClick={() => setImportOpen((value) => !value)}><Upload size={18} /><span><strong>Import your music</strong><small>Files, albums, lyrics, or a complete folder</small></span><ChevronDown size={16} /></button>
-              {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>Audio, LRC, and TXT lyric files</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>Choose a folder</strong><small>Preserve album order and matching lyrics</small></span></button></div>}
-              <p>Drop files here anytime · everything stays on this device</p>
+              {importOpen && <div className="welcome-import-menu"><button type="button" onClick={() => openFiles()}><FileAudio size={17} /><span><strong>Choose files</strong><small>{pickerPolicy.isIOS ? "Browse iCloud Drive or On My iPhone in Files" : "Audio, LRC, and TXT lyric files"}</small></span></button><button type="button" onClick={() => openFolder()}><FolderOpen size={17} /><span><strong>{pickerPolicy.supportsDirectories ? "Choose a folder" : "Choose files in a folder"}</strong><small>{pickerPolicy.supportsDirectories ? "Preserve album order and matching lyrics" : "Open the folder and select multiple files"}</small></span></button></div>}
+              <p>{pickerPolicy.isIOS ? "In Files, use Browse → iCloud Drive to select your music." : "Drop files here anytime · everything stays on this device"}</p>
             </div>
           </div>
           <div className="library-welcome-stage">
@@ -1755,13 +1766,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
             </div>
           ) : (
           <div className="library-list-panel">
-            {unavailableCount > 0 && <div className="library-reconnect-banner"><FolderOpen size={17} /><span><strong>Some music needs to be reconnected.</strong><small>Your playlists and order are still here.</small></span><button type="button" onClick={() => openFolder(true)}>Reconnect folder</button></div>}
+            {unavailableCount > 0 && <div className="library-reconnect-banner"><FolderOpen size={17} /><span><strong>Some music needs to be reconnected.</strong><small>Your playlists and order are still here.</small></span><button type="button" onClick={() => openFolder(true)}>{pickerPolicy.supportsDirectories ? "Reconnect folder" : "Reconnect files"}</button></div>}
             <div className={`library-list-heading ${activeAlbum ? "library-album-heading" : ""}`}>
               {activeAlbum && <span className="library-album-heading-cover">{activeAlbum.cover ? <img src={activeAlbum.cover} alt={`${activeAlbum.name} cover`} draggable={false} /> : <Music2 size={34} strokeWidth={1.2} />}</span>}
               <div>{activeAlbum ? <><button type="button" className="album-back" onClick={() => { setActiveAlbumId(""); setBrowsingAlbums(true); }}><ChevronLeft size={12} /> Back to albums</button><h1>{activeAlbum.name}</h1><span>{filteredTracks.length} tracks · Drag rows to reorder</span></> : <><p>{browsingAlbums ? "GROUPED COLLECTIONS" : "LOCAL LIBRARY"}</p><h1>{browsingAlbums ? <>Virtual <em>albums.</em></> : <>Collected <em>manuscripts.</em></>}</h1><span>{browsingAlbums ? `${albums.length} collections · ${tracks.length} tracks` : `${filteredTracks.length} of ${tracks.length} tracks`}</span></>}</div>
               <div className="import-menu-wrap">
                 <button className="library-import-button" type="button" onClick={() => setImportOpen((value) => !value)}><Plus size={17} /><span>Import</span><ChevronDown size={14} /></button>
-                {importOpen && <div className="import-popover"><button type="button" onClick={() => openFiles()}><FileAudio size={16} /> Add files</button><button type="button" onClick={() => openFolder()}><FolderOpen size={16} /> Add folder</button></div>}
+                {importOpen && <div className="import-popover"><button type="button" onClick={() => openFiles()}><FileAudio size={16} /> Add files</button><button type="button" onClick={() => openFolder()}><FolderOpen size={16} /> {pickerPolicy.supportsDirectories ? "Add folder" : "Add files from folder"}</button>{pickerPolicy.isIOS && <p style={{ margin: "6px 11px", color: "var(--library-muted)", fontSize: 11, lineHeight: 1.5 }}>In Files, choose Browse → iCloud Drive. You can select multiple music and lyric files.</p>}</div>}
               </div>
             </div>
             {albumCollections}
