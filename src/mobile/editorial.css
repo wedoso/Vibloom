@@ -38,10 +38,13 @@
 .mobile-app .m-content > .m-live-lyrics { border-top:0; padding-top:0; }
 .mobile-app .m-content > .m-live-lyrics > header { min-height:44px; }
 .mobile-app .m-content > .m-live-lyrics > header > span { font-size:10px; letter-spacing:.04em; }
-.mobile-app .m-content > .m-live-lyrics .m-lyrics button { font:500 clamp(18px,5.5vw,23px)/1.5 var(--m-serif); padding:10px 6px; color:var(--m-muted); }
-.mobile-app .m-content > .m-live-lyrics .m-lyrics button.is-current { font-weight:500; color:var(--m-ink); }
-.mobile-app .m-content > .m-live-lyrics .m-lyrics button.is-current > span { background:linear-gradient(90deg,var(--m-ink) var(--lyric-progress),var(--m-muted) var(--lyric-progress)); background-clip:text; -webkit-background-clip:text; color:transparent; }
-.mobile-app .m-content > .m-live-lyrics.is-comparison .m-lyrics button.is-current > span { --m-ink:var(--m-b); }
+/* Lyrics use one regular system face in both the room and the expanded sheet.
+   Keep emphasis in the timed color fill, without changing glyph weight or width. */
+.mobile-app .m-live-lyrics .m-lyrics button,
+.mobile-app .m-live-lyrics .m-plain-lyrics p { font:400 clamp(18px,5.5vw,23px)/1.5 var(--m-sans); font-synthesis:none; padding:10px 6px; color:var(--m-muted); }
+.mobile-app .m-live-lyrics .m-lyrics button.is-current { font-weight:400; color:var(--m-ink); }
+.mobile-app .m-live-lyrics .m-lyrics button.is-current > span { background:linear-gradient(90deg,var(--m-ink) var(--lyric-progress),var(--m-muted) var(--lyric-progress)); background-clip:text; -webkit-background-clip:text; color:transparent; }
+.mobile-app .m-live-lyrics.is-comparison .m-lyrics button.is-current > span { --m-ink:var(--m-b); }
 .mobile-app .m-playback-footer { background:color-mix(in srgb,var(--m-surface) 84%,transparent); border-top-color:var(--m-line); }
 .mobile-app .m-play-main { box-shadow:0 5px 14px color-mix(in srgb,var(--m-ink) 12%,transparent); }
 .mobile-app .m-direct-seek { column-gap:10px; }
@@ -88,14 +91,15 @@
   .mobile-app .m-room-title { padding-bottom:6px; }
   .mobile-app .m-room-orbit { min-height:158px; }
   .mobile-app .m-room-title p { margin-top:5px; }
-  .mobile-app .m-content > .m-live-lyrics .m-lyrics button { font-size:18px; }
+  .mobile-app .m-live-lyrics .m-lyrics button, .mobile-app .m-live-lyrics .m-plain-lyrics p { font-size:18px; }
 }
 @media (orientation:landscape) and (min-width:600px) {
   .mobile-app.is-room .m-content { grid-template-rows:minmax(200px,1fr); gap:24px; padding-top:8px; }
   .mobile-app .m-room-orbit { min-height:200px; }
   .mobile-app .m-room-hero.is-away { right:20px; }
   .mobile-app .m-content > .m-live-lyrics { padding-inline:8px; }
-  .mobile-app .m-content > .m-live-lyrics .m-lyrics button { font-size:clamp(18px,2.5vw,26px); text-align:left; }
+  .mobile-app .m-live-lyrics .m-lyrics button, .mobile-app .m-live-lyrics .m-plain-lyrics p { font-size:clamp(18px,2.5vw,26px); }
+  .mobile-app .m-content > .m-live-lyrics .m-lyrics button { text-align:left; }
   .mobile-app .m-album-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
 }
 .mobile-app.is-focus .m-content { grid-template-rows:minmax(248px,1.6fr) minmax(120px,1fr); }
