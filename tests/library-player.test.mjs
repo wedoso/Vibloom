@@ -32,7 +32,7 @@ test("ships the local library as the primary application", async () => {
   assert.match(main, /import LibraryApp from "\.\/LibraryApp"/u);
   assert.match(main, /<LibraryApp \/>/u);
   assert.match(app, /multiple hidden/u);
-  assert.match(app, /folderInput\.webkitdirectory = true/u);
+  assert.match(app, /folderInput\.webkitdirectory = pickerPolicy\.supportsDirectories/u);
   assert.match(app, /createShuffleBag/u);
   assert.doesNotMatch(app, /ComparisonApp/u);
   assert.match(app, /const \[workspace, setWorkspace\]/u);
@@ -134,13 +134,14 @@ test("keeps playback and Hiyori inside one player-first shell", async () => {
 
 test("attaches or replaces timestamped LRC lyrics per track", async () => {
   const app = await readFile(new URL("src/LibraryApp.tsx", root), "utf8");
+  const actions = await readFile(new URL("src/library/TrackActions.tsx", root), "utf8");
 
   assert.match(app, /ref=\{lyricsInputRef\}/u);
-  assert.match(app, /accept="\.lrc,\.txt,text\/plain"/u);
+  assert.match(app, /accept=\{pickerPolicy\.lyricsAccept\}/u);
   assert.match(app, /openLyricsPicker\(track\.id\)/u);
-  assert.match(app, /Attach lyrics \(\.lrc \/ \.txt\)/u);
-  assert.match(app, /Replace lyrics \(\.lrc \/ \.txt\)/u);
-  assert.match(app, /Remove lyrics/u);
+  assert.match(actions, /Attach lyrics \(\.lrc \/ \.txt\)/u);
+  assert.match(actions, /Replace lyrics \(\.lrc \/ \.txt\)/u);
+  assert.match(actions, /Remove lyrics/u);
   assert.match(app, /lyrics: parsed\.lyrics/u);
   assert.match(app, /lyricsFileName: file\.name/u);
   assert.match(app, /lyrics: \[\],[\s\S]*lyricsFileName: ""/u);

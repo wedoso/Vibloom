@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { createMediaSessionAnchor } from "./mediaSessionAnchor";
-import { bindMediaSession, type MediaControls, updateMediaPosition } from "./mediaSession";
+import { bindMediaSession, type MediaControls, mediaMetadataDetails, updateMediaPosition } from "./mediaSession";
 
 type MediaState = {
   enabled: boolean;
   title: string;
   album: string;
+  artwork?: string;
   isPlaying: boolean;
   duration: number;
   position: number;
@@ -42,8 +43,8 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
 
   useEffect(() => {
     if (!state.enabled || !navigator.mediaSession || typeof MediaMetadata === "undefined") return;
-    navigator.mediaSession.metadata = new MediaMetadata({ title: state.title, artist: "Vibloom", album: state.album });
-  }, [state.enabled, state.title, state.album]);
+    navigator.mediaSession.metadata = new MediaMetadata(mediaMetadataDetails(state.title, state.album, state.artwork));
+  }, [state.enabled, state.title, state.album, state.artwork]);
 
   useEffect(() => {
     if (!state.enabled || !navigator.mediaSession) return;

@@ -296,7 +296,7 @@ test("keeps phrase camera motion separate from Live2D music pose", async () => {
   assert.match(stage, /focusCameraTransitionUntilRef\.current/u);
   assert.match(stage, /let lightTier = 0/u);
   assert.match(stage, /lightTierStep = timeSinceLightAccent > 1\.05 \? 1 : Math\.min\(3, lightTierStep \+ 1\)/u);
-  assert.match(stage, /stage\.style\.setProperty\("--beat-tier", lightTier\.toFixed\(3\)\)/u);
+  assert.match(stage, /writeStageProperty\(stage, "--beat-tier", lightTier\.toFixed\(3\)\)/u);
   assert.doesNotMatch(stage, /radialSpectrum|radialWaveform|RADIAL_CONTOUR/u);
   assert.match(stage, /app\.render\(\)/u);
   assert.match(stage, /resizeFrame = requestAnimationFrame/u);

@@ -106,7 +106,10 @@ async function smoke() {
       };
       const decode = BaseAudioContext.prototype.decodeAudioData;
       window.__decodeCount = 0;
-      BaseAudioContext.prototype.decodeAudioData = function(...args) { window.__decodeCount++; return decode.apply(this, args); };
+      BaseAudioContext.prototype.decodeAudioData = function(...args) { window.__decodeCount++; return decode.apply(this, args).then(buffer=>{if(this instanceof AudioContext)window.__playbackRate=buffer.sampleRate;return buffer;}); };
+      if(${Number(process.env.VIBLOOM_TEST_AUDIO_RATE ?? 0)}===44100){
+        const Context=window.AudioContext;window.AudioContext=class extends Context{constructor(options){super({...options,sampleRate:44100});}};
+      }
       const Worker = window.Worker;
       window.__workerStarts = 0;
       window.Worker = class extends Worker { constructor(...args) { super(...args); window.__workerStarts++; } };
@@ -160,16 +163,21 @@ async function smoke() {
     await waitFor(`!document.documentElement.classList.contains("is-scene-transitioning")`, "library transition complete");
     await capture("library-selection");
     const workersBeforeSubmission = await run("window.__workerStarts");
+    const decodesBeforeSubmission = await run("window.__decodeCount");
     await click('.library-vocal-toolbar button');
     await waitFor(`document.querySelector('.track-vocal-job progress')`, "Library progress");
     // Progress is published while the file is still being read/decoded. That
     // does not mean runAnalysis has constructed its worker yet (especially CPU CI).
     await waitFor(`window.__workerStarts > ${workersBeforeSubmission}`, "Library analysis worker starts after decoding");
+    assert.equal(await run("window.__decodeCount"), decodesBeforeSubmission + (await run("window.__playbackRate") === 44100 ? 0 : 1), "Library reuses only an original at its existing 44.1 kHz input rate");
+    console.log("PASS Library input reuse/fallback at playback rate", await run("window.__playbackRate"));
     const sharedWorkers = await run("window.__workerStarts");
     assert.equal(sharedWorkers, workersBeforeSubmission + 2, "one separation and one MotionSync worker start for the submitted source");
     await click('[aria-label="Actions for Voice A"]');
-    await run(`[...document.querySelectorAll('.track-popover button')].find(b=>b.textContent==='Prepare vocal lip sync').click()`);
-    assert.equal(await run("window.__workerStarts"), sharedWorkers, "duplicate menu submission is deduplicated");
+    assert.equal(await run(`[...document.querySelectorAll('.track-popover button')].some(b=>b.textContent==='Prepare vocal lip sync')`), false, "busy menu does not offer a duplicate submission");
+    assert.ok(await run(`[...document.querySelectorAll('.track-popover button')].some(b=>b.textContent==='Cancel preparation')`), "busy menu offers cancellation");
+    assert.equal(await run("window.__workerStarts"), sharedWorkers, "opening the busy menu starts no extra workers");
+    await click('[aria-label="Actions for Voice A"]');
     await click('button[title="Player"]');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')`, 'Player card mounted');
     await waitFor(`document.querySelector('.version-a .card-perimeter-progress')`, "progress bar");
@@ -191,6 +199,11 @@ async function smoke() {
     assert.equal(await run("window.__workerStarts"), sharedWorkers, "no duplicate worker starts before analysis completes");
     assert.equal(await run("window.__decodeCount"), decodesBeforeLoop, "repeat reuses decoded audio");
     assert.equal(await run(`document.querySelector('[data-vocal-track="1"]').getAttribute("aria-pressed")`), "true", "newly prepared vocals automatically enable");
+    await range("Playback position", 4.2);
+    await open("newly prepared vocals animate immediately without toggling");
+    assert.equal(await run(`Boolean(document.querySelector('.version-a .card-vocal-status'))`), false, "completed vocals leave no redundant ready status");
+    await delay(500);
+    assert.equal(await run(`Boolean(document.querySelector('.version-a .card-vocal-status'))`), false, "completion text stays removed after the progress transition");
     await click('[aria-label="Pause"]');
     await click('[aria-label="Repeat one"]');
     console.log("PASS background Demucs analysis, uninterrupted repeat, visible phases, automatic singing, cancellation and retry");
@@ -271,7 +284,7 @@ async function smoke() {
     await waitFor(`document.querySelector('[aria-label="Cancel vocal preparation for Queued cancellation"]')`, "second song queued");
     await click('[aria-label="Cancel vocal preparation for Queued cancellation"]');
     const startsBeforeLibrary = await run("window.__sourceStarts");
-    await waitFor(`[...document.querySelectorAll('.track-row')].find(row => row.textContent.includes('Library vocal preparation'))?.textContent.includes('Vocals ready')`, "library vocal preparation finished", true);
+    await waitFor(`[...document.querySelectorAll('.track-row')].find(row => row.textContent.includes('Library vocal preparation'))?.querySelector('.vocal-ready')`, "library vocal preparation finished", true);
     assert.equal(await run("window.__sourceStarts"), startsBeforeLibrary, "library preparation does not replace playback sources");
     assert.ok(await run(`document.querySelector('.library-list-panel') !== null`), "processing stays in Library");
     await capture("library-vocal-preparation");
@@ -304,13 +317,17 @@ async function smoke() {
       open.onerror = () => reject(open.error);
       open.onsuccess = () => {
         const db = open.result, tx = db.transaction('state', 'readwrite'), store = tx.objectStore('state');
-        const request = store.get('library'); let original;
+        const sessionRequest = store.get('session'), request = store.get('library'); let original;
         request.onsuccess = () => {
-          const snapshot = request.result, track = snapshot.tracks.find(t => t.id === snapshot.session.currentTrackId);
+          const snapshot = request.result, track = snapshot.tracks.find(t => t.id === (sessionRequest.result?.currentTrackId ?? snapshot.session.currentTrackId));
           if (track.vocalAnalysis?.version !== 4 || track.comparison?.vocalAnalysis?.version !== 4) { tx.abort(); return; }
           original = { id: track.id, name: track.name, lyrics: track.lyrics, comparison: track.comparison };
-          track.vocalAnalysis = { version: 3, rms: track.vocalAnalysis.rms, visemes: track.vocalAnalysis.rms.map(() => 2) };
-          store.put(snapshot, 'library');
+          const legacy = analysis => {
+            track.vocalAnalysis = { version: 3, rms: Array.from(analysis.rms), visemes: Array.from(analysis.rms, () => 2) };
+            store.put(snapshot, 'library');
+          };
+          if (track.vocalAnalysis.cacheKey) { const curve = store.get('vocal:' + track.vocalAnalysis.cacheKey); curve.onsuccess = () => legacy(curve.result); }
+          else legacy(track.vocalAnalysis);
         };
         tx.oncomplete = () => { db.close(); resolve(original); };
         tx.onabort = () => { db.close(); reject(new Error('Missing version 4 persisted caches')); };
@@ -320,7 +337,7 @@ async function smoke() {
     await ready('hiyori');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')?.getAttribute('aria-label') === 'Prepare vocals track 1' && !document.querySelector('[data-vocal-track="1"]').disabled`, 'legacy cache needs preparation');
     await click('button[title="Library"]');
-    await waitFor(`document.querySelector('.track-row.is-active .track-vocal-job')?.textContent === 'Reprepare lip sync'`, 'Library marks legacy cache');
+    await waitFor(`document.querySelector('.track-row.is-active .vocal-outdated')`, 'Library marks legacy cache');
     await click('button[title="Player"]');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')`, 'Player card mounted');
     await click('[data-vocal-track="1"]');
@@ -332,13 +349,16 @@ async function smoke() {
       open.onerror = () => reject(open.error);
       open.onsuccess = () => {
         const db = open.result, tx = db.transaction('state', 'readonly');
-        const request = tx.objectStore('state').get('library');
-        request.onsuccess = () => resolve(request.result.tracks.find(t => t.id === request.result.session.currentTrackId));
+        const state = tx.objectStore('state'), sessionRequest = state.get('session'), request = state.get('library');
+        request.onsuccess = () => resolve(request.result.tracks.find(t => t.id === (sessionRequest.result?.currentTrackId ?? request.result.session.currentTrackId)));
         tx.oncomplete = () => db.close();
       };
     })`);
     assert.equal(afterMigration.vocalAnalysis.version, 4);
-    assert.equal(afterMigration.vocalAnalysis.vowels.length, afterMigration.vocalAnalysis.rms.length * 5);
+    assert.ok(afterMigration.vocalAnalysis.cacheKey);
+    const persistedCurve = await run(`new Promise((resolve,reject)=>{const request=indexedDB.open('vibloom-library');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('state'),get=tx.objectStore('state').get('vocal:'+${JSON.stringify(afterMigration.vocalAnalysis.cacheKey)});tx.oncomplete=()=>{db.close();resolve({rms:get.result.rms.length,vowels:get.result.vowels.length});};tx.onabort=()=>reject(tx.error);};})`);
+    assert.equal(persistedCurve.rms, afterMigration.vocalAnalysis.frames);
+    assert.equal(persistedCurve.vowels, persistedCurve.rms * 5);
     assert.equal(afterMigration.id, beforeMigration.id);
     assert.equal(afterMigration.name, beforeMigration.name);
     assert.deepEqual(afterMigration.lyrics, beforeMigration.lyrics);
@@ -350,7 +370,7 @@ async function smoke() {
     console.error(error);
     if (window && !window.isDestroyed()) {
       console.error(await window.webContents.executeJavaScript(`({cards:[...document.querySelectorAll('.source-selector')].map(x=>[x.textContent,x.getAttribute('aria-pressed')]),vocals:[...document.querySelectorAll('[data-vocal-track]')].map(x=>[x.dataset.vocalTrack,x.getAttribute('aria-label'),x.dataset.tooltip]),position:document.querySelector('[aria-label="Playback position"]')?.value,pose:window.__mouthProbe?.current})`));
-      console.error(await window.webContents.executeJavaScript(`new Promise(resolve=>{const req=indexedDB.open('vibloom-library');req.onsuccess=()=>{const db=req.result,r=db.transaction('state').objectStore('state').get('library');r.onsuccess=()=>{const t=r.result?.tracks.find(x=>x.id===r.result.session.currentTrackId);resolve({original:t?.vocalAnalysis?.rms.slice(0,10),versions:t?.comparisons.map(x=>({slot:x.slot,name:x.name,duration:x.duration,rms:x.vocalAnalysis?.rms.slice(0,20),max:x.vocalAnalysis&&Math.max(...x.vocalAnalysis.rms)}))});db.close();};};})`));
+      console.error(await window.webContents.executeJavaScript(`new Promise(resolve=>{const req=indexedDB.open('vibloom-library');req.onsuccess=()=>{const db=req.result,r=db.transaction('state').objectStore('state').get('library');r.onsuccess=()=>{const t=r.result?.tracks.find(x=>x.id===r.result.session.currentTrackId);resolve({original:t?.vocalAnalysis?.rms?.slice(0,10),versions:t?.comparisons.map(x=>({slot:x.slot,name:x.name,duration:x.duration,rms:x.vocalAnalysis?.rms?.slice(0,20),max:x.vocalAnalysis?.rms && Math.max(...x.vocalAnalysis.rms)}))});db.close();};};})`));
     }
     exitCode = 1;
   } finally {

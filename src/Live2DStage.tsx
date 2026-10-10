@@ -23,7 +23,9 @@ type Live2DStageProps = {
   isPlaying: boolean;
   focusMode: boolean;
   containModel?: boolean;
+  renderActive?: boolean;
   layoutKey?: string;
+  playerZoomOffset?: (modelHeight: number, portraitHeight: number, companionId: CompanionId) => number;
   onPickAudio?: () => void;
 };
 
@@ -233,6 +235,10 @@ type InternalModelControls = {
   off: (event: "afterMotionUpdate" | "beforeModelUpdate", listener: () => void) => void;
 };
 
+function writeStageProperty(stage: HTMLElement | null, name: string, value: string) {
+  if (stage && stage.style.getPropertyValue(name) !== value) stage.style.setProperty(name, value);
+}
+
 export default function Live2DStage({
   companionId: requestedCompanionId = "hong-xi",
   featuresRef,
@@ -244,7 +250,9 @@ export default function Live2DStage({
   isPlaying,
   focusMode,
   containModel = false,
+  renderActive = true,
   layoutKey,
+  playerZoomOffset,
   onPickAudio,
 }: Live2DStageProps) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -260,6 +268,15 @@ export default function Live2DStage({
   }, [requestedCompanionId, companionId]);
   const companion = COMPANIONS[companionId];
   const reactToCompanionRef = useRef<(() => void) | null>(null);
+  const renderActiveRef = useRef(renderActive);
+  const renderingAppRef = useRef<PixiApplication | null>(null);
+  useLayoutEffect(() => {
+    renderActiveRef.current = renderActive;
+    const app = renderingAppRef.current;
+    if (!app) return;
+    if (renderActive) app.start();
+    else app.stop();
+  }, [renderActive]);
   const startsInPortrait = variant === "player";
   const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -270,6 +287,7 @@ export default function Live2DStage({
   const previousFocusModeRef = useRef(focusMode);
   const focusModeRef = useRef(focusMode);
   const containModelRef = useRef(containModel);
+  const playerZoomOffsetRef = useRef(playerZoomOffset);
   const focusCameraTransitionUntilRef = useRef(0);
   const layoutRef = useRef<(() => void) | null>(null);
   const cameraModeRef = useRef<"auto" | "locked">(startsInPortrait ? "locked" : "auto");
@@ -296,6 +314,7 @@ export default function Live2DStage({
     variantRef.current = variant;
     focusModeRef.current = focusMode;
     containModelRef.current = containModel;
+    playerZoomOffsetRef.current = playerZoomOffset;
     const sceneCovered = document.documentElement.classList.contains("is-scene-covering");
     if (changingFocus && sceneCovered) {
       focusCameraSnapRef.current = true;
@@ -330,7 +349,7 @@ export default function Live2DStage({
       setZoomReadout(cameraUi.mode === "locked" ? Math.round(PORTRAIT_ZOOM * 100) : 100);
     });
     return () => cancelAnimationFrame(frame);
-  }, [containModel, focusMode, layoutKey, variant]);
+  }, [containModel, focusMode, layoutKey, variant, playerZoomOffset]);
 
   useEffect(() => {
     cameraModeRef.current = cameraMode;
@@ -462,6 +481,11 @@ export default function Live2DStage({
         let isCompactLayout = window.innerWidth < 600;
         let previousHostBounds: DOMRect | null = null;
         let stageTitleSafeTop = STAGE_TITLE_SAFE_GAP;
+        const framedRigY = (desiredY: number, renderedHeight: number, safeTop: number, stageVariant: StageVariant) => {
+          const defaultY = titleSafeRigY(desiredY, renderedHeight, safeTop, stageVariant);
+          if (stageVariant !== "player" || !playerZoomOffsetRef.current) return defaultY;
+          return defaultY - playerZoomOffsetRef.current(renderedHeight, naturalHeight * currentModelScale * portraitZoomRef.current, companionId);
+        };
 
         let rendererWidth = 0;
         let rendererHeight = 0;
@@ -473,7 +497,7 @@ export default function Live2DStage({
           const heading = host.closest(".persistent-stage-panel")?.querySelector(".now-listening-heading");
           const headingBottom = heading?.getBoundingClientRect().bottom ?? nextHostBounds.top;
           stageTitleSafeTop = Math.max(STAGE_TITLE_SAFE_GAP, headingBottom - nextHostBounds.top + STAGE_TITLE_SAFE_GAP);
-          stageRef.current?.style.setProperty("--stage-title-safe-top", `${stageTitleSafeTop}px`);
+          writeStageProperty(stageRef.current, "--stage-title-safe-top", `${stageTitleSafeTop}px`);
           const sceneCovered = document.documentElement.classList.contains("is-scene-covering");
           if (layoutInitialized && previousHostBounds && canvasRevealed && !sceneCovered) {
             // Keep Hiyori at the same viewport pixel while the header/score strip
@@ -537,7 +561,7 @@ export default function Live2DStage({
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(snapZoom, host.clientHeight, snapPortraitFactor);
             const snapRenderZoom = snapZoom;
-            const safeSnapRigY = titleSafeRigY(
+            const safeSnapRigY = framedRigY(
               currentRigY + currentPortraitOffset,
               naturalHeight * currentModelScale * snapRenderZoom,
               stageTitleSafeTop,
@@ -1084,7 +1108,7 @@ export default function Live2DStage({
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, snapPortraitFactor);
             const snapRenderZoom = cameraZoom;
-            const safeSnapRigY = titleSafeRigY(
+            const safeSnapRigY = framedRigY(
               currentRigY + currentPortraitOffset,
               naturalHeight * currentModelScale * snapRenderZoom,
               stageTitleSafeTop,
@@ -1450,7 +1474,7 @@ export default function Live2DStage({
           contactShadow.scale.set(currentModelScale);
           const renderCameraZoom = cameraZoom;
           const renderedModelHeight = naturalHeight * currentModelScale * renderCameraZoom;
-          const safeCameraRigY = titleSafeRigY(
+          const safeCameraRigY = framedRigY(
             currentRigY + currentPortraitOffset,
             renderedModelHeight,
             stageTitleSafeTop,
@@ -1508,7 +1532,7 @@ export default function Live2DStage({
               restSettleElapsed = 0;
             }
           }
-          if (companion.authoredMotions && stageRef.current) stageRef.current.dataset.gesture = manualMotion ? "hello" : "";
+          if (companion.authoredMotions && stageRef.current && stageRef.current.dataset.gesture !== (manualMotion ? "hello" : "")) stageRef.current.dataset.gesture = manualMotion ? "hello" : "";
           if (!companion.authoredMotions) {
             personalityPose = personality.update({ dt, playing: features.isPlaying, welcome: variantRef.current === "welcome", energy, beatCount });
             personalityWeight = follow(personalityWeight, personality.gesture ? 1 : 0, 4);
@@ -1516,10 +1540,11 @@ export default function Live2DStage({
               wasReacting = personality.reacting;
               setReacting(wasReacting);
             }
-            if (stageRef.current) stageRef.current.dataset.gesture = personality.gesture ?? "";
+            if (stageRef.current && stageRef.current.dataset.gesture !== (personality.gesture ?? "")) stageRef.current.dataset.gesture = personality.gesture ?? "";
           }
           const stage = stageRef.current;
           if (stage) {
+            const stageWidth = Math.max(1, host.clientWidth), stageHeight = Math.max(1, host.clientHeight);
             const discCenterOffsetFactor = DISC_MODEL_CENTER_OFFSET_FACTOR
               + Math.max(0, renderCameraZoom - 1) * DISC_ZOOM_CENTER_OFFSET_FACTOR;
             const renderedModelWidth = naturalWidth * currentModelScale * renderCameraZoom;
@@ -1531,24 +1556,24 @@ export default function Live2DStage({
               stageTitleSafeTop,
               variantRef.current,
             );
-            stage.style.setProperty("--music-energy", energy.toFixed(3));
-            stage.style.setProperty("--music-energy-long", energyLong.toFixed(3));
-            stage.style.setProperty("--music-bass", bass.toFixed(3));
-            stage.style.setProperty("--beat-pulse", lightPulse.toFixed(3));
-            stage.style.setProperty("--beat-tier", lightTier.toFixed(3));
-            stage.style.setProperty("--particle-strength", particlePulse.toFixed(3));
-            stage.style.setProperty("--music-active", activity.toFixed(3));
-            stage.style.setProperty("--camera-zoom", cameraZoom.toFixed(3));
-            stage.style.setProperty("--camera-rig-x", currentRigX.toFixed(3));
-            stage.style.setProperty("--camera-rig-y", safeCameraRigY.toFixed(3));
-            stage.style.setProperty("--model-scale", currentModelScale.toFixed(5));
-            stage.style.setProperty("--stage-model-height", `${renderedModelHeight}px`);
-            stage.style.setProperty("--stage-model-top", `${safeCameraRigY - renderedModelHeight / 2}px`);
-            stage.style.setProperty("--stage-model-width", `${renderedModelWidth}px`);
-            stage.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
-            stage.style.setProperty(
+            writeStageProperty(stage, "--music-energy", energy.toFixed(3));
+            writeStageProperty(stage, "--music-energy-long", energyLong.toFixed(3));
+            writeStageProperty(stage, "--music-bass", bass.toFixed(3));
+            writeStageProperty(stage, "--beat-pulse", lightPulse.toFixed(3));
+            writeStageProperty(stage, "--beat-tier", lightTier.toFixed(3));
+            writeStageProperty(stage, "--particle-strength", particlePulse.toFixed(3));
+            writeStageProperty(stage, "--music-active", activity.toFixed(3));
+            writeStageProperty(stage, "--camera-zoom", cameraZoom.toFixed(3));
+            writeStageProperty(stage, "--camera-rig-x", currentRigX.toFixed(3));
+            writeStageProperty(stage, "--camera-rig-y", safeCameraRigY.toFixed(3));
+            writeStageProperty(stage, "--model-scale", currentModelScale.toFixed(5));
+            writeStageProperty(stage, "--stage-model-height", `${renderedModelHeight}px`);
+            writeStageProperty(stage, "--stage-model-top", `${safeCameraRigY - renderedModelHeight / 2}px`);
+            writeStageProperty(stage, "--stage-model-width", `${renderedModelWidth}px`);
+            writeStageProperty(stage, "--stage-subject-x", `${(currentRigX / stageWidth) * 100}%`);
+            writeStageProperty(stage,
               "--stage-subject-y",
-              `${(discCenterY / Math.max(1, host.clientHeight)) * 100}%`,
+              `${(discCenterY / stageHeight) * 100}%`,
             );
           }
         }, undefined, UPDATE_PRIORITY.HIGH);
@@ -1584,7 +1609,7 @@ export default function Live2DStage({
         contactShadow.scale.set(currentModelScale);
         const initialRenderZoom = cameraZoom;
         const initialRenderedModelHeight = naturalHeight * currentModelScale * initialRenderZoom;
-        const initialSafeRigY = titleSafeRigY(
+        const initialSafeRigY = framedRigY(
           currentRigY + currentPortraitOffset,
           initialRenderedModelHeight,
           stageTitleSafeTop,
@@ -1603,11 +1628,11 @@ export default function Live2DStage({
           stageTitleSafeTop,
           variantRef.current,
         );
-        stageRef.current?.style.setProperty("--stage-model-height", `${initialRenderedModelHeight}px`);
-        stageRef.current?.style.setProperty("--stage-model-top", `${initialSafeRigY - initialRenderedModelHeight / 2}px`);
-        stageRef.current?.style.setProperty("--stage-model-width", `${initialRenderedModelWidth}px`);
-        stageRef.current?.style.setProperty("--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
-        stageRef.current?.style.setProperty(
+        writeStageProperty(stageRef.current, "--stage-model-height", `${initialRenderedModelHeight}px`);
+        writeStageProperty(stageRef.current, "--stage-model-top", `${initialSafeRigY - initialRenderedModelHeight / 2}px`);
+        writeStageProperty(stageRef.current, "--stage-model-width", `${initialRenderedModelWidth}px`);
+        writeStageProperty(stageRef.current, "--stage-subject-x", `${(currentRigX / Math.max(1, host.clientWidth)) * 100}%`);
+        writeStageProperty(stageRef.current,
           "--stage-subject-y",
           `${(initialDiscCenterY / Math.max(1, host.clientHeight)) * 100}%`,
         );
@@ -1616,6 +1641,8 @@ export default function Live2DStage({
         app.render();
         canvasRevealed = true;
         canvas.style.visibility = "";
+        renderingAppRef.current = app;
+        if (!renderActiveRef.current) app.stop();
         if (!disposed) setStatus("ready");
       } catch (error) {
         modelLoading = false;
@@ -1634,6 +1661,7 @@ export default function Live2DStage({
     void mountModel();
     return () => {
       disposed = true;
+      renderingAppRef.current = null;
       layoutRef.current = null;
       resizeObserver?.disconnect();
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);

@@ -50,8 +50,9 @@ async function main(){const timer=setTimeout(()=>app.exit(1),300000);try{
   await process(1,'eq','warm',track);const resource=await measure('track '+track);
   assert.ok(resource.pcmBytes<=256*1024*1024,'resident decoded PCM budget');assert.ok(resource.alive<=4,'only the buffers that fit the decoded PCM budget remain');
  }
+ const decodedBeforeSwitch=await run('window.__weak.length');
  await click('[aria-label="Listen to track 2"]');await wait(`document.querySelector('[data-track-number="2"] .source-selector').getAttribute('aria-pressed')==='true'`,'cold track decoded');
- const switched=await measure('cold switch');assert.ok(switched.pcmBytes<=256*1024*1024);assert.equal(switched.decoded,10);
+ const switched=await measure('cold switch');assert.ok(switched.pcmBytes<=256*1024*1024);assert.equal(switched.decoded,decodedBeforeSwitch+1,'cold selection decodes exactly once, independently of initial player preloading');
  await process(2,'remaster','gentle',3);assert.equal((await measure('cold-source remaster chain')).activeWorkers,0);
  await click('.transport-secondary > button');await click('.queue-sheet .destructive-text-button');await wait(`document.querySelector('.confirm-destructive')`,'clear queue confirmation');await click('.confirm-destructive');await wait(`!document.querySelector('.version-b')`,'queue released');
  const cleared=await measure('queue cleared');assert.equal(cleared.alive,0);assert.equal(cleared.activeWorkers,0);

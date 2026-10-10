@@ -77,6 +77,7 @@ async function smoke() {
     await run(`document.querySelector('.open-library-button')?.click()`);
     await waitFor(`document.querySelector('[aria-label="Actions for Timing test"]')`, "library ready");
     await click('[aria-label="Actions for Timing test"]');
+    await button("Lyrics…");
     await button("Timestamp lyrics");
     await waitFor(`document.querySelectorAll('.lyric-timing-lines button').length === 3`, "TXT editor opens");
     assert.equal(await run(`document.querySelector('.lyric-timing-download').disabled`), true);
@@ -148,7 +149,7 @@ async function smoke() {
     await waitFor(`document.querySelector('[aria-label="Actions for Timing test"]') || document.querySelector('.open-library-button')`, "restored");
     await run(`document.querySelector('.open-library-button')?.click()`);
     await waitFor(`document.querySelector('[aria-label="Actions for Timing test"]')`, "restored library");
-    await click('[aria-label="Actions for Timing test"]'); await button("Timestamp lyrics");
+    await click('[aria-label="Actions for Timing test"]'); await button("Lyrics…"); await button("Timestamp lyrics");
     await waitFor(`document.querySelector('.lyric-timing-editor')`, "draft reopened");
     assert.equal(await run(`document.querySelectorAll('.lyric-timing-lines time')[1].textContent`), "00:02.34", "draft survives reload");
     await seek(1); await key("KeyT", "t");
@@ -160,7 +161,7 @@ async function smoke() {
     await writeFile(path.join(output, "editor.png"), (await window.webContents.capturePage()).toPNG());
     await button("Save synced lyrics");
     await waitFor(`!document.querySelector('.lyric-timing-editor')`, "saving closes editor");
-    await click('[aria-label="Actions for Timing test"]'); await button("Edit timing");
+    await click('[aria-label="Actions for Timing test"]'); await button("Lyrics…"); await button("Edit timing");
     await waitFor(`document.querySelector('.lyric-timing-editor')`, "saved timestamps can be edited again");
     const downloaded = new Promise((resolve, reject) => {
       window.webContents.session.once("will-download", (_event, item) => {
@@ -179,8 +180,9 @@ async function smoke() {
     assert.ok(await run(`(() => {const r=document.querySelector('.lyric-timing-editor').getBoundingClientRect();const f=document.querySelector('.lyric-timing-editor footer').getBoundingClientRect();return r.right <= innerWidth && r.bottom <= innerHeight && f.bottom <= innerHeight;})()`), 'lyric editor and save controls fit narrow windows');
     await writeFile(path.join(output, "editor-narrow.png"), (await window.webContents.capturePage()).toPNG());
     await click('[aria-label="Close timestamp editor"]');
-    await run(`document.querySelector('[aria-label="Actions for Timing test"]').click()`);
-    await button("Open in player / compare");
+    await run(`(() => { const button=document.querySelector('[aria-label="Actions for Timing test"]');button.scrollIntoView({block:'center',behavior:'instant'});button.click(); })()`);
+    await waitFor(`document.querySelector('.track-action-popover:popover-open')`, "narrow song menu visible");
+    await button("Open in Player");
     await waitFor(`document.querySelector('.library-lyrics-list')`, "saved synced lyrics visible");
     await waitFor(`!document.documentElement.classList.contains("is-scene-transitioning")`, "player visible");
     await run(`void (document.querySelector('input[accept=".lrc,.txt,text/plain"]').click = () => {})`);

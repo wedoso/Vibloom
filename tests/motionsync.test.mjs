@@ -48,4 +48,6 @@ test("official Core produces compact causal weights equivalent to the selected l
     assert.equal(result.vowels.length, Math.ceil(length / 882) * 5);
     assert.ok(result.vowels.every(value => value === 0), "no previous-clip vowel state");
   }
+  sandbox.self.onmessage({ data: { mono: speech } });
+  assert.deepEqual(Array.from(reports.at(-1).vowels), Array.from(report.vowels), "reused Core produces identical speech shapes after silent clips");
 });

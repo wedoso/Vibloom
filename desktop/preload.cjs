@@ -1,5 +1,14 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+contextBridge.exposeInMainWorld("vibloomWindowState", Object.freeze({
+  read: () => ipcRenderer.invoke("window:visibility"),
+  subscribe: (listener) => {
+    const receive = (_event, visible) => listener(visible);
+    ipcRenderer.on("window:visibility", receive);
+    return () => ipcRenderer.removeListener("window:visibility", receive);
+  },
+}));
+
 contextBridge.exposeInMainWorld("vibloomUpdates", Object.freeze({
   check: () => ipcRenderer.invoke("updates:check"),
   download: () => ipcRenderer.invoke("updates:download"),

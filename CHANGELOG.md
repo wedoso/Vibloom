@@ -2,6 +2,14 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.11.0](https://github.com/wedoso/Vibloom/compare/v1.10.0...v1.11.0) (2026-10-10)
+
+- Add a dedicated mobile listening room with portrait and landscape layouts, direct seeking, A/B comparison, synchronized lyrics, compact lyric editing, and Live2D pinch zoom and camera controls.
+- Prepare vocal lip sync on mobile with progress visible outside the panel; support background playback and album artwork in system media controls where the browser allows it.
+- Align desktop Library status icons and simplify song actions; keep Player and Library model zoom framing consistent.
+- Improve playback and large-library rendering, reuse decoded audio and vocal workers, and reduce processing memory while preserving audio and mouth-animation results.
+- Load saved vocal timing on demand, recover temporary read failures automatically, prevent stale saves and cancelled jobs from replacing newer data, and keep completed lip-sync controls free of redundant status text.
+
 ## [1.10.0](https://github.com/wedoso/Vibloom/compare/v1.9.0...v1.10.0) (2026-10-08)
 
 - Compare up to nine tracks with number shortcuts, compact cards and one-click cleanup.

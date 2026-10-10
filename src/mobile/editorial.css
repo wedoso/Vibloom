@@ -1,0 +1,269 @@
+/* The approved editorial composition, imported exclusively by MobileApp. */
+.mobile-app { background:radial-gradient(ellipse at 65% 28%,rgb(230 205 174 / .18),transparent 65%),#faf5ec; }
+.mobile-app[data-companion="hong-xi"] { background:radial-gradient(ellipse at 60% 30%,rgb(174 196 229 / .2),transparent 65%),#f2f6fb; }
+.mobile-app .m-header { border-bottom:0; }
+.mobile-app .m-brand small { display:none; }
+.mobile-app .m-brand strong { font-size:26px; }
+.mobile-app .m-brand { gap:8px; }
+.mobile-app .m-header-leading { gap:6px; }
+.mobile-app .m-header-actions .m-bordered { background:transparent; }
+.mobile-app.is-room .m-content { grid-template-rows:minmax(0,2.8fr) minmax(128px,1fr); gap:0; padding-top:8px; }
+.mobile-app .m-room-title { padding:0 2px 2px; }
+.mobile-app .m-room-title h1 { font:500 clamp(26px,7.4vw,36px)/1.18 var(--m-serif); letter-spacing:-.035em; -webkit-line-clamp:2; }
+.mobile-app .m-room-title p { display:flex; align-items:center; gap:7px; font-size:11px; letter-spacing:.035em; margin-top:8px; }
+.mobile-app .m-room-title p::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--m-a); flex:none; }
+.mobile-app .m-room-orbit { width:100%; min-height:0; max-width:640px; margin-inline:auto; }
+/* Fade the model's lower edge into the room, including the artwork's own cutoff.
+   The host contains only the rendered character; camera/source controls stay crisp. */
+.mobile-app .m-room-orbit .live2d-host {
+  inset:-20px -16px 0;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 74%,rgba(0,0,0,.85) 84%,transparent 98%);
+  mask-image:linear-gradient(to bottom,#000 0%,#000 74%,rgba(0,0,0,.85) 84%,transparent 98%);
+}
+.mobile-app .m-room-orbit .stage-music-disc { width:94%; left:50%; top:52%; border:0; background:radial-gradient(circle,rgb(var(--stage-light-rgb) / .34),rgb(var(--stage-light-rgb) / .15) 65%,transparent); }
+@media (orientation:portrait) {
+  /* Let the reactive backdrop paint beyond the stage without moving its center.
+     Clip only at the screen's horizontal edges, not at the room container. */
+  .mobile-app.is-room { overflow-x:clip; }
+  .mobile-app .m-room-orbit .stage-disc-viewport { overflow:visible; -webkit-mask-image:none; mask-image:none; }
+}
+.mobile-app .m-room-hero.is-away { right:20px; }
+.mobile-app .camera-capsule > i { display:none; }
+/* Keep all three native framing callbacks. Only their mobile presentation changes. */
+.mobile-app .m-room-orbit .camera-capsule { top:6px; right:0; left:auto; transform:none; width:96px; height:46px; padding:0; border:1px solid var(--m-line); border-radius:24px; background:var(--m-paper); flex-direction:row; gap:0; box-shadow:0 4px 16px rgb(36 33 27 / .04); }
+.mobile-app .camera-capsule > button { width:47px; min-width:47px; height:44px; min-height:44px; border-radius:50%; padding:0; }
+.mobile-app .camera-capsule > .m-stage-vocals { border-left:1px solid var(--m-line); border-radius:0 24px 24px 0; }
+.mobile-app .camera-capsule > .m-stage-camera { border-radius:24px 0 0 24px; }
+.mobile-app .camera-capsule > button:nth-of-type(-n+3) { display:none; }
+.mobile-app .is-camera-open .camera-capsule > button:nth-of-type(-n+3) { display:flex; position:absolute; top:0; width:48px; height:44px; min-width:48px; min-height:44px; border:1px solid var(--m-line); border-radius:12px; background:var(--m-paper); box-shadow:0 4px 12px rgb(36 33 27 / .06); }
+.mobile-app .is-camera-open .camera-capsule > button:nth-of-type(1) { right:208px; }
+.mobile-app .is-camera-open .camera-capsule > button:nth-of-type(2) { right:156px; }
+.mobile-app .is-camera-open .camera-capsule > button:nth-of-type(3) { right:104px; }
+.mobile-app .is-camera-open .camera-capsule > button.is-active { background:var(--m-ink); color:var(--m-surface); }
+.mobile-app .camera-capsule > button.is-active, .mobile-app .camera-capsule > button[aria-expanded="true"] { background:var(--m-ink); color:var(--m-surface); }
+.mobile-app .m-orbit-track { box-shadow:none; }
+.mobile-app .m-orbit-track[aria-pressed="true"] { box-shadow:0 0 0 4px color-mix(in srgb,var(--m-a) 12%,transparent); }
+.mobile-app .m-content > .m-live-lyrics { border-top:0; padding-top:0; }
+/* Lyrics use one regular system face in both the room and the expanded sheet.
+   Keep emphasis in the timed color fill, without changing glyph weight or width. */
+.mobile-app .m-live-lyrics .m-lyrics button,
+.mobile-app .m-live-lyrics .m-plain-lyrics p { font:400 clamp(18px,5.5vw,23px)/1.5 var(--m-sans); font-synthesis:none; padding:10px 6px; color:var(--m-muted); }
+.mobile-app .m-live-lyrics .m-lyrics button.is-current { font-weight:400; color:var(--m-ink); }
+.mobile-app .m-live-lyrics .m-lyrics button.is-current > span { background:linear-gradient(90deg,var(--m-ink) var(--lyric-progress),var(--m-muted) var(--lyric-progress)); background-clip:text; -webkit-background-clip:text; color:transparent; }
+.mobile-app .m-live-lyrics.is-comparison .m-lyrics button.is-current > span { --m-ink:var(--m-b); }
+.mobile-app .m-playback-footer { background:color-mix(in srgb,var(--m-surface) 84%,transparent); border-top-color:var(--m-line); }
+.mobile-app .m-play-main { box-shadow:0 5px 14px color-mix(in srgb,var(--m-ink) 12%,transparent); }
+.mobile-app .m-direct-seek { column-gap:10px; }
+.mobile-app .m-direct-seek input::-webkit-slider-thumb { width:18px; height:18px; background:var(--m-surface); border:2px solid var(--m-accent); }
+.mobile-app .m-direct-seek input::-moz-range-thumb { width:14px; height:14px; background:var(--m-surface); border:2px solid var(--m-accent); }
+/* One hierarchy for collections, drawers, and action sheets. */
+.mobile-app .m-library-page { gap:18px; }
+.mobile-app .m-page-heading h1 { font-size:clamp(30px,8vw,40px); margin-top:6px; }
+.mobile-app .m-page-heading .m-kicker { font-size:9px; font-weight:600; letter-spacing:.16em; }
+.mobile-app .m-segment { border:1px solid var(--m-line); border-radius:25px; padding:3px; background:transparent; }
+.mobile-app .m-segment button { border-radius:22px; font-weight:500; }
+.mobile-app .m-segment button[aria-pressed="true"] { color:var(--m-surface); background:var(--m-a); box-shadow:none; }
+.mobile-app .m-search { border-radius:24px; background:color-mix(in srgb,var(--m-soft) 40%,transparent); }
+.mobile-app .m-button { font-weight:550 !important; border-radius:16px; }
+.mobile-app .m-primary { background:var(--m-accent); border-color:var(--m-accent); }
+.mobile-app .m-song-row { border-radius:12px; }
+.mobile-app .m-song-row.is-current, .mobile-app .m-queue-row.is-current { background:color-mix(in srgb,var(--m-a) 14%,transparent); border-bottom-color:transparent; }
+.mobile-app .m-song-copy strong { font-size:15px; font-weight:550; letter-spacing:0; }
+.mobile-app .m-song-copy small { font-size:11px; }
+.mobile-app .m-song-number { color:var(--m-a); }
+.mobile-app .m-album-art { border-radius:16px; background:linear-gradient(135deg,var(--m-paper),var(--m-soft)); }
+.mobile-app .m-album-card strong { font-weight:550; }
+.mobile-app .m-sheet { background:var(--m-surface); border-color:var(--m-line); box-shadow:0 -12px 50px rgb(36 33 27 / .1); }
+.mobile-app .m-sheet > header { padding-top:22px; padding-bottom:12px; }
+.mobile-app .m-sheet > header h2 { font-size:clamp(26px,7vw,32px); font-weight:500; }
+.mobile-app .m-sheet-content { gap:18px; }
+.mobile-app .m-menu-action { padding:8px 4px; border-bottom:1px solid var(--m-line); }
+.mobile-app .m-menu-action svg { color:var(--m-muted); }
+.mobile-app .m-menu-action.m-danger svg { color:var(--m-b); }
+.mobile-app .m-picker-hint { background:color-mix(in srgb,var(--m-soft) 60%,transparent); font-size:12px; border-radius:14px; }
+.mobile-app .m-settings-card { border:0; border-radius:0; background:transparent; }
+.mobile-app .m-setting-row { padding:16px 0; min-height:72px; }
+.mobile-app .m-setting-row strong { font-weight:550; font-size:14px; }
+.mobile-app .m-setting-row small { line-height:1.6; }
+.mobile-app .m-queue-song strong { font-size:14px; font-weight:550; }
+/* Song names keep the same type and weight across views and playback states. */
+.mobile-app .m-room-title h1.m-song-title,
+.mobile-app .m-song-copy strong,
+.mobile-app .m-footer-track strong,
+.mobile-app .m-queue-song strong,
+.mobile-app .m-focus-header > span,
+.mobile-app .m-version-heading strong,
+.mobile-app .m-managed-track > strong,
+.mobile-app .m-vocal-heading strong { font-family:var(--m-sans); font-weight:500; font-synthesis:none; }
+.mobile-app .m-queue-row.is-current { padding-inline:8px; }
+.mobile-app .m-navigation button { border-radius:14px; }
+.mobile-app .m-navigation button[aria-current="page"] { color:var(--m-a); background:color-mix(in srgb,var(--m-a) 14%,transparent); }
+.mobile-app .m-import-option, .mobile-app .m-companion-options > button, .mobile-app .m-vocal-source { background:color-mix(in srgb,var(--m-paper) 55%,transparent); border-radius:16px; }
+.mobile-app .m-companion-options > button[aria-pressed="true"] { background:color-mix(in srgb,var(--m-a) 8%,transparent); border-color:color-mix(in srgb,var(--m-a) 40%,var(--m-line)); }
+@media (max-width:350px), (max-height:700px) {
+  .mobile-app.is-room .m-content { padding-top:8px; grid-template-rows:minmax(0,2.8fr) minmax(112px,1fr); }
+  .mobile-app .m-room-title h1 { font-size:25px; }
+  .mobile-app .m-room-title { padding-bottom:6px; }
+  .mobile-app .m-room-orbit { min-height:0; }
+  .mobile-app .m-room-title p { margin-top:5px; }
+  .mobile-app .m-live-lyrics .m-lyrics button, .mobile-app .m-live-lyrics .m-plain-lyrics p { font-size:18px; }
+}
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app.is-room .m-content { grid-template-rows:minmax(200px,1fr); gap:24px; padding-top:8px; }
+  .mobile-app .m-room-orbit { min-height:200px; }
+  /* Use the open space above the landscape stage for a larger, higher subject.
+     Resize the renderer's host so camera presets and pinch keep native framing. */
+  .mobile-app .m-room-orbit .live2d-host { top:-100px; }
+  .mobile-app .m-header, .mobile-app .m-focus-header { position:relative; z-index:7; }
+  /* Open framing choices down the side, clear of the enlarged face. */
+  .mobile-app .is-camera-open .camera-capsule > button:nth-of-type(1) { right:48px; top:46px; }
+  .mobile-app .is-camera-open .camera-capsule > button:nth-of-type(2) { right:48px; top:90px; }
+  .mobile-app .is-camera-open .camera-capsule > button:nth-of-type(3) { right:48px; top:134px; }
+  /* Expand the backdrop upwards too, reserving room for the 1.24 rhythm scale. */
+  .mobile-app .m-room-orbit .stage-disc-viewport { inset:-56px 0 0; container-type:size; -webkit-mask-image:none; mask-image:none; }
+  .mobile-app .m-room-orbit .stage-music-disc { width:min(76cqw,76cqh); top:50%; }
+  .mobile-app .m-room-hero.is-away { right:20px; }
+  .mobile-app .m-content > .m-live-lyrics { padding-inline:8px; }
+  .mobile-app .m-live-lyrics .m-lyrics button, .mobile-app .m-live-lyrics .m-plain-lyrics p { font-size:clamp(18px,2.5vw,26px); }
+  .mobile-app .m-content > .m-live-lyrics .m-lyrics button { text-align:left; }
+  .mobile-app .m-album-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  /* Progress is primary; the lower row keeps transport centered and volume short. */
+  .mobile-app .m-playback-footer {
+    grid-template-columns:minmax(0,1fr) 244px minmax(0,1fr);
+    grid-template-rows:44px 44px;
+    grid-template-areas:"seek seek seek" "identity transport extras";
+    column-gap:16px;
+    padding-inline:max(20px,env(safe-area-inset-left)) max(20px,env(safe-area-inset-right));
+  }
+  .mobile-app .m-playback-footer .m-footer-track { height:44px; gap:8px; }
+  .mobile-app .m-playback-footer .m-mini-art { display:flex; width:36px; height:36px; border-radius:12px; }
+  .mobile-app .m-playback-footer .m-footer-track strong { -webkit-line-clamp:1; font-size:13px; }
+  .mobile-app .m-playback-footer .m-direct-seek { gap:12px; }
+  .mobile-app .m-playback-footer .m-footer-extras { height:44px; flex-wrap:nowrap; justify-content:flex-end; align-items:center; }
+  .mobile-app .m-playback-footer .m-footer-extras > button { display:none; }
+  .mobile-app .m-footer-extras .m-volume { flex:none; width:124px; max-width:100%; height:44px; gap:8px; padding:0; }
+  .mobile-app .m-footer-extras .m-volume input { min-width:0; margin:0; padding:0; appearance:none; -webkit-appearance:none; background:transparent; }
+  .mobile-app .m-footer-extras .m-volume input::-webkit-slider-runnable-track { height:3px; border-radius:9px; background:linear-gradient(to right,var(--m-accent) var(--volume-progress),var(--m-line) var(--volume-progress)); }
+  .mobile-app .m-footer-extras .m-volume input::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; margin-top:-6.5px; border-radius:50%; background:var(--m-surface); border:1px solid var(--m-accent); }
+  .mobile-app .m-footer-extras .m-volume input::-moz-range-track { height:3px; border-radius:9px; background:var(--m-line); }
+  .mobile-app .m-footer-extras .m-volume input::-moz-range-progress { height:3px; background:var(--m-accent); }
+  .mobile-app .m-footer-extras .m-volume input::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--m-surface); border:1px solid var(--m-accent); }
+}
+@media (orientation:landscape) and (min-width:600px) and (max-width:740px) {
+  .mobile-app .m-playback-footer { grid-template-columns:minmax(0,1fr) 236px minmax(0,1fr); column-gap:8px; }
+  .mobile-app .m-footer-extras .m-volume { width:104px; }
+}
+@media (orientation:landscape) and (min-width:600px) and (max-height:360px) {
+  .mobile-app .m-content > .m-live-lyrics { max-height:calc(100dvh - var(--m-header-space) - var(--m-footer-space) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px); }
+}
+.mobile-app.is-focus .m-content { grid-template-rows:minmax(0,3.2fr) minmax(112px,1fr); }
+@media (orientation:landscape) and (min-width:600px) { .mobile-app.is-focus .m-content { grid-template-rows:minmax(200px,1fr); } }
+
+/* A single selected line unfolds; playback and commit actions stay reachable. */
+.mobile-app .m-library-tools, .mobile-app .m-library-results { display:contents; }
+.mobile-app .m-sheet.m-lyrics-sheet { height:min(720px,calc(var(--m-vv-height) - 12px),calc(100dvh - 12px)); overflow:hidden; display:flex; flex-direction:column; }
+.mobile-app .m-lyrics-sheet:not([open]) { display:none; }
+.mobile-app .m-lyrics-sheet > header { position:relative; flex:none; padding:8px 12px 8px 16px; }
+.mobile-app .m-lyrics-sheet > header h2 { font-size:25px; }
+.mobile-app .m-lyrics-sheet > .m-sheet-content { flex:1; min-height:0; overflow:hidden; padding:0 16px; gap:0; }
+.mobile-app .m-lyrics-editor-toolbar { display:flex; align-items:center; gap:8px; flex:none; min-height:52px; }
+.mobile-app .m-lyrics-editor-toolbar .m-direct-seek { flex:1; min-width:0; column-gap:8px; }
+.mobile-app .m-lyrics-editor-caption { display:flex; justify-content:space-between; gap:8px; flex:none; padding:0 0 10px; font-size:11px; color:var(--m-muted); }
+.mobile-app .m-lyrics-editor-caption output { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.mobile-app .m-lyrics-editor-list { flex:1; min-height:44px; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.mobile-app .m-lyrics-editor-row { border-bottom:1px solid var(--m-line); border-radius:10px; }
+.mobile-app .m-lyrics-editor-row.is-selected { background:color-mix(in srgb,var(--m-a) 9%,transparent); }
+.mobile-app .m-lyrics-editor-line { display:flex; align-items:center; gap:0; min-width:0; }
+.mobile-app .m-lyrics-editor-select { flex:1; min-width:0; min-height:48px; display:flex; align-items:center; gap:10px; text-align:left; padding:8px 6px; border:0; background:transparent; }
+.mobile-app .m-lyrics-editor-select time { flex:none; width:64px; font-size:11px; font-variant-numeric:tabular-nums; color:var(--m-muted); white-space:nowrap; }
+.mobile-app .m-lyrics-editor-select > span { min-width:0; font-size:14px; font-weight:400; line-height:1.45; overflow-wrap:anywhere; white-space:pre-line; }
+.mobile-app .m-lyrics-editor-fields { padding:0 10px 10px; }
+.mobile-app .m-lyrics-editor-fields textarea { display:block; width:100%; min-height:72px; resize:vertical; border:1px solid var(--m-line); border-radius:10px; padding:10px; background:var(--m-paper); font-size:16px; line-height:1.5; }
+.mobile-app .m-lyrics-editor-field-actions { display:flex; align-items:center; gap:4px; margin-top:6px; }
+.mobile-app .m-lyrics-editor-field-actions label { display:flex; align-items:center; gap:6px; flex:1; min-width:0; font-size:11px; color:var(--m-muted); }
+.mobile-app .m-lyrics-editor-field-actions input { min-width:0; width:100%; min-height:44px; padding:6px 8px; border:1px solid var(--m-line); border-radius:10px; background:var(--m-paper); font-size:16px; }
+.mobile-app .m-lyrics-editor-bottom { flex:none; position:relative; padding:10px 0 max(12px,env(safe-area-inset-bottom)); background:var(--m-surface); }
+.mobile-app .m-lyrics-editor-bottom .m-error { margin-bottom:8px; font-size:12px; }
+.mobile-app .m-lyrics-editor-controls { display:flex; align-items:center; gap:8px; }
+.mobile-app .m-lyrics-editor-controls > .m-button { min-height:44px; padding:8px 10px; font-size:13px; gap:6px; }
+.mobile-app .m-lyrics-editor-controls > .m-button:not(.m-primary) { flex:1; min-width:0; }
+.mobile-app .m-lyrics-actions { position:absolute; bottom:100%; left:0; width:min(240px,100%); border:1px solid var(--m-line); background:var(--m-surface); border-radius:14px; padding:4px 12px; box-shadow:0 -6px 24px rgb(36 33 27 / .1); }
+.mobile-app .m-lyrics-actions .m-menu-action:last-child { border:0; }
+.mobile-app .m-lyrics-discard { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.mobile-app .m-lyrics-discard > span { flex-basis:100%; font-size:12px; color:var(--m-muted); }
+.mobile-app .m-lyrics-discard > button { flex:1; min-width:0; min-height:44px; font-size:13px; padding:8px; }
+
+/* Landscape workspaces use width; sheets keep a fixed heading and scroll body. */
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app:not(.is-room) .m-content { height:calc(100dvh - var(--m-header-space) - var(--m-footer-space) - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding-block:12px; overflow:hidden; }
+  .mobile-app .m-library-page { display:grid; height:100%; grid-template-columns:clamp(180px,26vw,260px) minmax(0,1fr); grid-template-rows:44px minmax(0,1fr); gap:12px 24px; min-height:0; }
+  .mobile-app .m-library-page > .m-page-heading { grid-column:2; grid-row:1; align-items:center; }
+  .mobile-app .m-library-page > .m-page-heading h1 { font-size:24px; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .mobile-app .m-library-page > .m-page-heading p { display:none; }
+  .mobile-app .m-library-tools { grid-column:1; grid-row:1 / -1; display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; padding-right:8px; }
+  .mobile-app .m-library-results { grid-column:2; grid-row:2; display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; padding-bottom:12px; }
+  .mobile-app .m-library-results > * { flex:none; }
+  .mobile-app .m-library-tools .m-page-heading h1 { font-size:28px; }
+  .mobile-app .m-library-tools .m-page-heading p:last-child { margin-top:4px; }
+  .mobile-app .m-library-tools .m-segment { flex:none; }
+  .mobile-app .m-library-tools .m-search { flex:none; min-height:44px; }
+  .mobile-app .m-library-tools .m-search input { height:44px; }
+  .mobile-app .m-library-tools .m-library-toolbar { flex-wrap:wrap; gap:8px; }
+  .mobile-app .m-library-results .m-song-main { min-height:60px; padding-block:8px; }
+  .mobile-app .m-library-results .library-render-group { contain-intrinsic-block-size:auto calc(var(--render-count) * 61px) !important; }
+  .mobile-app .m-library-results .m-album-grid { grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); }
+  .mobile-app .m-library-results .m-album-art { max-height:160px; }
+  .mobile-app .m-library-results .m-welcome { min-height:0; gap:12px; padding:12px 4px; }
+  .mobile-app .m-library-results .m-welcome-disc { width:80px; height:80px; }
+  .mobile-app .m-sheet[open] { display:flex; flex-direction:column; overflow:hidden; width:min(840px,calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px)); max-height:min(860px,calc(100dvh - env(safe-area-inset-top) - 12px),calc(var(--m-vv-height) - 12px)); }
+  .mobile-app .m-sheet > header { position:relative; flex:none; padding:8px 16px; }
+  .mobile-app .m-sheet > header h2 { font-size:25px; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+  .mobile-app .m-sheet > header .m-icon { flex:none; }
+  .mobile-app .m-sheet > .m-sheet-content { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:12px 16px max(16px,env(safe-area-inset-bottom)); gap:12px; }
+  .mobile-app .m-sheet > .m-sheet-content > * { flex-shrink:0; }
+  .mobile-app .m-side-sheet[open] { width:min(420px,calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px)); right:env(safe-area-inset-right); }
+  .mobile-app .m-nav-sheet[open] { width:min(320px,calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px)); right:auto; left:env(safe-area-inset-left); }
+  .mobile-app .m-navigation { gap:4px; }
+  .mobile-app .m-navigation > button { min-height:44px; padding:6px 12px; }
+  .mobile-app .m-navigation > button:nth-child(3) { margin-top:8px; }
+  .mobile-app .m-sheet-content:has(> .m-import-option), .mobile-app .m-sheet-content:has(> .m-listening-toggles) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; }
+  .mobile-app .m-sheet-content:has(> .m-import-option) > :not(.m-import-option), .mobile-app .m-listening-toggles { grid-column:1 / -1; }
+  .mobile-app .m-import-option { min-width:0; min-height:84px; padding:12px; }
+  .mobile-app .m-picker-hint a { display:inline-flex; align-items:center; min-height:44px; }
+  .mobile-app .m-companion-options, .mobile-app .m-track-manager, .mobile-app .m-vocal-sources { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .mobile-app .m-companion-options > button, .mobile-app .m-managed-track, .mobile-app .m-vocal-source { min-width:0; }
+  .mobile-app .m-vocal-source { padding:12px; gap:10px; }
+  .mobile-app .m-queue-song strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+  .mobile-app .m-setting-row { min-height:56px; padding-block:12px; }
+  .mobile-app .m-album-song-selection { max-height:180px; overflow:auto; overscroll-behavior:contain; }
+  .mobile-app .m-album-song-selection label { flex:none; min-height:48px; padding-block:6px; }
+  .mobile-app .m-album-sheet > .m-sheet-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr); align-content:start; }
+  .mobile-app .m-album-sheet > .m-sheet-content > * { grid-column:1; min-width:0; }
+  .mobile-app .m-album-sheet > .m-sheet-content > .m-kicker { grid-column:2; grid-row:1; align-self:end; }
+  .mobile-app .m-album-sheet > .m-sheet-content > .m-album-song-selection { grid-column:2; grid-row:2 / span 4; align-self:start; }
+  .mobile-app .m-lyrics-sheet { container-name:mobile-lyric-editor; container-type:size; }
+  .mobile-app .m-lyrics-sheet > .m-sheet-content { display:grid; grid-template-columns:minmax(0,1fr) 224px; grid-template-rows:52px auto minmax(0,1fr); gap:0 16px; overflow:hidden; padding:0 16px; }
+  .mobile-app .m-lyrics-editor-list { grid-column:1; grid-row:1 / -1; min-height:0; }
+  .mobile-app .m-lyrics-editor-toolbar { grid-column:2; grid-row:1; }
+  .mobile-app .m-lyrics-editor-caption { grid-column:2; grid-row:2; }
+  .mobile-app .m-lyrics-editor-bottom { grid-column:2; grid-row:3; align-self:end; padding-block:8px max(12px,env(safe-area-inset-bottom)); }
+  .mobile-app .m-lyrics-editor-controls { gap:4px; }
+  .mobile-app .m-lyrics-editor-controls > .m-button { padding-inline:6px; }
+  .mobile-app .m-lyrics-sheet .m-lyrics-discard { gap:4px; }
+}
+@container mobile-lyric-editor (max-height:240px) {
+  .mobile-app .m-lyrics-sheet .m-lyrics-editor-toolbar, .mobile-app .m-lyrics-sheet .m-lyrics-editor-caption { display:none; }
+  .mobile-app .m-lyrics-sheet > .m-sheet-content { grid-template-rows:minmax(0,1fr); }
+  .mobile-app .m-lyrics-sheet .m-lyrics-editor-bottom { grid-row:1; }
+  .mobile-app .m-lyrics-sheet .m-lyrics-actions { max-height:calc(100cqh - 128px); overflow:auto; }
+}
+
+/* In short landscape keyboard viewports, keep the active field and close action visible. */
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app.has-compact-keyboard .m-sheet > header { position:absolute; top:4px; right:8px; z-index:2; padding:0; border:0; background:transparent; }
+  .mobile-app.has-compact-keyboard .m-sheet > header h2 { display:none; }
+  .mobile-app.has-compact-keyboard .m-sheet > .m-sheet-content { padding:6px 64px 6px 16px; }
+  .mobile-app.has-compact-keyboard .m-field > span { display:none; }
+  .mobile-app.has-compact-keyboard .m-lyrics-editor-bottom { padding:0; }
+  .mobile-app.has-compact-keyboard .m-lyrics-editor-fields textarea { min-height:44px; height:44px; padding-block:8px; }
+}

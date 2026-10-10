@@ -2618,6 +2618,14 @@ button.track-index,
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule button span { display: none; }
 .library-app.is-library-focus .persistent-stage-canvas .camera-capsule > i { width: 15px; height: 1px; }
 
+/* Keep the zoom readout centered beneath the vertical camera buttons. */
+.library-app .persistent-stage-canvas .camera-zoom {
+  flex: none;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Model selection lives outside the stage, so audio keeps its current clock. */
 .companion-selector {
   display: flex;
@@ -2777,6 +2785,7 @@ button.track-index,
 .waveform-card-foot .is-job-hidden { display: none; }
 .card-vocal-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgb(var(--waveform-rgb)); font-size: 9px; font-weight: 600; letter-spacing: 0; }
 .card-vocal-status.is-error { color: #996b42; }
+.waveform-card-foot:has(.card-vocal-status) > span:last-child:not(.card-vocal-status) { display: none; }
 .comparison-versions { position: relative; }
 .comparison-stack-actions { position: absolute; top: -14px; right: 2px; left: 2px; display: flex; justify-content: space-between; align-items: center; color: var(--library-muted); font-size: 9px; }
 .comparison-stack-actions button { height: 22px; padding: 0 5px; display: flex; gap: 4px; align-items: center; background: transparent; border: 0; color: var(--library-muted); font: inherit; cursor: pointer; }

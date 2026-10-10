@@ -1,3 +1,4 @@
+import { encodePcmWav } from "../pcm/processPcm";
 import { runAudioJob } from "../processingQueue";
 import { validateRepairInput } from "../remaster/presets";
 import type { RemasterProgress } from "../remaster/renderRemaster";
@@ -40,31 +41,7 @@ export async function applyEq(buffer: AudioBuffer, presetId: string, signal: Abo
 /** Upstream 24-bit encoding: round(sample * 0x7fffff), no dither or metadata.
  * Write directly from planar PCM to avoid its extra whole-song interleave copy. */
 export async function encodeEqWav(buffer: AudioBuffer, signal: AbortSignal, progress: (p: RemasterProgress) => void = () => {}, bitDepth: 16 | 24 = 24, random = Math.random) {
-  const channels = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
-  const width = bitDepth / 8;
-  const dataSize = buffer.length * channels.length * width, bytes = new ArrayBuffer(44 + dataSize), view = new DataView(bytes);
-  const text = (offset: number, value: string) => { for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i)); };
-  text(0, "RIFF"); view.setUint32(4, bytes.byteLength - 8, true); text(8, "WAVE"); text(12, "fmt ");
-  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels.length, true);
-  view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * channels.length * width, true);
-  view.setUint16(32, channels.length * width, true); view.setUint16(34, bitDepth, true); text(36, "data"); view.setUint32(40, dataSize, true);
-  let offset = 44, clippedSamples = 0;
-  for (let first = 0; first < buffer.length; first += 65536) {
-    signal.throwIfAborted();
-    const end = Math.min(buffer.length, first + 65536);
-    for (let i = first; i < end; i++) for (const channel of channels) {
-      const sample = channel[i];
-      if (!Number.isFinite(sample)) throw new Error("EQ produced a non-finite sample.");
-      if (Math.abs(sample) > 1) clippedSamples++;
-      const max = bitDepth === 16 ? 0x7fff : 0x7fffff, min = bitDepth === 16 ? -0x8000 : -0x800000;
-      const value = Math.max(min, Math.min(max, Math.round(Math.max(-1, Math.min(1, sample)) * max + (bitDepth === 16 ? random() - random() : 0))));
-      if (bitDepth === 16) { view.setInt16(offset, value, true); offset += 2; }
-      else { view.setUint8(offset++, value & 255); view.setUint8(offset++, value >> 8 & 255); view.setUint8(offset++, value >> 16 & 255); }
-    }
-    progress({ phase: "Preparing WAV", progress: .8 + .2 * end / buffer.length });
-    await new Promise<void>(resolve => setTimeout(resolve, 0));
-  }
-  return { bytes, clippedSamples };
+  return encodePcmWav(buffer, signal, fraction => progress({ phase: "Preparing WAV", progress: .8 + .2 * fraction }), bitDepth, random);
 }
 
 export function renderEq(source: () => Promise<AudioBuffer>, presetId: string, signal: AbortSignal, progress: (p: RemasterProgress) => void) {

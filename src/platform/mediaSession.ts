@@ -8,6 +8,10 @@ export type MediaControls = {
   onError: () => void;
 };
 
+export function mediaMetadataDetails(title: string, album: string, artwork?: string): MediaMetadataInit {
+  return { title, artist: "Vibloom", album, ...(artwork ? { artwork: [{ src: artwork, sizes: "any" }] } : {}) };
+}
+
 // Route headset and OS commands to the same transport used by the player UI.
 export function bindMediaSession(session: MediaSession, controls: MediaControls) {
   const invoke = (action: () => void | Promise<void>) => {
