@@ -24,6 +24,7 @@ type Live2DStageProps = {
   focusMode: boolean;
   containModel?: boolean;
   layoutKey?: string;
+  playerZoomOffset?: (modelHeight: number, portraitHeight: number, companionId: CompanionId) => number;
   onPickAudio?: () => void;
 };
 
@@ -245,6 +246,7 @@ export default function Live2DStage({
   focusMode,
   containModel = false,
   layoutKey,
+  playerZoomOffset,
   onPickAudio,
 }: Live2DStageProps) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -270,6 +272,7 @@ export default function Live2DStage({
   const previousFocusModeRef = useRef(focusMode);
   const focusModeRef = useRef(focusMode);
   const containModelRef = useRef(containModel);
+  const playerZoomOffsetRef = useRef(playerZoomOffset);
   const focusCameraTransitionUntilRef = useRef(0);
   const layoutRef = useRef<(() => void) | null>(null);
   const cameraModeRef = useRef<"auto" | "locked">(startsInPortrait ? "locked" : "auto");
@@ -296,6 +299,7 @@ export default function Live2DStage({
     variantRef.current = variant;
     focusModeRef.current = focusMode;
     containModelRef.current = containModel;
+    playerZoomOffsetRef.current = playerZoomOffset;
     const sceneCovered = document.documentElement.classList.contains("is-scene-covering");
     if (changingFocus && sceneCovered) {
       focusCameraSnapRef.current = true;
@@ -330,7 +334,7 @@ export default function Live2DStage({
       setZoomReadout(cameraUi.mode === "locked" ? Math.round(PORTRAIT_ZOOM * 100) : 100);
     });
     return () => cancelAnimationFrame(frame);
-  }, [containModel, focusMode, layoutKey, variant]);
+  }, [containModel, focusMode, layoutKey, variant, playerZoomOffset]);
 
   useEffect(() => {
     cameraModeRef.current = cameraMode;
@@ -462,6 +466,11 @@ export default function Live2DStage({
         let isCompactLayout = window.innerWidth < 600;
         let previousHostBounds: DOMRect | null = null;
         let stageTitleSafeTop = STAGE_TITLE_SAFE_GAP;
+        const framedRigY = (desiredY: number, renderedHeight: number, safeTop: number, stageVariant: StageVariant) => {
+          const defaultY = titleSafeRigY(desiredY, renderedHeight, safeTop, stageVariant);
+          if (stageVariant !== "player" || !playerZoomOffsetRef.current) return defaultY;
+          return defaultY - playerZoomOffsetRef.current(renderedHeight, naturalHeight * currentModelScale * portraitZoomRef.current, companionId);
+        };
 
         let rendererWidth = 0;
         let rendererHeight = 0;
@@ -537,7 +546,7 @@ export default function Live2DStage({
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(snapZoom, host.clientHeight, snapPortraitFactor);
             const snapRenderZoom = snapZoom;
-            const safeSnapRigY = titleSafeRigY(
+            const safeSnapRigY = framedRigY(
               currentRigY + currentPortraitOffset,
               naturalHeight * currentModelScale * snapRenderZoom,
               stageTitleSafeTop,
@@ -1084,7 +1093,7 @@ export default function Live2DStage({
                 : ROOM_PORTRAIT_OFFSET_FACTOR;
             currentPortraitOffset = portraitOffsetForZoom(cameraZoom, host.clientHeight, snapPortraitFactor);
             const snapRenderZoom = cameraZoom;
-            const safeSnapRigY = titleSafeRigY(
+            const safeSnapRigY = framedRigY(
               currentRigY + currentPortraitOffset,
               naturalHeight * currentModelScale * snapRenderZoom,
               stageTitleSafeTop,
@@ -1450,7 +1459,7 @@ export default function Live2DStage({
           contactShadow.scale.set(currentModelScale);
           const renderCameraZoom = cameraZoom;
           const renderedModelHeight = naturalHeight * currentModelScale * renderCameraZoom;
-          const safeCameraRigY = titleSafeRigY(
+          const safeCameraRigY = framedRigY(
             currentRigY + currentPortraitOffset,
             renderedModelHeight,
             stageTitleSafeTop,
@@ -1584,7 +1593,7 @@ export default function Live2DStage({
         contactShadow.scale.set(currentModelScale);
         const initialRenderZoom = cameraZoom;
         const initialRenderedModelHeight = naturalHeight * currentModelScale * initialRenderZoom;
-        const initialSafeRigY = titleSafeRigY(
+        const initialSafeRigY = framedRigY(
           currentRigY + currentPortraitOffset,
           initialRenderedModelHeight,
           stageTitleSafeTop,

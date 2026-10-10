@@ -5,6 +5,7 @@ import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "../audioVisual";
 import { SILENT_VOCAL_POSE } from "../audio/vocals/envelope";
 import type { MobileLibrary } from "./useMobileLibrary";
 import { bindMobileModelPinch } from "./modelPinch";
+import { mobileModelZoomOffset } from "./modelFraming";
 const Live2DStage = lazy(() => import("../Live2DStage"));
 
 export default function MobileCompanion({ library, focus, onVocals }: { library: MobileLibrary; focus: boolean; onVocals: () => void }) {
@@ -74,7 +75,7 @@ export default function MobileCompanion({ library, focus, onVocals }: { library:
     if (!button.classList.contains("m-stage-vocals")) requestAnimationFrame(() => capsule?.querySelector<HTMLButtonElement>(".m-stage-camera")?.focus());
   }}>
     <Suspense fallback={<p className="m-muted">Opening your listening room…</p>}>
-      <Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" />
+      <Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" playerZoomOffset={mobileModelZoomOffset} />
     </Suspense>
     <output ref={zoomReadout} className="m-pinch-readout" aria-label="Model zoom" hidden />
     {capsule && createPortal(<>

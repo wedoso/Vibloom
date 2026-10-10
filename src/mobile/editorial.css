@@ -21,6 +21,12 @@
   mask-image:linear-gradient(to bottom,#000 0%,#000 74%,rgba(0,0,0,.85) 84%,transparent 98%);
 }
 .mobile-app .m-room-orbit .stage-music-disc { width:94%; left:50%; top:52%; border:0; background:radial-gradient(circle,rgb(var(--stage-light-rgb) / .34),rgb(var(--stage-light-rgb) / .15) 65%,transparent); }
+@media (orientation:portrait) {
+  /* Let the reactive backdrop paint beyond the stage without moving its center.
+     Clip only at the screen's horizontal edges, not at the room container. */
+  .mobile-app.is-room { overflow-x:clip; }
+  .mobile-app .m-room-orbit .stage-disc-viewport { overflow:visible; -webkit-mask-image:none; mask-image:none; }
+}
 .mobile-app .m-room-hero.is-away { right:20px; }
 .mobile-app .camera-capsule > i { display:none; }
 /* Keep all three native framing callbacks. Only their mobile presentation changes. */
