@@ -154,6 +154,7 @@
 @media (orientation:landscape) and (min-width:600px) { .mobile-app.is-focus .m-content { grid-template-rows:minmax(200px,1fr); } }
 
 /* A single selected line unfolds; playback and commit actions stay reachable. */
+.mobile-app .m-library-tools, .mobile-app .m-library-results { display:contents; }
 .mobile-app .m-sheet.m-lyrics-sheet { height:min(720px,calc(var(--m-vv-height) - 12px),calc(100dvh - 12px)); overflow:hidden; display:flex; flex-direction:column; }
 .mobile-app .m-lyrics-sheet:not([open]) { display:none; }
 .mobile-app .m-lyrics-sheet > header { position:relative; flex:none; padding:8px 12px 8px 16px; }
@@ -185,3 +186,77 @@
 .mobile-app .m-lyrics-discard { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .mobile-app .m-lyrics-discard > span { flex-basis:100%; font-size:12px; color:var(--m-muted); }
 .mobile-app .m-lyrics-discard > button { flex:1; min-width:0; min-height:44px; font-size:13px; padding:8px; }
+
+/* Landscape workspaces use width; sheets keep a fixed heading and scroll body. */
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app:not(.is-room) .m-content { height:calc(100dvh - var(--m-header-space) - var(--m-footer-space) - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding-block:12px; overflow:hidden; }
+  .mobile-app .m-library-page { display:grid; height:100%; grid-template-columns:clamp(180px,26vw,260px) minmax(0,1fr); grid-template-rows:44px minmax(0,1fr); gap:12px 24px; min-height:0; }
+  .mobile-app .m-library-page > .m-page-heading { grid-column:2; grid-row:1; align-items:center; }
+  .mobile-app .m-library-page > .m-page-heading h1 { font-size:24px; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .mobile-app .m-library-page > .m-page-heading p { display:none; }
+  .mobile-app .m-library-tools { grid-column:1; grid-row:1 / -1; display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; padding-right:8px; }
+  .mobile-app .m-library-results { grid-column:2; grid-row:2; display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; padding-bottom:12px; }
+  .mobile-app .m-library-results > * { flex:none; }
+  .mobile-app .m-library-tools .m-page-heading h1 { font-size:28px; }
+  .mobile-app .m-library-tools .m-page-heading p:last-child { margin-top:4px; }
+  .mobile-app .m-library-tools .m-segment { flex:none; }
+  .mobile-app .m-library-tools .m-search { flex:none; min-height:44px; }
+  .mobile-app .m-library-tools .m-search input { height:44px; }
+  .mobile-app .m-library-tools .m-library-toolbar { flex-wrap:wrap; gap:8px; }
+  .mobile-app .m-library-results .m-song-main { min-height:60px; padding-block:8px; }
+  .mobile-app .m-library-results .m-album-grid { grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); }
+  .mobile-app .m-library-results .m-album-art { max-height:160px; }
+  .mobile-app .m-library-results .m-welcome { min-height:0; gap:12px; padding:12px 4px; }
+  .mobile-app .m-library-results .m-welcome-disc { width:80px; height:80px; }
+  .mobile-app .m-sheet[open] { display:flex; flex-direction:column; overflow:hidden; width:min(840px,calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px)); max-height:min(860px,calc(100dvh - env(safe-area-inset-top) - 12px),calc(var(--m-vv-height) - 12px)); }
+  .mobile-app .m-sheet > header { position:relative; flex:none; padding:8px 16px; }
+  .mobile-app .m-sheet > header h2 { font-size:25px; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+  .mobile-app .m-sheet > header .m-icon { flex:none; }
+  .mobile-app .m-sheet > .m-sheet-content { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:12px 16px max(16px,env(safe-area-inset-bottom)); gap:12px; }
+  .mobile-app .m-sheet > .m-sheet-content > * { flex-shrink:0; }
+  .mobile-app .m-side-sheet[open] { width:min(420px,calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px)); right:env(safe-area-inset-right); }
+  .mobile-app .m-nav-sheet[open] { width:min(320px,calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px)); right:auto; left:env(safe-area-inset-left); }
+  .mobile-app .m-navigation { gap:4px; }
+  .mobile-app .m-navigation > button { min-height:44px; padding:6px 12px; }
+  .mobile-app .m-navigation > button:nth-child(3) { margin-top:8px; }
+  .mobile-app .m-sheet-content:has(> .m-import-option), .mobile-app .m-sheet-content:has(> .m-listening-toggles) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; }
+  .mobile-app .m-sheet-content:has(> .m-import-option) > :not(.m-import-option), .mobile-app .m-listening-toggles { grid-column:1 / -1; }
+  .mobile-app .m-import-option { min-width:0; min-height:84px; padding:12px; }
+  .mobile-app .m-picker-hint a { display:inline-flex; align-items:center; min-height:44px; }
+  .mobile-app .m-companion-options, .mobile-app .m-track-manager, .mobile-app .m-vocal-sources { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .mobile-app .m-companion-options > button, .mobile-app .m-managed-track, .mobile-app .m-vocal-source { min-width:0; }
+  .mobile-app .m-vocal-source { padding:12px; gap:10px; }
+  .mobile-app .m-queue-song strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+  .mobile-app .m-setting-row { min-height:56px; padding-block:12px; }
+  .mobile-app .m-album-song-selection { max-height:180px; overflow:auto; overscroll-behavior:contain; }
+  .mobile-app .m-album-song-selection label { flex:none; min-height:48px; padding-block:6px; }
+  .mobile-app .m-album-sheet > .m-sheet-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr); align-content:start; }
+  .mobile-app .m-album-sheet > .m-sheet-content > * { grid-column:1; min-width:0; }
+  .mobile-app .m-album-sheet > .m-sheet-content > .m-kicker { grid-column:2; grid-row:1; align-self:end; }
+  .mobile-app .m-album-sheet > .m-sheet-content > .m-album-song-selection { grid-column:2; grid-row:2 / span 4; align-self:start; }
+  .mobile-app .m-lyrics-sheet { container-name:mobile-lyric-editor; container-type:size; }
+  .mobile-app .m-lyrics-sheet > .m-sheet-content { display:grid; grid-template-columns:minmax(0,1fr) 224px; grid-template-rows:52px auto minmax(0,1fr); gap:0 16px; overflow:hidden; padding:0 16px; }
+  .mobile-app .m-lyrics-editor-list { grid-column:1; grid-row:1 / -1; min-height:0; }
+  .mobile-app .m-lyrics-editor-toolbar { grid-column:2; grid-row:1; }
+  .mobile-app .m-lyrics-editor-caption { grid-column:2; grid-row:2; }
+  .mobile-app .m-lyrics-editor-bottom { grid-column:2; grid-row:3; align-self:end; padding-block:8px max(12px,env(safe-area-inset-bottom)); }
+  .mobile-app .m-lyrics-editor-controls { gap:4px; }
+  .mobile-app .m-lyrics-editor-controls > .m-button { padding-inline:6px; }
+  .mobile-app .m-lyrics-sheet .m-lyrics-discard { gap:4px; }
+}
+@container mobile-lyric-editor (max-height:240px) {
+  .mobile-app .m-lyrics-sheet .m-lyrics-editor-toolbar, .mobile-app .m-lyrics-sheet .m-lyrics-editor-caption { display:none; }
+  .mobile-app .m-lyrics-sheet > .m-sheet-content { grid-template-rows:minmax(0,1fr); }
+  .mobile-app .m-lyrics-sheet .m-lyrics-editor-bottom { grid-row:1; }
+  .mobile-app .m-lyrics-sheet .m-lyrics-actions { max-height:calc(100cqh - 128px); overflow:auto; }
+}
+
+/* In short landscape keyboard viewports, keep the active field and close action visible. */
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app.has-compact-keyboard .m-sheet > header { position:absolute; top:4px; right:8px; z-index:2; padding:0; border:0; background:transparent; }
+  .mobile-app.has-compact-keyboard .m-sheet > header h2 { display:none; }
+  .mobile-app.has-compact-keyboard .m-sheet > .m-sheet-content { padding:6px 64px 6px 16px; }
+  .mobile-app.has-compact-keyboard .m-field > span { display:none; }
+  .mobile-app.has-compact-keyboard .m-lyrics-editor-bottom { padding:0; }
+  .mobile-app.has-compact-keyboard .m-lyrics-editor-fields textarea { min-height:44px; height:44px; padding-block:8px; }
+}
