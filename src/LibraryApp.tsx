@@ -1,7 +1,6 @@
 import StyledSelect from "./StyledSelect";
 import {
   ArrowDown,
-  ArrowLeftRight,
   ArrowUp,
   AudioLines,
   ChevronDown,
@@ -18,7 +17,6 @@ import {
   Maximize2,
   Minimize2,
   Menu,
-  MoreHorizontal,
   Music2,
   Pause,
   Play,
@@ -54,6 +52,9 @@ import {
 import { flushSync } from "react-dom";
 import Live2DStage from "./Live2DStage";
 import { COMPANIONS, type CompanionId } from "./live2d/models";
+import { desktopPlayerZoomOffset } from "./live2d/playerFraming";
+import TrackActions from "./library/TrackActions";
+import { TrackStatus, TrackVocalProgress } from "./library/TrackStatus";
 import BrandMark from "./BrandMark";
 import UpdateControl from "./UpdateControl";
 import ProcessingDialog from "./ProcessingDialog";
@@ -1799,30 +1800,27 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                     onDragStart={(event) => { event.dataTransfer.setData(TRACK_DRAG_TYPE, track.id); event.dataTransfer.effectAllowed = "all"; albumDragRef.current = activeAlbum ? { albumId: activeAlbum.id, trackId: track.id } : null; if (activeAlbum) { setAlbumDrag(track.id); setMenuTrackId(""); } }}
                     onDragOver={(event) => previewAlbumDrop(event, track.id)}
                     onDrop={(event) => dropAlbumTrack(event, track.id)}
-                    onDoubleClick={() => void playLibraryTrack(track.id)}>
+                    onDoubleClick={event => { if (!(event.target as Element).closest("button, input, [role='dialog']")) void playLibraryTrack(track.id); }}>
                     <button className="track-index" type="button" aria-label={`Play ${trackDisplayName(track.name)}`} title={activeAlbum ? "Drag row to reorder · Click to play" : undefined} onClick={() => void playLibraryTrack(track.id)}>{active && isPlaying ? <AudioLines size={14} /> : String(index + 1).padStart(2, "0")}{activeAlbum && <GripVertical className="album-drag-grip" size={14} aria-hidden="true" />}</button>
-                    <span className="track-title"><label className="vocal-track-select">{vocalSelectionMode && <input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} />}<strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small></span>
-                    <span className="track-states">
-                      <span className={`track-availability availability-${track.availability} ${track.persistence === "cached" ? "is-cached" : ""}`}>{track.persistence === "cached" ? "On device" : track.availability === "available" ? "Available" : track.availability === "session" ? "This session" : track.availability === "missing" ? "Missing" : "Reconnect"}</span>
-                      {((vocalJob && vocalJob.status !== "idle") || track.vocalAnalysis) && <span className="track-vocal-job" role="status">
-                        {vocalJob?.status === "working" || vocalJob?.status === "queued" ? <><span>{vocalJob.phase} · {Math.round(vocalJob.progress * 100)}%</span><progress aria-label={`Vocal preparation for ${trackDisplayName(track.name)}`} max={1} value={vocalJob.progress} /><button type="button" aria-label={`Cancel vocal preparation for ${trackDisplayName(track.name)}`} onClick={() => libraryVocals.cancel(jobKey)}>Cancel</button></> : vocalJob?.status === "error" ? <><span>{vocalJob.error}</span><button type="button" onClick={() => libraryVocals.prepare([track])}>Retry</button></> : track.vocalAnalysis?.version === 4 || vocalJob?.status === "ready" ? "Vocals ready" : "Reprepare lip sync"}
-                      </span>}
-                      <span className="track-feature-icons">
-                        {(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <span className="has-lyrics" role="img" aria-label={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"} title={track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached"}><FileText size={13} /></span>}
-                        {comparisonsOf(track).length > 0 && <span className={`has-version-b comparison-${comparisonsOf(track)[0].availability}`} role="img" aria-label={`${comparisonsOf(track).length} comparison tracks attached`} title={`${comparisonsOf(track).length} comparison versions`}><ArrowLeftRight size={13} /></span>}
-                      </span>
+                    <span className="track-title"><label className="vocal-track-select">{vocalSelectionMode && <input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} />}<strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small>
+                      <TrackVocalProgress trackName={trackDisplayName(track.name)} job={vocalJob} onCancel={() => libraryVocals.cancel(jobKey)} onRetry={() => libraryVocals.prepare([track])} />
                     </span>
+                    <TrackStatus track={track} job={vocalJob} />
                     <span className="track-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
-                    <span className="track-menu-wrap"><button type="button" aria-label={`Actions for ${trackDisplayName(track.name)}`} onClick={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)}><MoreHorizontal size={18} /></button>
-                      {menuTrackId === track.id && <span className="track-popover">
-                        {!!albums.length && <label className="track-album-select">Add to album<StyledSelect label={`Add ${trackDisplayName(track.name)} to album`} value="" onChange={value => { if (value) addTrackToAlbum(value, track.id); }} options={[{ value: "", label: "Choose album…", disabled: true }, ...albums.map(album => ({ value: album.id, label: album.name }))]}/></label>}
-                        {activeAlbumId && <button type="button" onClick={() => { setAlbums((current) => current.map((album) => album.id === activeAlbumId ? { ...album, trackIds: album.trackIds.filter((id) => id !== track.id) } : album)); setMenuTrackId(""); }}>Remove from album</button>}
-                        {activeAlbum && ["before", "after"].map(edge => {
-                          const position = activeAlbum.trackIds.indexOf(track.id), targetId = activeAlbum.trackIds[position + (edge === "before" ? -1 : 1)];
-                          return <button key={edge} type="button" disabled={!targetId} onClick={() => { setAlbums(current => current.map(album => album.id === activeAlbum.id ? reorderAlbumTrack(album, track.id, targetId, edge as "before" | "after") : album)); setMenuTrackId(""); setMessage("Album order saved."); }}>{edge === "before" ? "Move up in album" : "Move down in album"}</button>;
-                        })}
-                        <button type="button" onClick={() => { libraryVocals.prepare([track]); setMenuTrackId(""); }}>Prepare vocal lip sync</button><button type="button" onClick={() => addPlayNext(track.id)}>Play next</button><button type="button" onClick={() => appendQueue(track.id)}>Add to queue</button><button type="button" onClick={() => openLyricsPicker(track.id)}>{(track.lyrics.length || track.lyricTiming?.length) ? "Replace lyrics (.lrc / .txt)" : "Attach lyrics (.lrc / .txt)"}</button>{(track.lyrics.length > 0 || !!track.lyricTiming?.length) && <button type="button" onClick={() => removeTrackLyrics(track.id)}>Remove lyrics</button>}{(track.lyrics.length > 0 || track.lyricTiming !== undefined) && <button type="button" onClick={() => void openTimingEditor(track.id)}>{track.lyrics.length ? "Edit timing" : "Timestamp lyrics"}</button>}<button type="button" onClick={() => void toggleTrackCache(track)}>{track.persistence === "cached" ? "Remove cached copy" : "Keep on this device"}</button><button type="button" onClick={() => openComparison(track.id)}>Open in player / compare</button></span>}
-                    </span>
+                    <TrackActions track={track} trackName={trackDisplayName(track.name)} job={vocalJob} open={menuTrackId === track.id} albums={albums} activeAlbum={activeAlbum ?? undefined}
+                      onToggle={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)} onClose={() => setMenuTrackId(current => current === track.id ? "" : current)}
+                      onOpenPlayer={() => openComparison(track.id)} onNext={() => addPlayNext(track.id)} onQueue={() => appendQueue(track.id)}
+                      onPrepare={() => libraryVocals.prepare([track])} onCancelVocals={() => libraryVocals.cancel(jobKey)}
+                      onAttachLyrics={() => openLyricsPicker(track.id)} onRemoveLyrics={() => removeTrackLyrics(track.id)} onEditTiming={() => void openTimingEditor(track.id)}
+                      onToggleCache={() => void toggleTrackCache(track)} onReconnect={() => openFiles(true)} onAddToAlbum={id => addTrackToAlbum(id, track.id)}
+                      onRemoveFromAlbum={() => { setAlbums(current => current.map(album => album.id === activeAlbumId ? { ...album, trackIds: album.trackIds.filter(id => id !== track.id) } : album)); setMenuTrackId(""); }}
+                      onMoveInAlbum={edge => {
+                        if (!activeAlbum) return;
+                        const position = activeAlbum.trackIds.indexOf(track.id), targetId = activeAlbum.trackIds[position + (edge === "before" ? -1 : 1)];
+                        if (!targetId) return;
+                        setAlbums(current => current.map(album => album.id === activeAlbum.id ? reorderAlbumTrack(album, track.id, targetId, edge) : album));
+                        setMenuTrackId(""); setMessage("Album order saved.");
+                      }} />
                   </div>
                 );
               })}
@@ -1836,7 +1834,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
           <aside className="persistent-stage-panel">
             {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
-            <div className="persistent-stage-canvas"><Live2DStage companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
+            <div className="persistent-stage-canvas"><Live2DStage companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} playerZoomOffset={desktopPlayerZoomOffset} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><span className={`is-active source-${activeSource === 0 ? "a" : "b"}`}>{activeSource + 1}</span><small>{comparisonReady ? `Listening to track ${activeSource + 1}` : "Solo playback"}</small></div>
           </aside>
         </div>

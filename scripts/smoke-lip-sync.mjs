@@ -168,8 +168,10 @@ async function smoke() {
     const sharedWorkers = await run("window.__workerStarts");
     assert.equal(sharedWorkers, workersBeforeSubmission + 2, "one separation and one MotionSync worker start for the submitted source");
     await click('[aria-label="Actions for Voice A"]');
-    await run(`[...document.querySelectorAll('.track-popover button')].find(b=>b.textContent==='Prepare vocal lip sync').click()`);
-    assert.equal(await run("window.__workerStarts"), sharedWorkers, "duplicate menu submission is deduplicated");
+    assert.equal(await run(`[...document.querySelectorAll('.track-popover button')].some(b=>b.textContent==='Prepare vocal lip sync')`), false, "busy menu does not offer a duplicate submission");
+    assert.ok(await run(`[...document.querySelectorAll('.track-popover button')].some(b=>b.textContent==='Cancel preparation')`), "busy menu offers cancellation");
+    assert.equal(await run("window.__workerStarts"), sharedWorkers, "opening the busy menu starts no extra workers");
+    await click('[aria-label="Actions for Voice A"]');
     await click('button[title="Player"]');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')`, 'Player card mounted');
     await waitFor(`document.querySelector('.version-a .card-perimeter-progress')`, "progress bar");
@@ -271,7 +273,7 @@ async function smoke() {
     await waitFor(`document.querySelector('[aria-label="Cancel vocal preparation for Queued cancellation"]')`, "second song queued");
     await click('[aria-label="Cancel vocal preparation for Queued cancellation"]');
     const startsBeforeLibrary = await run("window.__sourceStarts");
-    await waitFor(`[...document.querySelectorAll('.track-row')].find(row => row.textContent.includes('Library vocal preparation'))?.textContent.includes('Vocals ready')`, "library vocal preparation finished", true);
+    await waitFor(`[...document.querySelectorAll('.track-row')].find(row => row.textContent.includes('Library vocal preparation'))?.querySelector('.vocal-ready')`, "library vocal preparation finished", true);
     assert.equal(await run("window.__sourceStarts"), startsBeforeLibrary, "library preparation does not replace playback sources");
     assert.ok(await run(`document.querySelector('.library-list-panel') !== null`), "processing stays in Library");
     await capture("library-vocal-preparation");
@@ -320,7 +322,7 @@ async function smoke() {
     await ready('hiyori');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')?.getAttribute('aria-label') === 'Prepare vocals track 1' && !document.querySelector('[data-vocal-track="1"]').disabled`, 'legacy cache needs preparation');
     await click('button[title="Library"]');
-    await waitFor(`document.querySelector('.track-row.is-active .track-vocal-job')?.textContent === 'Reprepare lip sync'`, 'Library marks legacy cache');
+    await waitFor(`document.querySelector('.track-row.is-active .vocal-outdated')`, 'Library marks legacy cache');
     await click('button[title="Player"]');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')`, 'Player card mounted');
     await click('[data-vocal-track="1"]');

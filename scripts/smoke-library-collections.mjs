@@ -256,7 +256,7 @@ async function smoke() {
     })()`);
     assert.deepEqual(await summary(), [1, 1, 0, 1], "a mixed directory/file drop works in the populated library");
     assert.equal((await rows()).length, 3, "files dropped on an album join its collection");
-    await click('[aria-label="Actions for New album song"]'); await button("Remove from album");
+    await click('[aria-label="Actions for New album song"]'); await button("Albums…"); await button("Remove from album");
     await waitFor(`document.querySelectorAll('.track-title').length === 2`, "song removed from album");
     await selectAlbum("All songs");
     assert.equal((await rows()).length, 4, "removing from an album preserves the library song");
@@ -312,6 +312,55 @@ async function smoke() {
     await browseAlbums();
     assert.equal(await run(`document.querySelectorAll('.album-card').length`), 2, "only the selected album is deleted");
     console.log("PASS virtual album creation, cover upload, filtered playback, internal drag, album file imports, removal, rename, persistence, deletion, and narrow layout");
+    // A persisted current analysis and an old cache exercise the actual restored
+    // Library without downloading a separation model or touching a user profile.
+    await waitFor(`(async () => {
+      const db = await new Promise(resolve => {const r=indexedDB.open('vibloom-library');r.onsuccess=()=>resolve(r.result);});
+      try {const snapshot=await new Promise(resolve=>{const r=db.transaction('state').objectStore('state').get('library');r.onsuccess=()=>resolve(r.result);});return snapshot?.tracks.length===4&&snapshot.albums.length===2;}
+      finally {db.close();}
+    })()`, "final collection changes persisted");
+    const readyId = await run(`(async () => {
+      const db=await new Promise(resolve=>{const r=indexedDB.open('vibloom-library');r.onsuccess=()=>resolve(r.result);});
+      try {
+        const snapshot=await new Promise(resolve=>{const r=db.transaction('state').objectStore('state').get('library');r.onsuccess=()=>resolve(r.result);});
+        const ready=snapshot.tracks.find(track=>track.lyrics.length||track.lyricTiming?.length),old=snapshot.tracks.find(track=>track.id!==ready.id);
+        const frames=Math.ceil((ready.duration||2)*50);ready.duration=ready.duration||2;
+        ready.vocalAnalysis={version:4,rms:Array(frames).fill(.1),vowels:Array(frames*5).fill(0)};
+        old.vocalAnalysis={version:1,rms:[.1,.2]};snapshot.session.currentTrackId='';
+        await new Promise((resolve,reject)=>{const tx=db.transaction('state','readwrite');tx.objectStore('state').put(snapshot,'library');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});
+        return ready.id;
+      } finally {db.close();}
+    })()`);
+    await window.loadURL("vibloom://app/index.html");
+    await waitFor(`document.querySelector('.open-library-button')`, "fixture library restored"); await click('.open-library-button');
+    await waitFor(`document.querySelectorAll('.track-row[data-track-id]').length===4&&!document.documentElement.classList.contains('is-scene-transitioning')`, "fixture Library visible");
+    assert.equal(await run(`document.querySelectorAll('.vocal-ready').length`),1,"current analysis has a ready icon");
+    assert.equal(await run(`document.querySelectorAll('.vocal-outdated').length`),1,"old analysis is not presented as ready");
+    assert.ok(await run(`(()=>{const rows=[...document.querySelectorAll('.track-row[data-track-id]')];const x=rows[0].querySelector('.track-states').getBoundingClientRect().x;return rows.every(row=>row.querySelectorAll('.track-status-icon').length===3&&Math.abs(row.querySelector('.track-states').getBoundingClientRect().x-x)<1&&!row.querySelector('.track-vocal-job'));})()`),"three fixed feature slots align across prepared and unprepared songs");
+    const readyRow = `[...document.querySelectorAll('.track-row[data-track-id]')].find(row=>row.dataset.trackId===${JSON.stringify(readyId)})`;
+    await run(`${readyRow}.querySelector('.track-menu-wrap > button').click()`);
+    await waitFor(`document.querySelector('.track-action-popover:popover-open')`, "native song popover visible");
+    assert.equal(await run(`[...document.querySelectorAll('.track-action-popover button')].some(b=>b.textContent.includes('Prepare vocal lip sync'))`),false,"prepared song has no redundant prepare action");
+    window.webContents.sendInputEvent({type:'keyDown',keyCode:'Down'});window.webContents.sendInputEvent({type:'keyUp',keyCode:'Down'});
+    await waitFor(`document.activeElement?.textContent==='Play next'`,"arrow navigation selects the next action");
+    await button("Lyrics…");
+    assert.ok(await run(`document.querySelector('.track-action-file')`),"lyrics submenu shows its file");
+    assert.ok(await run(`[...document.querySelectorAll('.track-action-popover button')].some(b=>b.textContent==='Remove lyrics')`),"lyrics removal remains available");
+    window.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});window.webContents.sendInputEvent({type:'keyUp',keyCode:'Escape'});
+    await waitFor(`!document.querySelector('.track-action-popover')`,"Escape dismisses the song popover");
+    assert.ok(await run(`${readyRow}.querySelector('.track-menu-wrap > button')===document.activeElement`),"Escape restores focus to the trigger");
+    await run(`${readyRow}.querySelector('.track-menu-wrap > button').click()`);await button("Albums…");
+    await click('.track-action-album-select .styled-select-trigger');
+    await waitFor(`document.querySelector('.styled-select-menu:popover-open')`,"nested album selector opens");
+    assert.ok(await run(`document.querySelector('.track-action-popover:popover-open')`),"opening an album selector keeps its parent popover open");
+    await run(`document.querySelector('.styled-select-menu:popover-open button:not(:disabled)').click()`);
+    await waitFor(`!document.querySelector('.track-action-popover')`,"adding an album closes the menu");
+    window.setSize(1100,700);await delay(200);
+    await run(`[...document.querySelectorAll('.track-row[data-track-id]')].at(-1).querySelector('.track-menu-wrap > button').click()`);
+    await waitFor(`document.querySelector('.track-action-popover:popover-open')`,"bottom-row menu visible");
+    assert.ok(await run(`(()=>{const p=document.querySelector('.track-action-popover').getBoundingClientRect(),a=[...document.querySelectorAll('.track-row[data-track-id]')].at(-1).querySelector('.track-menu-wrap > button').getBoundingClientRect();return p.top>=11&&p.left>=11&&p.bottom<=innerHeight-11&&p.right<=innerWidth-11&&p.top<a.top;})()`),"bottom-row menu flips upward and stays inside the viewport");
+    await writeFile(path.join(output,'library-actions-bottom.png'),(await window.webContents.capturePage()).toPNG());
+    console.log("PASS fixed ready/legacy status slots, compact lyric actions, keyboard focus restoration, nested album selection and viewport-aware popovers");
   } catch (error) {
     console.error(error);
     exitCode = 1;
