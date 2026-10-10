@@ -210,6 +210,7 @@
   .mobile-app .m-library-tools .m-search input { height:44px; }
   .mobile-app .m-library-tools .m-library-toolbar { flex-wrap:wrap; gap:8px; }
   .mobile-app .m-library-results .m-song-main { min-height:60px; padding-block:8px; }
+  .mobile-app .m-library-results .library-render-group { contain-intrinsic-block-size:auto calc(var(--render-count) * 61px) !important; }
   .mobile-app .m-library-results .m-album-grid { grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); }
   .mobile-app .m-library-results .m-album-art { max-height:160px; }
   .mobile-app .m-library-results .m-welcome { min-height:0; gap:12px; padding:12px 4px; }

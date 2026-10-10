@@ -5,17 +5,53 @@ export type TrackAvailability = "available" | "reconnect" | "missing" | "session
 export type TrackPersistence = "indexed" | "cached";
 export type RepeatMode = "off" | "all" | "one";
 
-export type MotionVocalAnalysis = { version: 4; rms: number[]; vowels: number[] };
-export type VocalAnalysis = { version: 1; rms: number[] } | { version: 2 | 3; rms: number[]; visemes: number[] } | MotionVocalAnalysis;
+export type MotionVocalAnalysis = { version: 4; rms: number[] | Float64Array; vowels: number[] | Uint8Array };
+export type VocalAnalysisReference = { version: 4; frames: number; cacheKey: string };
+export type VocalAnalysis = { version: 1; rms: number[] } | { version: 2 | 3; rms: number[]; visemes: number[] } | MotionVocalAnalysis | VocalAnalysisReference;
+
+// Analysis objects are immutable once published. Cache the expensive contents
+// check by identity; duration is checked on every call, including unknown -> known.
+const vocalValidity = new WeakMap<MotionVocalAnalysis, boolean>();
 
 /** Old classifier caches remain metadata until explicitly re-prepared. Never
  * interpret their discrete labels as MotionSync's frame-major byte weights. */
 export function isCurrentVocalAnalysis(analysis: VocalAnalysis | undefined, duration?: number): analysis is MotionVocalAnalysis {
-  return analysis?.version === 4 && Array.isArray(analysis.rms) && Array.isArray(analysis.vowels)
-    && (duration === undefined || analysis.rms.length === Math.ceil(duration * 50))
-    && analysis.vowels.length === analysis.rms.length * 5
-    && analysis.rms.every(value => Number.isFinite(value) && value >= 0 && value <= 1)
-    && analysis.vowels.every(value => Number.isInteger(value) && value >= 0 && value <= 255);
+  if (analysis?.version !== 4 || !("rms" in analysis)
+    || !(Array.isArray(analysis.rms) || analysis.rms instanceof Float64Array)
+    || !(Array.isArray(analysis.vowels) || analysis.vowels instanceof Uint8Array)
+    || analysis.vowels.length !== analysis.rms.length * 5) return false;
+  if (duration !== undefined && analysis.rms.length !== Math.ceil(duration * 50)) return false;
+  let valid = vocalValidity.get(analysis);
+  if (valid === undefined) {
+    valid = (Array.isArray(analysis.rms) || analysis.rms instanceof Float64Array)
+      && (Array.isArray(analysis.vowels) || analysis.vowels instanceof Uint8Array)
+      && analysis.vowels.length === analysis.rms.length * 5
+      && analysis.rms.every(value => Number.isFinite(value) && value >= 0 && value <= 1)
+      && analysis.vowels.every(value => Number.isInteger(value) && value >= 0 && value <= 255);
+    vocalValidity.set(analysis, valid);
+  }
+  return valid;
+}
+
+export function isVocalAnalysisReference(analysis: VocalAnalysis | undefined): analysis is VocalAnalysisReference {
+  return analysis?.version === 4 && "cacheKey" in analysis && typeof analysis.cacheKey === "string" && !!analysis.cacheKey
+    && Number.isSafeInteger(analysis.frames) && analysis.frames > 0;
+}
+export function isVocalAnalysisReady(analysis: VocalAnalysis | undefined, duration?: number) {
+  return isVocalAnalysisReference(analysis)
+    ? duration === undefined || analysis.frames === Math.ceil(duration * 50)
+    : isCurrentVocalAnalysis(analysis, duration);
+}
+export function clearVocalReference(tracks: LibraryTrack[], cacheKey: string) {
+  let changed = false;
+  const matches = (value: VocalAnalysis | undefined) => isVocalAnalysisReference(value) && value.cacheKey === cacheKey;
+  const next = tracks.map(track => {
+    const original = matches(track.vocalAnalysis), versions = comparisonsOf(track);
+    if (!original && !versions.some(item => matches(item.vocalAnalysis))) return track;
+    changed = true;
+    return withComparisons({ ...track, ...(original ? { vocalAnalysis: undefined } : {}) }, versions.map(item => matches(item.vocalAnalysis) ? { ...item, vocalAnalysis: undefined } : item));
+  });
+  return changed ? next : tracks;
 }
 
 export type TrackComparison = {

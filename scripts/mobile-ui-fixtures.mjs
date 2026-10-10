@@ -19,7 +19,7 @@ export async function seedMobile(page, library, wave) {
     const bytes = new Uint8Array(data);
     const request=indexedDB.open('vibloom-mobile-library',2);
     const db=await new Promise((resolve,reject)=>{request.onupgradeneeded=()=>{for(const name of ['state','audio'])if(!request.result.objectStoreNames.contains(name))request.result.createObjectStore(name);};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
-    await new Promise((resolve,reject)=>{const tx=db.transaction(['state','audio'],'readwrite');tx.objectStore('state').put(library,'library');
+    await new Promise((resolve,reject)=>{const tx=db.transaction(['state','audio'],'readwrite');tx.objectStore('state').put(library,'library');tx.objectStore('state').delete('session');
       for(const track of library.tracks)tx.objectStore('audio').put({bytes:bytes.buffer,type:'audio/wav'},track.id);
       for(const version of library.tracks[0].comparisons)tx.objectStore('audio').put({bytes:bytes.buffer,type:'audio/wav'},version.cacheKey);
       tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();

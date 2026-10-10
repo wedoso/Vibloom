@@ -148,6 +148,20 @@ function createMainWindow() {
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  let lastVisibility;
+  const publishVisibility = () => {
+    if (window.isDestroyed()) return;
+    const visible = window.isVisible() && !window.isMinimized();
+    if (visible === lastVisibility) return;
+    lastVisibility = visible;
+    window.webContents.send("window:visibility", visible);
+  };
+  for (const event of ["show", "hide", "minimize", "restore"]) window.on(event, publishVisibility);
+  // Some native window transitions omit visibility events. Keep the renderer
+  // in sync without repeatedly sending IPC or throttling its audio scheduler.
+  const visibilityTimer = setInterval(publishVisibility, 500);
+  visibilityTimer.unref();
+  window.once("closed", () => clearInterval(visibilityTimer));
   window.webContents.on("will-navigate", (event, targetUrl) => {
     if (!isAllowedNavigation(targetUrl)) event.preventDefault();
   });
@@ -271,6 +285,10 @@ app.whenReady().then(async () => {
   await registerAppProtocol();
   installSessionGuards();
   installUpdateHandlers();
+  ipcMain.handle("window:visibility", event => {
+    if (!mainWindow || event.sender !== mainWindow.webContents || !isAllowedNavigation(event.senderFrame.url)) throw new Error("Window state request came from an untrusted renderer.");
+    return mainWindow.isVisible() && !mainWindow.isMinimized();
+  });
   mainWindow = createMainWindow();
 
   app.on("activate", () => {

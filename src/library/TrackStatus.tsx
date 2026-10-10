@@ -1,11 +1,11 @@
 import { useMemo, type ReactNode } from "react";
-import { ArrowLeftRight, Check, CircleAlert, Clock3, FileText, LoaderCircle, MicVocal } from "lucide-react";
-import { comparisonsOf, isCurrentVocalAnalysis, type LibraryTrack } from "../domain/library";
+import { LibraryIcon } from "./LibraryIcons";
+import { comparisonsOf, isVocalAnalysisReady, type LibraryTrack } from "../domain/library";
 import type { VocalJob } from "../audio/vocals/jobStore";
 
 export function useVocalPreparationState(track: LibraryTrack, job?: VocalJob) {
-  const ready = useMemo(() => isCurrentVocalAnalysis(track.vocalAnalysis, track.duration || undefined)
-    || job?.status === "ready" && isCurrentVocalAnalysis(job.analysis, track.duration || undefined),
+  const ready = useMemo(() => isVocalAnalysisReady(track.vocalAnalysis, track.duration || undefined)
+    || job?.status === "ready" && isVocalAnalysisReady(job.analysis, track.duration || undefined),
   [track.vocalAnalysis, track.duration, job?.status, job?.analysis]);
   if (job?.status === "working" || job?.status === "queued" || job?.status === "error") return job.status;
   return ready ? "ready" : track.vocalAnalysis ? "outdated" : "idle";
@@ -33,11 +33,11 @@ export function TrackStatus({ track, job }: { track: LibraryTrack; job?: VocalJo
     <span className={`track-availability availability-${track.availability} ${track.persistence === "cached" && !unavailable ? "is-cached" : ""}`}>{availability}</span>
     <span className="track-feature-icons">
       <Feature label={vocalLabel} className={`has-vocals vocal-${state} ${state === "idle" || state === "outdated" ? "is-muted" : ""}`}>
-        {state === "working" ? <LoaderCircle size={14} className="vocal-spinner" /> : state === "queued" ? <Clock3 size={14} /> : state === "error" ? <CircleAlert size={14} /> : <MicVocal size={14} />}
-        {state === "ready" && <Check className="vocal-ready-check" size={8} />}
+        <LibraryIcon name={state === "working" ? "LoaderCircle" : state === "queued" ? "Clock3" : state === "error" ? "CircleAlert" : "MicVocal"} size={14} className={state === "working" ? "vocal-spinner" : ""} />
+        {state === "ready" && <LibraryIcon name="Check" className="vocal-ready-check" size={8} />}
       </Feature>
-      <Feature label={lyrics ? track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached" : "No lyrics attached"} className={lyrics ? "has-lyrics" : "is-muted"}><FileText size={14} /></Feature>
-      <Feature label={comparisons.length ? `${comparisons.length} comparison tracks attached${comparisonUnavailable ? " · Reconnect audio" : ""}` : "No comparison tracks attached"} className={comparisons.length ? `has-version-b ${comparisonUnavailable ? "comparison-reconnect" : ""}` : "is-muted"}><ArrowLeftRight size={14} /></Feature>
+      <Feature label={lyrics ? track.lyrics.length ? "Synced lyrics attached" : "TXT lyrics attached" : "No lyrics attached"} className={lyrics ? "has-lyrics" : "is-muted"}><LibraryIcon name="FileText" size={14} /></Feature>
+      <Feature label={comparisons.length ? `${comparisons.length} comparison tracks attached${comparisonUnavailable ? " · Reconnect audio" : ""}` : "No comparison tracks attached"} className={comparisons.length ? `has-version-b ${comparisonUnavailable ? "comparison-reconnect" : ""}` : "is-muted"}><LibraryIcon name="ArrowLeftRight" size={14} /></Feature>
     </span>
   </span>;
 }
@@ -47,7 +47,7 @@ export function TrackVocalProgress({ trackName, job, onCancel, onRetry }: { trac
   const error = job.status === "error";
   return <span className={`track-vocal-job ${error ? "is-error" : ""}`} role="status">
     <span className="track-vocal-phase" title={error ? job.error : job.phase} aria-label={error ? job.error : undefined}>
-      {error ? <><CircleAlert size={10} /> Lip sync preparation failed</> : `${job.phase} · ${Math.round(job.progress * 100)}%`}
+      {error ? <><LibraryIcon name="CircleAlert" size={10} /> Lip sync preparation failed</> : `${job.phase} · ${Math.round(job.progress * 100)}%`}
     </span>
     <button type="button" aria-label={`${error ? "Retry" : "Cancel"} vocal preparation for ${trackName}`} onClick={error ? onRetry : onCancel}>{error ? "Retry" : "Cancel"}</button>
     {!error && <progress aria-label={`Vocal preparation for ${trackName}`} max={1} value={job.progress} />}

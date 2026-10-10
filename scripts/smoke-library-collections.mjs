@@ -327,7 +327,7 @@ async function smoke() {
         const frames=Math.ceil((ready.duration||2)*50);ready.duration=ready.duration||2;
         ready.vocalAnalysis={version:4,rms:Array(frames).fill(.1),vowels:Array(frames*5).fill(0)};
         old.vocalAnalysis={version:1,rms:[.1,.2]};snapshot.session.currentTrackId='';
-        await new Promise((resolve,reject)=>{const tx=db.transaction('state','readwrite');tx.objectStore('state').put(snapshot,'library');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});
+        await new Promise((resolve,reject)=>{const tx=db.transaction('state','readwrite');tx.objectStore('state').put(snapshot,'library');tx.objectStore('state').delete('session');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});
         return ready.id;
       } finally {db.close();}
     })()`);

@@ -22,8 +22,10 @@ export class SynchronizedAudioEngine {
   private playbackStartedAt = 0;
   private playing = false;
   private playRequest = 0;
+  private disposed = false;
   constructor(private readonly contextFactory: () => AudioContext = () => new AudioContext()) {}
   async ensureGraph(resume = true, volume = .9) {
+    if (this.disposed) throw new DOMException("Audio engine closed", "AbortError");
     if (!this.graph) {
       const context = this.contextFactory(), master = context.createGain();
       const analysers = Array.from({ length: MAX_AUDIO_SOURCES }, () => context.createAnalyser());
@@ -35,8 +37,10 @@ export class SynchronizedAudioEngine {
       master.connect(context.destination); master.gain.value = volume;
       this.graph = { context, analysers, gains, master };
     }
-    if (resume && this.graph.context.state === "suspended") await this.graph.context.resume();
-    return this.graph.context;
+    const graph = this.graph;
+    if (resume && graph.context.state === "suspended") await graph.context.resume();
+    if (this.disposed || this.graph !== graph) throw new DOMException("Audio engine closed", "AbortError");
+    return graph.context;
   }
   get isPlaying() { return this.playing; }
   get currentOffset() { return this.playbackOffset; }
@@ -57,6 +61,7 @@ export class SynchronizedAudioEngine {
   }
   getBuffer(index: AudioSourceIndex) { valid(index); this.touched[index] = ++this.stamp; return this.buffers[index]; }
   setBuffer(index: AudioSourceIndex, buffer: AudioBuffer | null) {
+    if (this.disposed && buffer) throw new DOMException("Audio engine closed", "AbortError");
     valid(index); if (this.preview && (this.preview.source === index || this.preview.returnSource === index)) this.endPreview(); this.stopSource(index); this.buffers[index] = buffer; this.durations[index] = buffer?.duration ?? 0; this.touched[index] = ++this.stamp;
   }
   setDuration(index: AudioSourceIndex, duration: number) { valid(index); this.durations[index] = Math.max(0, duration); }
@@ -81,7 +86,10 @@ export class SynchronizedAudioEngine {
     this.sourceEnds[index] = when + buffer.duration - Math.max(0, offset); return true;
   }
   async play(offset: number, leadSeconds: number, volume: number) {
-    const request = ++this.playRequest, context = await this.ensureGraph(true, volume);
+    const request = ++this.playRequest;
+    let context: AudioContext;
+    try { context = await this.ensureGraph(true, volume); }
+    catch (error) { if (this.disposed) return false; throw error; }
     if (request !== this.playRequest) return false;
     this.stopAllSources();
     if (offset >= this.getMaxDuration() || !this.buffers[this.active]) return false;
@@ -215,6 +223,7 @@ export class SynchronizedAudioEngine {
   setVolume(volume: number) { this.graph?.master.gain.setTargetAtTime(volume, this.graph.context.currentTime, .015); }
   clearBuffers() { this.endPreview(false); this.stopAllSources(); this.buffers.fill(null); this.durations.fill(0); }
   async close() {
+    this.disposed = true;
     this.playRequest++; this.playing = false; this.clearBuffers();
     const graph = this.graph; this.graph = null;
     if (graph) { for (const node of [...graph.analysers, ...graph.gains, graph.master]) node.disconnect(); if (graph.context.state !== "closed") await graph.context.close(); }

@@ -1,4 +1,5 @@
-import type { LibrarySnapshot, StoredLibrarySnapshot } from "../domain/library";
+import type { LibrarySession, LibrarySnapshot, StoredLibrarySnapshot } from "../domain/library";
+import type { VocalAnalysisStore } from "../audio/vocals/analysisStore";
 
 export type StorageState = {
   usage: number;
@@ -9,6 +10,7 @@ export type StorageState = {
 export interface LibraryRepository {
   load(): Promise<StoredLibrarySnapshot | null>;
   save(snapshot: LibrarySnapshot): Promise<void>;
+  saveSession?(session: LibrarySession): Promise<void>;
   reset(): Promise<void>;
 }
 
@@ -29,4 +31,5 @@ export type LibraryPlatform = {
   audioFiles: AudioFileStore;
   storage: DeviceStorageManager;
   runtime: "web" | "desktop";
+  vocalAnalyses?: VocalAnalysisStore;
 };

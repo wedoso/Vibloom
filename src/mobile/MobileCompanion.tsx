@@ -6,9 +6,13 @@ import { SILENT_VOCAL_POSE } from "../audio/vocals/envelope";
 import type { MobileLibrary } from "./useMobileLibrary";
 import { bindMobileModelPinch } from "./modelPinch";
 import { mobileModelZoomOffset } from "./modelFraming";
+import { useVisualActivity } from "../platform/useVisualActivity";
+import MobileVocalProgress from "./MobileVocalProgress";
+import { mobileTrackLabel } from "./comparison";
 const Live2DStage = lazy(() => import("../Live2DStage"));
 
-export default function MobileCompanion({ library, focus, onVocals }: { library: MobileLibrary; focus: boolean; onVocals: () => void }) {
+export default function MobileCompanion({ library, focus, onVocals, visible = true }: { library: MobileLibrary; focus: boolean; onVocals: () => void; visible?: boolean }) {
+  const renderActive = useVisualActivity(visible);
   const host = useRef<HTMLDivElement>(null);
   const zoomReadout = useRef<HTMLOutputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -52,6 +56,7 @@ export default function MobileCompanion({ library, focus, onVocals }: { library:
   const { sampleVocals } = library.vocals;
   const visual = useRef({ ...EMPTY_AUDIO_VISUAL }), vocals = useRef(SILENT_VOCAL_POSE);
   useEffect(() => {
+    if (!renderActive) return;
     let frame = 0;
     const frequency = new Uint8Array(512), samples = new Uint8Array(1024);
     const tick = () => {
@@ -66,8 +71,12 @@ export default function MobileCompanion({ library, focus, onVocals }: { library:
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [library.engine, library.playing, library.source, library.comparisons.slots, sampleVocals, library.session.volume]);
+  }, [library.engine, library.playing, library.source, library.comparisons.slots, sampleVocals, library.session.volume, renderActive]);
   const vocalStatus = library.current ? library.vocals.state(library.current, library.source) : null;
+  const tasks = library.vocals.activeJobs.filter(task => task.track.id === library.current?.id);
+  const vocalTask = tasks.find(task => task.job?.status === "working") ?? tasks.find(task => task.job?.status === "queued") ?? tasks[0];
+  const progressJob = vocalTask?.job;
+  const progressLabel = `Vocal preparation for track ${mobileTrackLabel(vocalTask?.source ?? library.source)}`;
   return <div ref={host} className={`m-companion ${cameraOpen ? "is-camera-open" : ""}`} onClickCapture={event => {
     const button = (event.target as Element).closest("button");
     if (!button?.closest(".camera-capsule") || button.classList.contains("m-stage-camera")) return;
@@ -75,12 +84,12 @@ export default function MobileCompanion({ library, focus, onVocals }: { library:
     if (!button.classList.contains("m-stage-vocals")) requestAnimationFrame(() => capsule?.querySelector<HTMLButtonElement>(".m-stage-camera")?.focus());
   }}>
     <Suspense fallback={<p className="m-muted">Opening your listening room…</p>}>
-      <Live2DStage companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" playerZoomOffset={mobileModelZoomOffset} />
+      <Live2DStage renderActive={renderActive} companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" playerZoomOffset={mobileModelZoomOffset} />
     </Suspense>
     <output ref={zoomReadout} className="m-pinch-readout" aria-label="Model zoom" hidden />
     {capsule && createPortal(<>
       <button type="button" className="m-stage-camera" aria-label="Camera controls" aria-expanded={cameraOpen} title="Camera framing" onClick={() => setCameraOpen(value => !value)}><ScanFace size={19} strokeWidth={1.7} /></button>
-      <button type="button" className={vocalStatus?.enabled ? "m-stage-vocals is-active" : "m-stage-vocals"} aria-label="Vocal lip sync" aria-haspopup="dialog" aria-pressed={vocalStatus?.enabled ?? false} aria-busy={vocalStatus?.working ?? false} title={vocalStatus?.working ? "Preparing vocal lip sync" : vocalStatus?.enabled ? "Vocal lip sync is on" : "Prepare or enable vocal lip sync"} disabled={!library.current} onClick={onVocals}><MicVocal size={19} strokeWidth={1.7} /></button>
+      <button type="button" className={vocalStatus?.enabled ? "m-stage-vocals is-active" : "m-stage-vocals"} aria-label="Vocal lip sync" aria-haspopup="dialog" aria-pressed={vocalStatus?.enabled ?? false} aria-busy={!!progressJob && progressJob.status !== "error"} title={progressJob ? `${progressLabel} · ${progressJob.error ?? `${progressJob.phase} · ${Math.round(progressJob.progress * 100)}%`}` : vocalStatus?.enabled ? "Vocal lip sync is on" : "Prepare or enable vocal lip sync"} disabled={!library.current} onClick={onVocals}><MicVocal size={19} strokeWidth={1.7} /><MobileVocalProgress job={progressJob} label={progressLabel} /></button>
     </>, capsule)}
   </div>;
 }

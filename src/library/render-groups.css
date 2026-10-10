@@ -1,0 +1,3 @@
+.library-render-group { content-visibility: auto; }
+.library-render-group:hover, .library-render-group:focus-within,
+.library-render-group:has(.is-album-dragging) { content-visibility: visible; }

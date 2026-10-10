@@ -32,6 +32,7 @@ export function useComparisonWorkspace({ rootId, readRoot, readTracks, patchTrac
   const controllers = useRef(new Map<number, Job>());
   const files = useRef(new Map<string, File>());
   const pending = useRef(new Map<string, Promise<AudioBuffer>>());
+  const reads = useRef(new Map<string, AbortController>());
   const selectionTail = useRef<Promise<void>>(Promise.resolve());
   const urls = useRef(new Map<string, number>());
   const cancel = useCallback((source: number) => {
@@ -41,6 +42,7 @@ export function useComparisonWorkspace({ rootId, readRoot, readTracks, patchTrac
   const cancelAll = useCallback(() => { for (const job of controllers.current.values()) job.controller.abort(); controllers.current.clear(); setJobs({}); }, []);
   const reset = useCallback(() => {
     epoch.current++; selection.current++; cancelAll(); pending.current.clear();
+    for (const controller of reads.current.values()) controller.abort(); reads.current.clear();
     for (let i = 1; i < 9; i++) engine.setBuffer(i, null);
     setSlots({});
   }, [cancelAll, engine]);
@@ -56,6 +58,8 @@ export function useComparisonWorkspace({ rootId, readRoot, readTracks, patchTrac
     setSlots(next);
   }, [rootId, readRoot, reset, engine]);
   useEffect(() => () => {
+    epoch.current++; selection.current++;
+    for (const controller of reads.current.values()) controller.abort(); reads.current.clear();
     for (const job of controllers.current.values()) job.controller.abort();
     controllers.current.clear(); files.current.clear(); pending.current.clear();
     for (const [url, timer] of urls.current) { clearTimeout(timer); URL.revokeObjectURL(url); } urls.current.clear();
@@ -71,15 +75,20 @@ export function useComparisonWorkspace({ rootId, readRoot, readTracks, patchTrac
     if (!root || !item) throw new Error("This version is no longer available.");
     const key = `${root.id}:${item.id}`;
     const existing = pending.current.get(key); if (existing) { const result = await existing; signal?.throwIfAborted(); return result; }
-    const valid = () => generation === epoch.current && readRoot()?.id === root.id && record(index)?.id === item.id;
+    const controller = new AbortController(), abortRead = () => controller.abort();
+    signal?.addEventListener("abort", abortRead, { once: true }); reads.current.set(key, controller);
+    const sameSource = () => generation === epoch.current && readRoot()?.id === root.id && record(index)?.id === item.id;
+    const valid = () => !controller.signal.aborted && sameSource();
     const task = (async () => {
       const file = await resolveFile(root, item); if (!valid()) throw aborted();
       if (!file) throw new Error("Reconnect this version before listening or processing.");
       setSlots(current => ({ ...current, [index]: { ...current[index], status: "loading", loadProgress: 0, error: "" } }));
       try {
-        const bytes = await readAudioFile(file, progress => { if (valid()) setSlots(current => ({ ...current, [index]: { ...current[index], loadProgress: progress * .6 } })); });
+        const bytes = await readAudioFile(file, progress => { if (valid()) setSlots(current => ({ ...current, [index]: { ...current[index], loadProgress: progress * .6 } })); }, controller.signal);
         if (!valid()) throw aborted(); signal?.throwIfAborted();
-        const context = await engine.ensureGraph(false), buffer = await context.decodeAudioData(bytes);
+        const context = await engine.ensureGraph(false);
+        if (!valid()) throw aborted(); signal?.throwIfAborted();
+        const buffer = await context.decodeAudioData(bytes);
         if (!valid()) throw aborted(); signal?.throwIfAborted();
         engine.setBuffer(index, buffer); engine.trimDecodedBuffers([index]);
         const peaks = makeWaveformPeaks(buffer);
@@ -87,12 +96,19 @@ export function useComparisonWorkspace({ rootId, readRoot, readTracks, patchTrac
         patchTracks(current => current.map(track => track.id === root.id ? withComparisons(track, comparisonsOf(track).map(version => version.id === item.id ? { ...version, duration: buffer.duration, peaks } : version)) : track));
         return buffer;
       } catch (error) {
-        if (valid()) setSlots(current => ({ ...current, [index]: { ...current[index], status: error instanceof Error && error.name === "AbortError" ? "ready" : "error", error: error instanceof Error ? error.message : "Could not decode this version." } }));
+        if (sameSource()) {
+          const cancelled = error instanceof Error && error.name === "AbortError";
+          setSlots(current => ({ ...current, [index]: { ...current[index], status: cancelled ? "ready" : "error", loadProgress: 0, error: cancelled ? "" : error instanceof Error ? error.message : "Could not decode this version." } }));
+        }
         throw error;
       }
     })();
     pending.current.set(key, task);
-    try { return await task; } finally { if (pending.current.get(key) === task) pending.current.delete(key); }
+    try { return await task; } finally {
+      signal?.removeEventListener("abort", abortRead);
+      if (reads.current.get(key) === controller) reads.current.delete(key);
+      if (pending.current.get(key) === task) pending.current.delete(key);
+    }
   }, [engine, readRoot, record, resolveFile, patchTracks]);
   const select = useCallback(async (index: number) => {
     if (index > 0 && clearingRef.current) return;
@@ -203,6 +219,7 @@ export function useComparisonWorkspace({ rootId, readRoot, readTracks, patchTrac
   }, [readRoot, sourceIdentity, record, ensureBuffer, commitFile, onMessage, engine]);
   const remove = useCallback(async (index: number) => {
     cancelTouching(index); const root = readRoot(), item = record(index); if (!root || !item) return;
+    reads.current.get(`${root.id}:${item.id}`)?.abort();
     forgetVocals(root, index);
     if (engine.selectedSource === index) { await select(0); if (engine.isPlaying) await new Promise(resolve => setTimeout(resolve, 50)); }
     if (readRoot()?.id !== root.id || record(index)?.id !== item.id) return;
@@ -229,6 +246,7 @@ export function useComparisonWorkspace({ rootId, readRoot, readTracks, patchTrac
     const versions = comparisonsOf(root);
     clearingRef.current = true; setClearing(true);
     epoch.current++; selection.current++; cancelAll(); pending.current.clear();
+    for (const controller of reads.current.values()) controller.abort(); reads.current.clear();
     for (const version of versions) forgetVocals(root, version.slot!);
     try {
       await select(0);

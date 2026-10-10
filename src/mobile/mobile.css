@@ -420,7 +420,7 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 .mobile-app .m-room-orbit .live2d-host { overflow:hidden; }
 .mobile-app .m-room-orbit .camera-capsule { display:flex; position:absolute; z-index:6; top:50%; left:auto; right:-56px; bottom:auto; transform:translateY(-50%); width:48px; padding:4px 1px; flex-direction:column; align-items:center; border:1px solid var(--m-line); border-radius:18px; background:var(--m-paper); color:var(--m-muted); box-shadow:0 2px 12px rgb(36 51 76 / .035); backdrop-filter:blur(12px); }
 .mobile-app .camera-capsule > button { width:44px; min-width:44px; height:44px; min-height:44px; padding:0; border:0; border-radius:14px; background:transparent; color:var(--m-muted); display:flex; align-items:center; justify-content:center; }
-.mobile-app .camera-capsule > button svg { width:19px; height:19px; }
+.mobile-app .camera-capsule > button svg:not(.m-vocal-ring) { width:19px; height:19px; }
 .mobile-app .camera-capsule > button.is-active { color:var(--m-surface); background:var(--m-ink); }
 .mobile-app .camera-capsule > button > span, .mobile-app .camera-capsule > span { display:none; }
 .mobile-app .camera-capsule > i { display:block; width:20px; height:1px; margin:2px 0; background:var(--m-line); flex:none; }
@@ -530,4 +530,14 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 
 /* Mobile swaps the greeting slot for real vocal controls without changing shared stage code. */
 .mobile-app .camera-capsule > button[title^="Say hello"] { display:none; }
-.mobile-app .camera-capsule > .m-stage-vocals[aria-busy="true"] { box-shadow:inset 0 0 0 1px var(--m-accent); }
+.mobile-app .camera-capsule > .m-stage-vocals { position:relative; }
+.mobile-app .m-vocal-ring { position:absolute; inset:3px; width:calc(100% - 6px); height:calc(100% - 6px); pointer-events:none; overflow:visible; --ring-accent:var(--m-accent); --ring-track:var(--m-line); }
+.mobile-app .m-vocal-ring circle { fill:none; stroke-width:1.8; }
+.mobile-app .m-vocal-ring-track { stroke:var(--ring-track); }
+.mobile-app .m-vocal-ring-value { stroke:var(--ring-accent); stroke-linecap:round; }
+.mobile-app .m-vocal-ring.is-waiting { animation:m-vocal-wait 1.4s linear infinite; }
+.mobile-app .m-vocal-ring.is-error { --ring-accent:#996b42; }
+.mobile-app .camera-capsule > .m-stage-vocals.is-active .m-vocal-ring { --ring-accent:var(--m-surface); --ring-track:color-mix(in srgb,var(--m-surface) 24%,transparent); }
+.mobile-app .camera-capsule > .m-stage-vocals.is-active .m-vocal-ring.is-error { --ring-accent:#e0b488; }
+@keyframes m-vocal-wait { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .mobile-app .m-vocal-ring.is-waiting { animation:none; } }

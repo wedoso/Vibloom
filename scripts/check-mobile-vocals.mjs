@@ -1,4 +1,4 @@
-/* global document, window, indexedDB, Live2DCubismCore, HTMLInputElement, AudioBufferSourceNode, AudioContext */
+/* global document, window, indexedDB, Live2DCubismCore, HTMLInputElement, AudioBufferSourceNode, AudioContext, getComputedStyle */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
@@ -21,7 +21,7 @@ const serve=async(req,res)=>{try{
  if(url.pathname==='/__model.onnx'){
   res.setHeader('Content-Type','application/octet-stream');res.setHeader('Content-Length',modelSize);res.setHeader('Access-Control-Allow-Origin','*');
   const stream=createReadStream(model,{highWaterMark:1024*1024});res.on('close',()=>stream.destroy());
-  for await(const chunk of stream){if(res.destroyed)break;res.write(chunk);await new Promise(resolve=>setTimeout(resolve,10))}res.end();return;
+  for await(const chunk of stream){if(res.destroyed)break;res.write(chunk);await new Promise(resolve=>setTimeout(resolve,50))}res.end();return;
  }
  const base=path.resolve('dist'),file=path.resolve(base,'.'+(url.pathname==='/'?'/index.html':url.pathname));assert.ok(file.startsWith(base+path.sep));res.setHeader('Content-Type',mime[path.extname(file)]??'application/octet-stream');res.end(await readFile(file));
 }catch{if(!res.destroyed){if(!res.headersSent)res.writeHead(404);res.end()}}};
@@ -53,11 +53,28 @@ try{for(const [name,engine] of Object.entries({chromium,webkit})){
   await choose(page,'Hiyori');await page.getByRole('button',{name:'Play',exact:true}).click();await vocals(page);
   await page.getByRole('button',{name:'Prepare lip sync track A',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-vocal-track="A"]')?.textContent.includes('Downloading vocal model'),{},{timeout:60000});
   assert.equal(await page.locator('.m-stage-vocals').getAttribute('aria-busy'),'true','stage icon shows preparing state');await page.screenshot({path:path.join(output,`${name}-vocal-downloading.jpg`)});
+  const requestsBeforeMinimize=modelRequests;
+  await close(page);
+  await page.waitForFunction(()=>Number(document.querySelector('.m-stage-vocals [role="progressbar"]')?.getAttribute('aria-valuenow'))>0);
+  for(const [width,height] of [[390,844],[844,390]]){
+   await page.setViewportSize({width,height});
+   for(const selector of ['.m-stage-vocals','.m-vocal-task']){
+    const ring=page.locator(`${selector} .m-vocal-ring`);assert.ok(await ring.isVisible(),'minimized progress remains visible');
+    const geometry=await ring.evaluate(el=>{const r=el.getBoundingClientRect(),b=el.parentElement.getBoundingClientRect();return {inside:r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom,fills:r.width>=b.width-8&&r.height>=b.height-8,pointerEvents:getComputedStyle(el).pointerEvents,percent:Number(el.getAttribute('aria-valuenow')),offset:Number(el.querySelector('.m-vocal-ring-value').getAttribute('stroke-dashoffset'))}});
+    assert.equal(geometry.inside,true,'ring stays inside the icon');assert.equal(geometry.fills,true,'ring surrounds the icon rather than inheriting the mic SVG size');assert.equal(geometry.pointerEvents,'none','ring never intercepts button taps');assert.ok(Math.abs(geometry.percent-(100-geometry.offset))<=.51,'stroke matches real progress');
+   }
+   await page.screenshot({path:path.join(output,`${name}-${width}x${height}-vocal-minimized.jpg`)});
+  }
+  await page.setViewportSize({width:390,height:844});await page.locator('.m-stage-vocals').click();
+  assert.equal(modelRequests,requestsBeforeMinimize,'closing and reopening never restarts preparation');
+  assert.equal(await page.getByRole('button',{name:'Cancel preparation track A',exact:true}).count(),1,'stage icon reopens the ongoing job');
   await page.getByRole('button',{name:'Cancel preparation track A',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Prepare lip sync track A',exact:true}).count(),1);assert.ok((await page.title()).startsWith('Playing'));
-  await page.getByRole('button',{name:'Prepare lip sync track A',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-vocal-track="A"]')?.dataset.vocalStatus==='error',{},{timeout:60000});assert.equal(await page.getByRole('button',{name:'Retry preparation track A',exact:true}).count(),1);await page.screenshot({path:path.join(output,`${name}-vocal-retry.jpg`)});await page.getByRole('button',{name:'Retry preparation track A',exact:true}).click();console.log(name,'real Demucs + MotionSync preparation started');
+  assert.equal(await page.locator('.m-stage-vocals .m-vocal-ring').count(),0,'cancel removes progress');assert.equal(await page.locator('.m-vocal-task').count(),0,'cancel removes header task');
+  await page.getByRole('button',{name:'Prepare lip sync track A',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-vocal-track="A"]')?.dataset.vocalStatus==='error',{},{timeout:60000});assert.equal(await page.getByRole('button',{name:'Retry preparation track A',exact:true}).count(),1);await close(page);assert.equal(await page.locator('.m-stage-vocals .m-vocal-ring.is-error').count(),1,'failure remains visible outside the panel');await page.getByRole('button',{name:'Open vocal preparation',exact:true}).click();await page.screenshot({path:path.join(output,`${name}-vocal-retry.jpg`)});await page.getByRole('button',{name:'Retry preparation track A',exact:true}).click();console.log(name,'real Demucs + MotionSync preparation started');
   await page.waitForFunction(()=>['ready','error'].includes(document.querySelector('[data-vocal-track="A"]')?.dataset.vocalStatus),{},{timeout:240000});
   assert.equal(await page.locator('[data-vocal-track="A"]').getAttribute('data-vocal-status'),'ready',await page.locator('[data-vocal-track="A"]').innerText());assert.equal(await page.getByRole('button',{name:'Disable lip sync track A',exact:true}).getAttribute('aria-pressed'),'true');assert.equal(await page.locator('.m-stage-vocals').getAttribute('aria-pressed'),'true','stage mic shows ready/enabled state');assert.ok((await page.title()).startsWith('Playing'),'analysis does not pause playback');assert.ok(await page.evaluate(()=>window.__ticks)>20,'worker leaves UI responsive');
-  await page.getByRole('button',{name:'Prepare lip sync track B',exact:true}).click();await page.waitForFunction(()=>['ready','error'].includes(document.querySelector('[data-vocal-track="B"]')?.dataset.vocalStatus),{},{timeout:240000});assert.equal(await page.locator('[data-vocal-track="B"]').getAttribute('data-vocal-status'),'ready',await page.locator('[data-vocal-track="B"]').innerText());
+  assert.equal(await page.locator('.m-vocal-ring').count(),0,'completion removes progress rings');
+  await page.getByRole('button',{name:'Prepare lip sync track B',exact:true}).click();await close(page);await page.waitForSelector('.m-stage-vocals [role="progressbar"][aria-label="Vocal preparation for track B"]');assert.equal(await page.locator('.m-stage-vocals').getAttribute('aria-pressed'),'true','preparing B preserves enabled A');await page.locator('.m-stage-vocals').click();await page.waitForFunction(()=>['ready','error'].includes(document.querySelector('[data-vocal-track="B"]')?.dataset.vocalStatus),{},{timeout:240000});assert.equal(await page.locator('[data-vocal-track="B"]').getAttribute('data-vocal-status'),'ready',await page.locator('[data-vocal-track="B"]').innerText());assert.equal(await page.locator('.m-vocal-ring').count(),0,'B completion removes progress rings');
   const modelChecks=[];
   for(const companion of ['Hong Xi','Hiyori']){
    await choose(page,companion);await range(page,.2);await page.evaluate(()=>{window.__mouth.open=[];window.__mouth.forms=[]});await page.waitForTimeout(1600);const pose=await page.evaluate(()=>window.__mouth);assert.ok(Math.max(...pose.open)-Math.min(...pose.open)>.15,companion+' actual mouth opens with syllables');assert.ok(Math.max(...pose.forms)-Math.min(...pose.forms)>.1,companion+' actual vowel shape changes');
@@ -70,7 +87,7 @@ try{for(const [name,engine] of Object.entries({chromium,webkit})){
   await vocals(page);await page.getByRole('button',{name:'Disable lip sync track A',exact:true}).click();await page.waitForTimeout(500);const requestsBeforeReload=modelRequests;await page.reload();await page.waitForSelector('.live2d-stage[data-status="ready"]');await vocals(page);assert.equal(await page.getByRole('button',{name:'Enable lip sync track A',exact:true}).count(),1,'disabled preference and analysis persist');assert.equal(modelRequests,requestsBeforeReload,'reload never downloads or reprocesses');
   await page.getByRole('button',{name:'Enable lip sync track A',exact:true}).click();
   for(const [width,height] of [[320,568],[390,844],[844,390]]){await page.setViewportSize({width,height});await page.waitForTimeout(300);const bounds=await page.getByRole('dialog').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+.5);assert.ok(bounds.y>=0&&bounds.y+bounds.height<=height+.5);await page.screenshot({path:path.join(output,`${name}-${width}x${height}-vocal-ready.jpg`)})}
-  assert.deepEqual(errors,[]);results.engines.push({engine:name,status:'passed',modelRequests,modelChecks,checks:['real WASM Demucs and MotionSync workers','download/cancel/network error/retry','playback continues and UI responsive','voice/silent source preparation','actual Cubism open + vowel shape, both companions','pause and disabled close mouth','source switch + direct seeking','analysis and disabled preference survive reload','small portrait/landscape panel bounds']});console.log(name,'mobile lips passed');
+  assert.deepEqual(errors,[]);results.engines.push({engine:name,status:'passed',modelRequests,modelChecks,checks:['real WASM Demucs and MotionSync workers','download/cancel/network error/retry','minimized real progress stroke in portrait and landscape','stage and header reopen the same job without restarting','B progress remains visible while A is audible and enabled','cancel/ready remove rings; failure retains attention state','playback continues and UI responsive','voice/silent source preparation','actual Cubism open + vowel shape, both companions','pause and disabled close mouth','source switch + direct seeking','analysis and disabled preference survive reload','small portrait/landscape panel bounds']});console.log(name,'mobile lips passed');
  }catch(error){code=1;results.errors.push({engine:name,error:error.stack});console.error(name,error);await page.screenshot({path:path.join(output,`failure-mobile-vocals-${name}.png`)}).catch(()=>{});}
  finally{await browser.close()}
 }}finally{results.status=code?'failed':'passed';await writeFile(path.join(output,'mobile-vocals-results.json'),JSON.stringify(results,null,2));server.close();tlsServer.close();await rm(tlsDirectory,{recursive:true,force:true})}

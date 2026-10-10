@@ -1,5 +1,7 @@
 import type { LibraryPlatform } from "../platform/libraryPlatform";
-import type { LibrarySnapshot, StoredLibrarySnapshot } from "../domain/library";
+import { indexedLibraryRepository } from "../platform/indexedLibraryRepository";
+import { writeAudioBlob } from "../platform/writeAudioBlob";
+import { indexedVocalStorage, VocalAnalysisStore, withVocalStorage } from "../audio/vocals/analysisStore";
 
 export const MOBILE_DATABASE = "vibloom-mobile-library";
 export const MOBILE_AUDIO_DIRECTORY = "vibloom-mobile-tracks";
@@ -13,30 +15,6 @@ async function database() {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("Mobile library storage is unavailable."));
   });
-}
-
-async function readSnapshot(): Promise<StoredLibrarySnapshot | null> {
-  const db = await database();
-  try {
-    return await new Promise((resolve, reject) => {
-      const request = db.transaction("state").objectStore("state").get("library");
-      request.onsuccess = () => resolve(request.result ?? null);
-      request.onerror = () => reject(request.error);
-    });
-  } finally { db.close(); }
-}
-
-async function writeSnapshot(snapshot: LibrarySnapshot) {
-  const db = await database();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction("state", "readwrite");
-      transaction.objectStore("state").put(snapshot, "library");
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error ?? new Error("Could not save this mobile library."));
-    });
-  } finally { db.close(); }
 }
 
 async function directory(create = false) {
@@ -73,24 +51,11 @@ async function updateBlobs(update: (store: IDBObjectStore) => void) {
   } finally { db.close(); }
 }
 
+const vocalAnalyses = new VocalAnalysisStore(indexedVocalStorage(database));
 export const mobilePlatform: LibraryPlatform = {
   runtime: "web",
-  repository: {
-    load: readSnapshot,
-    save: writeSnapshot,
-    async reset() {
-      const db = await database();
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const transaction = db.transaction("state", "readwrite");
-          transaction.objectStore("state").clear();
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-          transaction.onabort = () => reject(transaction.error);
-        });
-      } finally { db.close(); }
-    },
-  },
+  vocalAnalyses,
+  repository: withVocalStorage(indexedLibraryRepository(database), vocalAnalyses),
   audioFiles: {
     async get(key) {
       // A successful fallback write may leave an inaccessible OPFS entry behind.
@@ -103,9 +68,10 @@ export const mobilePlatform: LibraryPlatform = {
         const handle = await (await directory(true)).getFileHandle(fileName(key), { create: true });
         if (typeof handle.createWritable !== "function") throw new Error("Writable OPFS is unavailable.");
         const writer = await handle.createWritable();
-        try { await writer.write(file); await writer.close(); }
-        catch (error) { await writer.abort().catch(() => undefined); throw error; }
-        await updateBlobs(store => store.delete(key)).catch(() => undefined);
+        await writeAudioBlob(writer, file);
+        // Do not report a successful new file while an older IDB fallback
+        // still shadows it. If deletion fails, write the new fallback below.
+        await updateBlobs(store => store.delete(key));
       } catch {
         const cached = { bytes: await file.arrayBuffer(), type: file.type };
         await updateBlobs(store => store.put(cached, key));

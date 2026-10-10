@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { ArrowDown, ArrowUp, AudioLines, Check, ChevronLeft, ChevronRight, Database, Download, FileAudio, FileText, FolderOpen, Headphones, Library, ListMusic, MoreHorizontal, Music2, Play, Plus, Maximize2, Minimize2, Repeat, Repeat1, ScanFace, Search, Menu, MicVocal, ShieldCheck, Shuffle, SlidersHorizontal, Trash2, Upload, Volume2 } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Database, Download, FileAudio, FileText, FolderOpen, Headphones, Library, ListMusic, MoreHorizontal, Music2, Play, Plus, Maximize2, Minimize2, Repeat, Repeat1, ScanFace, Search, Menu, MicVocal, ShieldCheck, Shuffle, SlidersHorizontal, Trash2, Upload, Volume2 } from "lucide-react";
 import BrandMark from "../BrandMark";
+import RenderGroups from "../library/RenderGroups";
+import { LibraryIcon, LibraryIcons } from "../library/LibraryIcons";
 import { APP_VERSION } from "../appVersion";
 import { comparisonsOf, withoutExtension, type LibraryAlbum, type LibraryTrack } from "../domain/library";
 import { COMPANIONS, type CompanionId } from "../live2d/models";
@@ -8,6 +10,7 @@ import { filePickerPolicy } from "../platform/filePickerPolicy";
 import MobileSheet from "./MobileSheet";
 import MobileCompanion from "./MobileCompanion";
 import MobileVocals from "./MobileVocals";
+import MobileVocalProgress from "./MobileVocalProgress";
 import MobileTransport from "./MobileTransport";
 import { formatTime } from "./format";
 import MobileLyrics from "./MobileLyrics";
@@ -24,13 +27,19 @@ type Panel = { kind: "vocals"; id?: string } | { kind: "import" | "queue" | "cle
 const sizeLabel = (bytes: number) => bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const trackName = (track: { name: string }) => withoutExtension(track.name);
 
-function SongRows({ tracks, library, onOptions }: { tracks: LibraryTrack[]; library: MobileLibrary; onOptions: (id: string) => void }) {
-  return <div className="m-song-list">{tracks.map((track, index) => <div className={`m-song-row ${library.current?.id === track.id ? "is-current" : ""}`} key={track.id}>
-    <button className="m-song-main" disabled={!library.ready || library.importing} onClick={() => void library.load(track.id, true, 0)} aria-label={`Play ${trackName(track)}`}>
-      <span className="m-song-number">{library.current?.id === track.id && library.playing ? <AudioLines size={18} /> : String(index + 1).padStart(2, "0")}</span><span className="m-song-copy"><strong>{trackName(track)}</strong><small>{track.availability === "missing" || track.availability === "reconnect" ? "Reconnect source file" : track.sourceLabel}{track.lyricsFileName ? " · Lyrics" : ""}{library.vocals.state(track).working ? " · Preparing vocals" : library.vocals.state(track).ready ? " · Vocals ready" : ""}</small></span><span className="m-song-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
-    </button><button className="m-icon" aria-label={`Options for ${trackName(track)}`} onClick={() => onOptions(track.id)}><MoreHorizontal size={20} /></button>
-  </div>)}</div>;
-}
+const SongRow = memo(function SongRow({ track, index, current, playing, ready, importing, working, vocalsReady, load, onOptions }: { track: LibraryTrack; index: number; current: boolean; playing: boolean; ready: boolean; importing: boolean; working: boolean; vocalsReady: boolean; load: MobileLibrary["load"]; onOptions: (id: string) => void }) {
+  return <div className={`m-song-row ${current ? "is-current" : ""}`}>
+    <button className="m-song-main" disabled={!ready || importing} onClick={() => void load(track.id, true, 0)} aria-label={`Play ${trackName(track)}`}>
+      <span className="m-song-number">{playing ? <LibraryIcon name="AudioLines" size={18} /> : String(index + 1).padStart(2, "0")}</span><span className="m-song-copy"><strong>{trackName(track)}</strong><small>{track.availability === "missing" || track.availability === "reconnect" ? "Reconnect source file" : track.sourceLabel}{track.lyricsFileName ? " · Lyrics" : ""}{working ? " · Preparing vocals" : vocalsReady ? " · Vocals ready" : ""}</small></span><span className="m-song-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
+    </button><button className="m-icon" aria-label={`Options for ${trackName(track)}`} onClick={() => onOptions(track.id)}><LibraryIcon name="MoreHorizontal" size={20} /></button>
+  </div>;
+});
+const SongRows = memo(function SongRows({ tracks, currentId, playing, ready, importing, load, vocalState, onOptions }: { tracks: LibraryTrack[]; currentId: string; playing: boolean; ready: boolean; importing: boolean; load: MobileLibrary["load"]; vocalState: MobileLibrary["vocals"]["state"]; onOptions: (id: string) => void }) {
+  return <div className="m-song-list"><LibraryIcons shared={tracks.length >= 128}><RenderGroups rowHeight={75}>{tracks.map((track, index) => {
+    const status = vocalState(track);
+    return <SongRow key={track.id} track={track} index={index} current={currentId === track.id} playing={currentId === track.id && playing} ready={ready} importing={importing} working={status.working} vocalsReady={status.ready} load={load} onOptions={onOptions} />;
+  })}</RenderGroups></LibraryIcons></div>;
+});
 
 function AlbumEditor({ library, album, onClose }: { library: MobileLibrary; album?: LibraryAlbum; onClose: () => void }) {
   const [name, setName] = useState(album?.name ?? ""), [ids, setIds] = useState(album?.trackIds ?? []), [cover, setCover] = useState(album?.cover ?? ""), [error, setError] = useState(""), [deleting, setDeleting] = useState(false);
@@ -72,11 +81,13 @@ export default function MobileApp() {
   const switchRequest = useRef(0);
   const [focus, setFocus] = useState(false);
   const [switchingSource, setSwitchingSource] = useState<number | null>(null);
+  const tracksById = useMemo(() => new Map(library.tracks.map(track => [track.id, track])), [library.tracks]);
+  const showTrackOptions = useCallback((id: string) => setPanel({ kind: "track", id }), []);
   const activeAlbum = library.albums.find(album => album.id === albumId);
   const visibleTracks = useMemo(() => {
-    const rows = activeAlbum ? activeAlbum.trackIds.flatMap(id => library.tracks.find(track => track.id === id) ?? []) : library.tracks;
+    const rows = activeAlbum ? activeAlbum.trackIds.flatMap(id => tracksById.get(id) ?? []) : library.tracks;
     const query = search.trim().toLocaleLowerCase(); return rows.filter(track => `${track.name} ${track.relativePath}`.toLocaleLowerCase().includes(query));
-  }, [activeAlbum, library.tracks, search]);
+  }, [activeAlbum, library.tracks, tracksById, search]);
   const roomPage = page === "player";
   const mini = !!library.current && !roomPage;
   const close = () => setPanel(null);
@@ -117,8 +128,8 @@ export default function MobileApp() {
   const optionVersion = panel?.kind === "version" ? versions.find(version => version.slot === panel.source) : null;
   const optionTrack = panel?.kind === "track" || panel?.kind === "remove" ? library.tracks.find(track => track.id === panel.id) : null;
 
-  const vocalTask = library.vocals.activeJobs[0];
-  const vocalTaskButton = vocalTask && <button className="m-icon m-vocal-task" aria-label="Open vocal preparation" title={vocalTask.job?.status === "error" ? "Vocal preparation needs attention" : `${vocalTask.job?.phase} · ${Math.round((vocalTask.job?.progress ?? 0) * 100)}%`} onClick={() => setPanel({ kind: "vocals", id: vocalTask.track.id })}><MicVocal size={19} /><small>{library.vocals.activeJobs.length}</small></button>;
+  const vocalTask = library.vocals.activeJobs.find(task => task.job?.status === "working") ?? library.vocals.activeJobs.find(task => task.job?.status === "queued") ?? library.vocals.activeJobs[0];
+  const vocalTaskButton = vocalTask && <button className="m-icon m-vocal-task" aria-label="Open vocal preparation" title={vocalTask.job?.status === "error" ? "Vocal preparation needs attention" : `${vocalTask.job?.phase} · ${Math.round((vocalTask.job?.progress ?? 0) * 100)}%`} onClick={() => setPanel({ kind: "vocals", id: vocalTask.track.id })}><MicVocal size={19} /><MobileVocalProgress job={vocalTask.job} label={`Vocal preparation for ${trackName(vocalTask.track)} · track ${mobileTrackLabel(vocalTask.source)}`} /><small>{library.vocals.activeJobs.length}</small></button>;
   return <div ref={root} className={`mobile-app ${library.current ? "has-playback" : ""} ${mini ? "has-library-playback" : ""} ${roomPage ? "is-room" : ""} ${focus && roomPage ? "is-focus" : ""}`} data-companion={library.session.companionId}>
     <input ref={filesInput} type="file" accept={policy.libraryAccept} multiple hidden data-picker="files" onChange={importSelection} />
     <input ref={folderInput} type="file" accept={policy.libraryAccept} multiple hidden data-picker="folder" onChange={importSelection} />
@@ -132,7 +143,7 @@ export default function MobileApp() {
     <main data-workspace={page} className="m-content" id="mobile-content" aria-busy={!library.ready || library.importing}>
       <section className={`m-room-hero ${!roomPage ? "is-away" : ""}`} inert={!roomPage} aria-hidden={!roomPage} aria-label="Live2D listening room">
         <div className="m-room-title"><h1 className={library.current ? "m-song-title" : undefined}>{library.current ? trackName(library.current) : <>A little <em>company.</em></>}</h1><p>{library.current ? `${library.source === 0 ? "Original" : `Track ${mobileTrackLabel(library.source)}`} · ${library.playing ? "Playing" : "Ready to listen"}` : "Bring your music. Let it bloom."}</p></div>
-        <div className="m-room-orbit"><MobileCompanion library={library} focus={focus && roomPage} onVocals={() => setPanel({ kind: "vocals" })} /><div className="m-source-controls" inert={focus && roomPage} aria-hidden={focus && roomPage}>{library.current && <MobileRoomOrbit key={library.current.id} library={library} pendingSource={switchingSource} onSelect={source => void selectSource(source)} onAdd={() => pickComparison()} />}</div></div>
+        <div className="m-room-orbit"><MobileCompanion visible={roomPage} library={library} focus={focus && roomPage} onVocals={() => setPanel({ kind: "vocals" })} /><div className="m-source-controls" inert={focus && roomPage} aria-hidden={focus && roomPage}>{library.current && <MobileRoomOrbit key={library.current.id} library={library} pendingSource={switchingSource} onSelect={source => void selectSource(source)} onAdd={() => pickComparison()} />}</div></div>
 
       </section>
       {roomPage && library.current && <MobileLyrics key={library.current.id} library={library} onAttach={() => pickLyrics(library.current!.id)} onEdit={() => setPanel({ kind: "lyrics" })} />}
@@ -152,7 +163,7 @@ export default function MobileApp() {
           <div className="m-album-grid">{library.albums.map(album => <div className="m-album-card" key={album.id}><button className="m-album-open" onClick={() => { setAlbumId(album.id); setSearch(""); }}><span className="m-album-art">{album.cover ? <img src={album.cover} alt="" /> : <Music2 size={36} strokeWidth={1.3} />}</span><strong>{album.name}</strong><small>{album.trackIds.length} songs</small></button><button className="m-icon" aria-label={`Edit album ${album.name}`} onClick={() => setPanel({ kind: "album", album })}><MoreHorizontal size={20} /></button></div>)}</div>{!library.albums.length && <p className="m-muted">Create a collection from songs already in your library.</p>}
         </> : <>
           {library.tracks.some(track => track.availability === "missing" || track.availability === "reconnect") && <div className="m-reconnect"><FolderOpen size={20} /><span>Some songs need their source files.</span><button onClick={() => pickFiles()}>Reconnect</button></div>}
-          <SongRows tracks={visibleTracks} library={library} onOptions={id => setPanel({ kind: "track", id })} />
+          <SongRows tracks={visibleTracks} currentId={library.current?.id ?? ""} playing={library.playing} ready={library.ready} importing={library.importing} load={library.load} vocalState={library.vocals.state} onOptions={showTrackOptions} />
           {!visibleTracks.length && <p className="m-muted">{search ? "No songs match your search." : "This album is empty. Edit it to add songs."}</p>}
         </>}
         </div>
@@ -166,7 +177,7 @@ export default function MobileApp() {
     {library.message && <div className="m-toast" role="status">{library.message}</div>}
     {panel?.kind === "import" && <MobileSheet title="Bring your music" onClose={close}><p className="m-muted">Music and matching LRC / TXT lyrics stay on your device.</p><button className="m-import-option" onClick={() => pickFiles()}><FileAudio size={24} /><span><strong>Choose files</strong><small>{policy.isIOS ? "Browse iCloud Drive or On My iPhone in Files" : "Select music and lyric files together"}</small></span><ChevronRight size={20} /></button><button className="m-import-option" onClick={() => pickFiles(true)}><FolderOpen size={24} /><span><strong>{policy.supportsDirectories ? "Choose a folder" : "Choose files from a folder"}</strong><small>{policy.supportsDirectories ? "Include its music and matching lyrics" : "Open the folder, then select its files"}</small></span><ChevronRight size={20} /></button>{policy.isIOS && <p className="m-picker-hint">In the Files picker, use Browse → iCloud Drive. Select the music you want, then tap Open.</p>}<span className="m-privacy"><ShieldCheck size={16} />Nothing is uploaded.</span></MobileSheet>}
     {library.summary && <MobileSheet title="Import complete" onClose={() => library.setSummary(null)}><div className="m-import-stats"><span><strong>{library.summary.accepted}</strong>New songs</span><span><strong>{library.summary.reconnected}</strong>Reconnected</span><span><strong>{library.summary.lyrics}</strong>Lyrics</span><span><strong>{library.summary.ignored}</strong>Ignored</span></div>{library.summary.errors.length > 0 && <div className="m-import-errors"><h3>Some files need attention</h3><ul>{library.summary.errors.map((error, i) => <li key={i}>{error}</li>)}</ul></div>}<button className="m-button m-primary m-full" onClick={() => library.setSummary(null)}>Continue to library</button></MobileSheet>}
-    {panel?.kind === "queue" && <MobileSheet title="Up next" side onClose={close}><p className="m-muted">Move songs with the arrows. Your playback keeps its place.</p><div className="m-queue-list">{library.session.queue.map((id, index) => { const track = library.tracks.find(item => item.id === id); if (!track) return null; const move = (step: number) => { const ids = [...library.session.queue]; const to = index + step; [ids[index], ids[to]] = [ids[to], ids[index]]; library.patchSession({ queue: ids }); }; return <div className={`m-queue-row ${library.current?.id === id ? "is-current" : ""}`} key={id}><button className="m-queue-song" onClick={() => void library.load(id, true, 0)}><small>{index + 1}</small><strong>{trackName(track)}</strong></button><div><button className="m-icon" aria-label={`Move ${trackName(track)} up`} disabled={index === 0} onClick={() => move(-1)}><ArrowUp size={18} /></button><button className="m-icon" aria-label={`Move ${trackName(track)} down`} disabled={index === library.session.queue.length - 1} onClick={() => move(1)}><ArrowDown size={18} /></button><button className="m-icon" aria-label={`Remove ${trackName(track)} from queue`} onClick={() => library.patchSession({ queue: library.session.queue.filter(trackId => trackId !== id) })}><Trash2 size={17} /></button></div></div>; })}</div>{!library.session.queue.length && <p className="m-muted">Your queue is empty. Play all from the library to fill it.</p>}{library.session.queue.length > 0 && <button className="m-button m-danger" onClick={() => setPanel({ kind: "clear-queue" })}>Clear queue only</button>}</MobileSheet>}
+    {panel?.kind === "queue" && <MobileSheet title="Up next" side onClose={close}><p className="m-muted">Move songs with the arrows. Your playback keeps its place.</p><div className="m-queue-list">{library.session.queue.map((id, index) => { const track = tracksById.get(id); if (!track) return null; const move = (step: number) => { const ids = [...library.session.queue]; const to = index + step; [ids[index], ids[to]] = [ids[to], ids[index]]; library.patchSession({ queue: ids }); }; return <div className={`m-queue-row ${library.current?.id === id ? "is-current" : ""}`} key={id}><button className="m-queue-song" onClick={() => void library.load(id, true, 0)}><small>{index + 1}</small><strong>{trackName(track)}</strong></button><div><button className="m-icon" aria-label={`Move ${trackName(track)} up`} disabled={index === 0} onClick={() => move(-1)}><ArrowUp size={18} /></button><button className="m-icon" aria-label={`Move ${trackName(track)} down`} disabled={index === library.session.queue.length - 1} onClick={() => move(1)}><ArrowDown size={18} /></button><button className="m-icon" aria-label={`Remove ${trackName(track)} from queue`} onClick={() => library.patchSession({ queue: library.session.queue.filter(trackId => trackId !== id) })}><Trash2 size={17} /></button></div></div>; })}</div>{!library.session.queue.length && <p className="m-muted">Your queue is empty. Play all from the library to fill it.</p>}{library.session.queue.length > 0 && <button className="m-button m-danger" onClick={() => setPanel({ kind: "clear-queue" })}>Clear queue only</button>}</MobileSheet>}
     {panel?.kind === "track" && optionTrack && <MobileSheet title={trackName(optionTrack)} onClose={close}><p className="m-file-detail">{optionTrack.relativePath}<br />{sizeLabel(optionTrack.size)} · {optionTrack.persistence === "cached" ? "Cached on this device" : "Keep the source file to reconnect"}</p><button className="m-menu-action" onClick={() => { close(); navigate("player"); void library.load(optionTrack.id, true, 0); }}><Play size={20} />Play song</button><button className="m-menu-action" onClick={() => setPanel({ kind: "vocals", id: optionTrack.id })}><MicVocal size={20} />Vocal lip sync</button><button className="m-menu-action" onClick={() => { library.patchSession({ queue: [...new Set([...library.session.queue, optionTrack.id])] }); close(); library.setMessage("Song added to queue."); }}><ListMusic size={20} />Add to queue</button><button className="m-menu-action" onClick={() => pickLyrics(optionTrack.id)}><FileText size={20} />{optionTrack.lyricsFileName ? "Replace lyrics" : "Attach lyrics"}</button><button className="m-menu-action" onClick={() => { close(); navigate("player"); void library.load(optionTrack.id, false, 0); setPanel({ kind: "versions" }); }}><SlidersHorizontal size={20} />A/B tracks</button><button className="m-menu-action m-danger" onClick={() => setPanel({ kind: "remove", id: optionTrack.id })}><Trash2 size={20} />Remove from library</button></MobileSheet>}
     {panel?.kind === "vocals" && (library.tracks.find(track => track.id === (panel.id ?? library.current?.id))) && <MobileVocals library={library} track={library.tracks.find(track => track.id === (panel.id ?? library.current?.id))!} onClose={close} />}
     {panel?.kind === "remove" && optionTrack && <MobileSheet title="Remove this song?" onClose={close}><p className="m-muted">{trackName(optionTrack)} and its comparison versions will be removed from your mobile library. Your original source file stays intact.</p><div className="m-sheet-actions"><button className="m-button" onClick={close}>Cancel</button><button className="m-button m-danger" onClick={() => { close(); void library.removeTrack(optionTrack.id); }}>Remove song</button></div></MobileSheet>}

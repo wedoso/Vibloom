@@ -2785,6 +2785,7 @@ button.track-index,
 .waveform-card-foot .is-job-hidden { display: none; }
 .card-vocal-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgb(var(--waveform-rgb)); font-size: 9px; font-weight: 600; letter-spacing: 0; }
 .card-vocal-status.is-error { color: #996b42; }
+.waveform-card-foot:has(.card-vocal-status) > span:last-child:not(.card-vocal-status) { display: none; }
 .comparison-versions { position: relative; }
 .comparison-stack-actions { position: absolute; top: -14px; right: 2px; left: 2px; display: flex; justify-content: space-between; align-items: center; color: var(--library-muted); font-size: 9px; }
 .comparison-stack-actions button { height: 22px; padding: 0 5px; display: flex; gap: 4px; align-items: center; background: transparent; border: 0; color: var(--library-muted); font: inherit; cursor: pointer; }

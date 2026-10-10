@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, FileText, FolderHeart, FolderOpen, HardDrive, Headphones, ListEnd, ListPlus, MicVocal, MoreHorizontal, RefreshCw, Timer, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, FileText, FolderHeart, FolderOpen, HardDrive, Headphones, ListEnd, ListPlus, MicVocal, RefreshCw, Timer, Trash2, X } from "lucide-react";
+import { LibraryIcon } from "./LibraryIcons";
 import StyledSelect from "../StyledSelect";
 import type { LibraryAlbum, LibraryTrack } from "../domain/library";
 import type { VocalJob } from "../audio/vocals/jobStore";
@@ -68,7 +69,7 @@ export default function TrackActions(props: Props) {
     if (next) { event.preventDefault(); next.focus(); }
   };
   return <span className="track-menu-wrap" onKeyDown={keyboard} onDoubleClick={event => event.stopPropagation()}>
-    <button ref={trigger} type="button" aria-label={`Actions for ${name}`} aria-expanded={open} aria-controls={open ? id : undefined} aria-haspopup="dialog" className={open ? "is-open" : ""} onClick={() => { if (!open) setView("main"); onToggle(); }}><MoreHorizontal size={18} /></button>
+    <button ref={trigger} type="button" aria-label={`Actions for ${name}`} aria-expanded={open} aria-controls={open ? id : undefined} aria-haspopup="dialog" className={open ? "is-open" : ""} onClick={() => { if (!open) setView("main"); onToggle(); }}><LibraryIcon name="MoreHorizontal" size={18} /></button>
     {open && <div ref={popup} id={id} className="track-popover track-action-popover" popover="auto" role="dialog" aria-label={`Actions for ${name}`} onToggle={event => { if (event.newState === "closed") onClose(); }}>
       {view === "main" ? <>
         <div className="track-action-heading"><strong title={name}>{name}</strong>{state === "ready" && <small><MicVocal size={12} /> Vocal lip sync ready</small>}</div>

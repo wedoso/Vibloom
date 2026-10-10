@@ -1,8 +1,8 @@
 import StyledSelect from "./StyledSelect";
+import { librarySaveMessage } from "./platform/indexedLibraryRepository";
 import {
   ArrowDown,
   ArrowUp,
-  AudioLines,
   ChevronDown,
   ChevronLeft,
   Database,
@@ -35,7 +35,6 @@ import {
   WandSparkles,
   SlidersHorizontal,
   MicVocal,
-  GripVertical,
   X,
 } from "lucide-react";
 import {
@@ -45,6 +44,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -53,8 +53,8 @@ import { flushSync } from "react-dom";
 import Live2DStage from "./Live2DStage";
 import { COMPANIONS, type CompanionId } from "./live2d/models";
 import { desktopPlayerZoomOffset } from "./live2d/playerFraming";
-import TrackActions from "./library/TrackActions";
-import { TrackStatus, TrackVocalProgress } from "./library/TrackStatus";
+import type { TrackRowHandlers } from "./library/TrackRow";
+import TrackRows from "./library/TrackRows";
 import BrandMark from "./BrandMark";
 import UpdateControl from "./UpdateControl";
 import ProcessingDialog from "./ProcessingDialog";
@@ -74,7 +74,8 @@ import { SynchronizedAudioEngine } from "./audio/SynchronizedAudioEngine";
 import { SILENT_VOCAL_POSE, type VocalPose } from "./audio/vocals/envelope";
 import { useLibraryVocals } from "./audio/vocals/useLibraryVocals";
 import { VocalJobStore, vocalJobKey } from "./audio/vocals/jobStore";
-import { useVocalPlayback } from "./audio/vocals/useVocalPlayback";
+import { releaseIdleVocalWorkers } from "./audio/vocals/analyzeVocals";
+import { useVocalPlaybackState } from "./audio/vocals/useVocalPlayback";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "./audioVisual";
 import { APP_VERSION } from "./appVersion";
 import {
@@ -84,7 +85,9 @@ import {
   comparisonCacheKey,
   comparisonsOf,
   withComparisons,
-  isCurrentVocalAnalysis,
+  isVocalAnalysisReady,
+  isVocalAnalysisReference,
+  clearVocalReference,
   createShuffleBag,
   EMPTY_SESSION,
   LibrarySession,
@@ -98,6 +101,7 @@ import {
   TRACK_DRAG_TYPE,
   type LibraryAlbum,
   type VocalAnalysis,
+  type VocalAnalysisReference,
 } from "./domain/library";
 import { decodeLrc, LyricLine, parseLrc, parseLyricsFile, serializeLrc, type LyricTimingLine } from "./lrc";
 import LyricsTimingEditor from "./LyricsTimingEditor";
@@ -107,6 +111,8 @@ import { browserLibraryPlatform } from "./platform/browserLibraryPlatform";
 import { filePickerPolicy } from "./platform/filePickerPolicy";
 import type { LibraryPlatform, StorageState } from "./platform/libraryPlatform";
 import { useMediaSession } from "./platform/useMediaSession";
+import { useVisualActivity } from "./platform/useVisualActivity";
+import { usePlaybackPaint } from "./platform/usePlaybackPaint";
 import "./library.css";
 import "./hong-xi-theme.css";
 
@@ -207,6 +213,8 @@ function PrecisionWaveform({
   onScrubStart,
   onScrub,
   onScrubEnd,
+  playing,
+  readTime,
 }: {
   peaks: number[];
   currentTime: number;
@@ -217,7 +225,10 @@ function PrecisionWaveform({
   onScrubStart: () => void;
   onScrub: (time: number) => void;
   onScrubEnd: (time: number) => void;
+  playing: boolean;
+  readTime: () => number;
 }) {
+  const host = useRef<HTMLDivElement>(null);
   const scrubbingRef = useRef(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubTime, setScrubTime] = useState(0);
@@ -225,6 +236,17 @@ function PrecisionWaveform({
   const safeDuration = Math.max(0, duration);
   const displayTime = Math.max(0, Math.min(safeDuration, isScrubbing ? scrubTime : currentTime));
   const progress = safeDuration > 0 ? displayTime / safeDuration : 0;
+  usePlaybackPaint(playing, displayTime, readTime, position => {
+    if (scrubbingRef.current || !host.current) return;
+    const time = Math.max(0, Math.min(safeDuration, position));
+    const percent = `${safeDuration > 0 ? time / safeDuration * 100 : 0}%`;
+    const played = host.current.querySelector<HTMLElement>(".waveform-played");
+    const cursor = host.current.querySelector<HTMLElement>("b");
+    const input = host.current.querySelector<HTMLInputElement>(".waveform-seek");
+    if (played) played.style.width = percent;
+    if (cursor) cursor.style.left = percent;
+    if (input) input.value = String(time);
+  });
 
   const finishScrub = (time: number) => {
     if (!scrubbingRef.current) return;
@@ -241,7 +263,7 @@ function PrecisionWaveform({
   };
 
   return (
-    <div className={`precision-waveform waveform-source-${source === 0 ? "a" : "b"} ${peaks.length ? "is-ready" : "is-loading"} ${isScrubbing ? "is-scrubbing" : ""}`}>
+    <div ref={host} className={`precision-waveform waveform-source-${source === 0 ? "a" : "b"} ${peaks.length ? "is-ready" : "is-loading"} ${isScrubbing ? "is-scrubbing" : ""}`}>
       <div className="waveform-bars">{bars}</div>
       <span className="waveform-played" style={{ width: `${Math.max(0, Math.min(100, progress * 100))}%` }} />
       <b style={{ left: `${Math.max(0, Math.min(100, progress * 100))}%` }} />
@@ -283,6 +305,16 @@ function PrecisionWaveform({
       />
     </div>
   );
+}
+
+function PlaybackPosition({ time, duration, precise, playing, readTime, onSeek }: { time: number; duration: number; precise: boolean; playing: boolean; readTime: () => number; onSeek: (position: number) => Promise<void> }) {
+  const input = useRef<HTMLInputElement>(null), dragging = useRef(false);
+  usePlaybackPaint(playing, time, readTime, position => {
+    if (input.current && !dragging.current) input.current.value = String(Math.min(position, Math.max(duration, 1)));
+  });
+  return <div className="transport-progress"><span>{formatTime(time, precise)}</span><input ref={input} aria-label="Playback position" type="range" min="0" max={Math.max(duration, 1)} step="0.001" value={Math.min(time, Math.max(duration, 1))}
+    onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); dragging.current = true; }} onPointerUp={() => { dragging.current = false; }} onPointerCancel={() => { dragging.current = false; }} onLostPointerCapture={() => { dragging.current = false; }} onBlur={() => { dragging.current = false; }}
+    onChange={event => void onSeek(Number(event.target.value))} /><span>{formatTime(duration, precise)}</span></div>;
 }
 
 function formatBytes(bytes: number) {
@@ -369,7 +401,7 @@ function repeatLabel(mode: RepeatMode) {
   return "Repeat off";
 }
 
-function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyrics, onRemoveLyrics, timing, onTiming, variant = "console" }: { lines: LyricLine[]; currentTime: number; fileName: string; activeSource: number; onAttachLyrics: () => void; onRemoveLyrics: () => void; timing?: LyricTimingLine[]; onTiming: () => void; variant?: "console" | "focus" }) {
+function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyrics, onRemoveLyrics, timing, onTiming, variant = "console", playing, readTime }: { lines: LyricLine[]; currentTime: number; fileName: string; activeSource: number; onAttachLyrics: () => void; onRemoveLyrics: () => void; timing?: LyricTimingLine[]; onTiming: () => void; variant?: "console" | "focus"; playing: boolean; readTime: () => number }) {
   const lineRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const activeIndex = useMemo(() => {
@@ -385,6 +417,12 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
   const lineProgress = activeLine && nextTime && nextTime > activeLine.time
     ? Math.min(100, Math.max(0, ((currentTime - activeLine.time) / (nextTime - activeLine.time)) * 100))
     : activeLine ? 100 : 0;
+  usePlaybackPaint(playing, currentTime, readTime, position => {
+    const row = lineRefs.current[activeIndex];
+    if (!row || !activeLine) return;
+    const fill = nextTime && nextTime > activeLine.time ? Math.min(100, Math.max(0, (position - activeLine.time) / (nextTime - activeLine.time) * 100)) : 100;
+    row.style.setProperty("--lyric-progress", `${fill}%`);
+  });
 
   useEffect(() => {
     if (activeIndex < 0) return;
@@ -450,6 +488,7 @@ function usePlaybackTitle(name: string, playing: boolean, count: number) {
 }
 
 export default function LibraryApp({ platform = browserLibraryPlatform }: { platform?: LibraryPlatform }) {
+  const visualActive = useVisualActivity();
   const [pickerPolicy] = useState(() => filePickerPolicy(navigator, "webkitdirectory" in document.createElement("input")));
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
   const [albums, setAlbums] = useState<LibraryAlbum[]>([]);
@@ -509,8 +548,11 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const frequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const timeDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const loadedTrackIdRef = useRef("");
+  const loadedTrackFingerprintRef = useRef("");
   const preloadingTrackIdRef = useRef("");
   const primaryLoadVersionRef = useRef(0);
+  const mountedRef = useRef(true);
+  const primaryReadRef = useRef<AbortController | null>(null);
   const playingRef = useRef(false);
   const playbackIntentVersionRef = useRef(0);
   const waveformScrubbingRef = useRef(false);
@@ -526,16 +568,16 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const audioVisualRef = useRef({ ...EMPTY_AUDIO_VISUAL });
   const vocalLevelRef = useRef<VocalPose>(SILENT_VOCAL_POSE);
 
-  const currentTrack = tracks.find((track) => track.id === session.currentTrackId) ?? null;
-  const timingTrack = tracks.find((track) => track.id === timingTrackId) ?? null;
+  const tracksById = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
+  const currentTrack = tracksById.get(session.currentTrackId) ?? null;
+  const timingTrack = tracksById.get(timingTrackId) ?? null;
   const filteredTracks = useMemo(() => {
     const query = normalizeFileName(search);
     const album = albums.find((candidate) => candidate.id === activeAlbumId);
-    const byId = new Map(tracks.map((track) => [track.id, track]));
-    const collected = album ? album.trackIds.flatMap((id) => { const track = byId.get(id); return track ? [track] : []; }) : tracks;
+    const collected = album ? album.trackIds.flatMap((id) => { const track = tracksById.get(id); return track ? [track] : []; }) : tracks;
     if (!query) return collected;
     return collected.filter((track) => normalizeFileName(`${track.name} ${track.relativePath} ${track.sourceLabel}`).includes(query));
-  }, [search, tracks, albums, activeAlbumId]);
+  }, [search, tracks, tracksById, albums, activeAlbumId]);
   const unavailableCount = tracks.filter((track) => track.availability === "reconnect" || track.availability === "missing").length;
   const patchTracks = useCallback((update: (current: LibraryTrack[]) => LibraryTrack[]) => {
     setTracks((current) => {
@@ -545,17 +587,20 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     });
   }, []);
 
-  const [vocalJobs] = useState(() => new VocalJobStore());
-  useEffect(() => () => vocalJobs.dispose(), [vocalJobs]);
+  const [vocalJobs] = useState(() => new VocalJobStore(undefined, platform.vocalAnalyses));
+  useEffect(() => () => { vocalJobs.dispose(); releaseIdleVocalWorkers(); }, [vocalJobs]);
   const jobsSnapshot = useSyncExternalStore(vocalJobs.subscribe, vocalJobs.getSnapshot);
   const [singingKeys, setSingingKeys] = useState<Set<string>>(() => new Set());
   const readRoot = useCallback(() => tracksRef.current.find(track => track.id === sessionRef.current.currentTrackId) ?? null, []);
   const readTracks = useCallback(() => tracksRef.current, []);
   const cacheEnabled = useCallback(() => sessionRef.current.cacheEnabled, []);
   const forgetVocals = useCallback((track: LibraryTrack, source: number) => {
-    const key = vocalJobKey(track, source); vocalJobs.forget(key);
+    const key = vocalJobKey(track, source);
+    const analysis = source === 0 ? track.vocalAnalysis : comparisonsOf(track).find(item => item.slot === source)?.vocalAnalysis;
+    if (isVocalAnalysisReference(analysis)) void platform.vocalAnalyses?.remove(analysis.cacheKey).catch(() => undefined);
+    vocalJobs.forget(key);
     setSingingKeys(current => { const next = new Set(current); next.delete(key); return next; });
-  }, [vocalJobs]);
+  }, [vocalJobs, platform]);
   const selectAudible = useCallback((source: number) => {
     setActiveSource(source);
     if (source > 0) setLastComparison({ rootId: readRoot()?.id ?? "", slot: source });
@@ -607,7 +652,14 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const activeSourceEnded = activeDuration > 0 && currentTime >= activeDuration - .005 && currentTime < timelineDuration - .005;
   const activeKey = currentTrack ? vocalJobKey(currentTrack, audibleSource) : "";
   const activeAnalysis = jobsSnapshot[activeKey]?.analysis ?? (audibleSource === 0 ? currentTrack?.vocalAnalysis : comparisonsOf(currentTrack ?? { comparison: null } as LibraryTrack).find(item => item.slot === audibleSource)?.vocalAnalysis);
-  const sampleVocals = useVocalPlayback(activeAnalysis, activeDuration, singingKeys.has(activeKey));
+  const missingVocalReference = useCallback((reference: VocalAnalysisReference) => {
+    if (clearVocalReference(tracksRef.current, reference.cacheKey) === tracksRef.current) return;
+    vocalJobs.forgetReference(reference.cacheKey);
+    patchTracks(current => clearVocalReference(current, reference.cacheKey));
+    setMessage("Vocal timing is unavailable. Prepare vocals again.");
+  }, [vocalJobs, patchTracks]);
+  const vocalPlayback = useVocalPlaybackState(activeAnalysis, activeDuration, singingKeys.has(activeKey), platform.vocalAnalyses, missingVocalReference);
+  const sampleVocals = vocalPlayback.sample;
   const { cancelAll: cancelTransforms, reset: resetComparisons } = comparisons;
 
   const patchSession = useCallback((patch: Partial<LibrarySession> | ((current: LibrarySession) => LibrarySession)) => {
@@ -702,16 +754,25 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     sessionRef.current = session;
   }, [session]);
 
+  const fallbackSession = platform.repository.saveSession ? null : session;
   useEffect(() => {
     if (!restored) return;
     const timer = window.setTimeout(() => {
       const serializableTracks = tracks.map(track => withComparisons({ ...track, availability: track.persistence === "cached" ? "available" as const : "reconnect" as const }, comparisonsOf(track).map(item => ({ ...item, availability: item.persistence === "cached" ? "available" as const : "reconnect" as const }))));
-      void platform.repository.save({ version: 3, tracks: serializableTracks, albums, session }).catch(() => {
-        setMessage("Could not save changes in this mode.");
+      void platform.repository.save({ version: 3, tracks: serializableTracks, albums, session: sessionRef.current }).catch(error => {
+        if (mountedRef.current && error?.name !== "AbortError") setMessage(librarySaveMessage(error, "Could not save changes in this mode."));
       });
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [platform, restored, session, tracks, albums]);
+  }, [platform, restored, fallbackSession, tracks, albums]);
+
+  useEffect(() => {
+    if (!restored || !platform.repository.saveSession) return;
+    const timer = window.setTimeout(() => {
+      void platform.repository.saveSession!(session).catch(error => { if (mountedRef.current && error?.name !== "AbortError") setMessage(librarySaveMessage(error, "Could not save playback settings in this mode.")); });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [platform, restored, session]);
 
   const ensureAudioGraph = useCallback(async (resume = true) => {
     const context = await audioEngine.ensureGraph(resume, sessionRef.current.volume);
@@ -795,20 +856,27 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     patchTracks((current) => current.map((track) => track.id === source.id && track.fingerprint === source.fingerprint ? { ...track, vocalAnalysis: analysis } : track));
     setSingingKeys(current => new Set(current).add(vocalJobKey(source)));
   }, [patchTracks]);
-  const libraryVocals = useLibraryVocals(vocalJobs, resolveTrackFile, saveLibraryVocals);
+  const readLoadedOriginal = useCallback((track: LibraryTrack) => loadedTrackIdRef.current === track.id && loadedTrackFingerprintRef.current === track.fingerprint ? audioEngine.getBuffer(0) : null, [audioEngine]);
+  const libraryVocals = useLibraryVocals(vocalJobs, resolveTrackFile, saveLibraryVocals, readLoadedOriginal);
 
   const startTrack = useCallback(async (trackId: string, play = true, resumeAt = 0) => {
     cancelTransforms();
     const playbackIntentVersion = playbackIntentVersionRef.current;
+    const loadVersion = ++primaryLoadVersionRef.current;
+    primaryReadRef.current?.abort();
+    const readController = new AbortController(); primaryReadRef.current = readController;
+    const valid = () => mountedRef.current && loadVersion === primaryLoadVersionRef.current;
     const track = tracksRef.current.find((candidate) => candidate.id === trackId);
     if (!track) return false;
-    const file = await resolveTrackFile(track);
-    if (!file) {
+    let buffer = readLoadedOriginal(track);
+    const reused = !!buffer;
+    const file = buffer ? null : await resolveTrackFile(track);
+    if (!valid()) return false;
+    if (!buffer && !file) {
       patchTracks((current) => current.map((candidate) => candidate.id === trackId ? { ...candidate, availability: "missing" } : candidate));
       setMessage(`Reconnect ${track.sourceLabel} to play ${trackDisplayName(track.name)}.`);
       return false;
     }
-    const loadVersion = ++primaryLoadVersionRef.current;
     if (loadedTrackIdRef.current && loadedTrackIdRef.current !== trackId) {
       setProcessingDialog(null); setProcessingError("");
       resetComparisons();
@@ -820,23 +888,26 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setIsPlaying(false);
     setMessage(`Preparing · ${trackDisplayName(track.name)}`);
     setPrimaryLoad({ stage: "reading", progress: 0 });
-    let buffer: AudioBuffer;
     try {
-      const context = await ensureAudioGraph(false);
-      const arrayBuffer = await readAudioFile(file, (progress) => {
-        if (loadVersion === primaryLoadVersionRef.current) setPrimaryLoad({ stage: "reading", progress });
-      });
-      if (loadVersion !== primaryLoadVersionRef.current) return false;
-      setPrimaryLoad({ stage: "decoding", progress: 58 });
-      buffer = await context.decodeAudioData(arrayBuffer);
+      if (!buffer) {
+        const context = await ensureAudioGraph(false);
+        const arrayBuffer = await readAudioFile(file!, (progress) => {
+          if (valid()) setPrimaryLoad({ stage: "reading", progress });
+        }, readController.signal);
+        if (!valid()) return false;
+        setPrimaryLoad({ stage: "decoding", progress: 58 });
+        buffer = await context.decodeAudioData(arrayBuffer);
+      }
     } catch {
+      if (!valid()) return false;
       setPrimaryLoad({ stage: "idle", progress: 0 });
       setMessage("This track could not be decoded in the current browser.");
       return false;
     }
-    if (loadVersion !== primaryLoadVersionRef.current) return false;
+    if (!valid()) return false;
     audioEngine.setBuffer(0, buffer);
     loadedTrackIdRef.current = trackId;
+    loadedTrackFingerprintRef.current = track.fingerprint;
     const safeTime = Math.min(Math.max(0, resumeAt), Math.max(0, buffer.duration - 0.05));
     audioEngine.setOffset(safeTime);
     const previous = sessionRef.current.currentTrackId;
@@ -854,12 +925,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setCurrentTime(safeTime);
     lastCheckpointRef.current = safeTime;
     setDuration(buffer.duration);
-    setPrimaryPeaks(makeWaveformPeaks(buffer));
+    if (!reused) setPrimaryPeaks(makeWaveformPeaks(buffer));
     setPrimaryLoad({ stage: "idle", progress: 100 });
     setMessage(`${play ? "Playing" : "Ready"} · ${trackDisplayName(track.name)}`);
     if (play && playbackIntentVersion === playbackIntentVersionRef.current) await startPlayback(safeTime);
     return true;
-  }, [audioEngine, cancelTransforms, resetComparisons, ensureAudioGraph, patchSession, patchTracks, resolveTrackFile, startPlayback]);
+  }, [audioEngine, cancelTransforms, resetComparisons, ensureAudioGraph, patchSession, patchTracks, resolveTrackFile, startPlayback, readLoadedOriginal]);
 
   useEffect(() => {
     startTrackRef.current = startTrack;
@@ -937,14 +1008,19 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       return;
     }
     let lastUiTime = -Infinity;
+    let backgroundTimer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (visualActive) animationFrameRef.current = requestAnimationFrame(tick);
+      else backgroundTimer = setTimeout(() => tick(performance.now()), 25);
+    };
     const tick = (now: number) => {
       if (!playingRef.current) return;
       const reference = getTimelineTime();
-      vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : SILENT_VOCAL_POSE;
+      if (visualActive) vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : SILENT_VOCAL_POSE;
       const maxDuration = audioEngine.getMaxDuration();
       const nextTime = Math.min(reference, maxDuration);
-      // The timing editor owns its visual playhead; background UI needs only 10 Hz.
-      if (!timingTrackId || now - lastUiTime >= 100) {
+      // Local playheads keep painting smoothly; page state needs only 10 Hz.
+      if (visualActive && now - lastUiTime >= 100) {
         setCurrentTime(nextTime);
         lastUiTime = now;
       }
@@ -956,7 +1032,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       const analyser = audioEngine.getAnalyser(audioEngine.audibleSource);
       const frequency = frequencyDataRef.current;
       const time = timeDataRef.current;
-      if (analyser && frequency && time) {
+      if (visualActive && analyser && frequency && time) {
         audioVisualRef.current = sampleAnalyser(analyser, frequency, time, audioVisualRef.current, reference, audioEngine.audibleSource);
       }
       if (maxDuration > 0 && reference >= maxDuration - 0.025) {
@@ -967,20 +1043,25 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         if (!timingTrackId) endedRef.current();
         // A buffered repeat may resume within the same React batch. Keep a
         // frame scheduled; the effect cleanup cancels it if playback stays off.
-        animationFrameRef.current = requestAnimationFrame(tick);
+        schedule();
         return;
       }
-      animationFrameRef.current = requestAnimationFrame(tick);
+      schedule();
     };
-    animationFrameRef.current = requestAnimationFrame(tick);
+    schedule();
     return () => {
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+      if (backgroundTimer !== null) clearTimeout(backgroundTimer);
     };
-  }, [activeSource, audioEngine, getTimelineTime, isPlaying, timingTrackId, sampleVocals]);
+  }, [activeSource, audioEngine, getTimelineTime, isPlaying, timingTrackId, sampleVocals, visualActive]);
 
   useEffect(() => () => {
+    mountedRef.current = false;
+    primaryReadRef.current?.abort(); primaryReadRef.current = null;
+    primaryLoadVersionRef.current++; playbackIntentVersionRef.current++;
+    platform.vocalAnalyses?.release();
     void audioEngine.close();
-  }, [audioEngine]);
+  }, [audioEngine, platform]);
 
   const handleImport = useCallback(async (fileList: FileList | File[], albumId = "") => {
     const files = Array.from(fileList) as FileWithPath[];
@@ -1457,11 +1538,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   function releaseLoadedAudio() {
+    primaryReadRef.current?.abort(); primaryReadRef.current = null;
     setProcessingDialog(null);
     setProcessingError("");
     resetComparisons();
     primaryLoadVersionRef.current += 1;
     loadedTrackIdRef.current = "";
+    loadedTrackFingerprintRef.current = "";
     preloadingTrackIdRef.current = "";
     playingRef.current = false;
     audioEngine.stop();
@@ -1553,10 +1636,11 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     if (job?.status === "queued" || job?.status === "working") { vocalJobs.cancel(key); return; }
     const analysis = job?.analysis ?? (source === 0 ? root.vocalAnalysis : item?.vocalAnalysis);
     const sourceDuration = source === 0 ? primaryDuration : item?.duration ?? 0;
-    if (isCurrentVocalAnalysis(analysis, sourceDuration)) {
+    if (isVocalAnalysisReady(analysis, sourceDuration)) {
+      if (key === activeKey && singingKeys.has(key) && vocalPlayback.error) { vocalPlayback.retry(); return; }
       setSingingKeys(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }); return;
     }
-    vocalJobs.prepare(key, () => { if (readRoot()?.id !== root.id || source > 0 && comparisons.record(source)?.id !== item?.id) throw new DOMException("Source changed", "AbortError"); return comparisons.ensureBuffer(source); }, result => {
+    vocalJobs.prepare(key, signal => { if (readRoot()?.id !== root.id || source > 0 && comparisons.record(source)?.id !== item?.id) throw new DOMException("Source changed", "AbortError"); return comparisons.ensureBuffer(source, signal); }, result => {
       patchTracks(current => current.map(track => {
         if (track.id !== root.id || track.fingerprint !== root.fingerprint) return track;
         if (source === 0) return { ...track, vocalAnalysis: result };
@@ -1568,12 +1652,15 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   function cardTools(source: number, ready: boolean) {
     const key = currentTrack ? vocalJobKey(currentTrack, source) : "", job = jobsSnapshot[key], transform = comparisons.jobs[source];
     const analysis = job?.analysis ?? (source === 0 ? currentTrack?.vocalAnalysis : comparisons.record(source)?.vocalAnalysis);
-    const vocalsReady = isCurrentVocalAnalysis(analysis, source === 0 ? primaryDuration : comparisons.slots[source]?.duration ?? 0);
+    const vocalsReady = isVocalAnalysisReady(analysis, source === 0 ? primaryDuration : comparisons.slots[source]?.duration ?? 0);
     const vocalsBusy = job?.status === "working" || job?.status === "queued";
+    const selected = key === activeKey && singingKeys.has(key);
+    const loading = selected && vocalPlayback.loading, loadError = selected && vocalPlayback.error;
+    const enabled = singingKeys.has(key) && (!selected || vocalPlayback.ready);
     return <span className="card-processing-tools">
       <ToolButton aria-label={`EQ track ${source + 1}`} title="EQ & mastering · Preview and shape this track" className={transform?.kind === "eq" ? "is-working" : ""} disabled={comparisons.clearing || !ready && !transform} onClick={() => openProcessing(source, "eq")}><SlidersHorizontal size={14} /></ToolButton>
       <ToolButton aria-label={`Audio repair track ${source + 1}`} title="Audio repair · Clean shimmer, noise and resonance" className={transform?.kind === "remaster" ? "is-working" : ""} disabled={comparisons.clearing || !ready && !transform} onClick={() => openProcessing(source, "remaster")}><WandSparkles size={14} /></ToolButton>
-      <ToolButton data-vocal-track={source + 1} data-vocal-status={vocalsBusy ? "working" : vocalsReady ? "ready" : job?.status ?? "idle"} aria-label={`${vocalsBusy ? "Cancel vocals" : vocalsReady ? singingKeys.has(key) ? "Disable singing" : "Enable singing" : "Prepare vocals"} track ${source + 1}`} title={job?.status === "error" ? job.error : vocalsBusy ? `${job.phase} · Click to cancel` : vocalsReady ? singingKeys.has(key) ? "Vocal lip sync · Disable singing" : "Vocal lip sync · Enable singing" : "Vocal lip sync · Prepare vocals (first download: 172 MiB)"} disabled={source > 0 && comparisons.clearing || !ready && !vocalsBusy} aria-pressed={vocalsReady ? singingKeys.has(key) : undefined} className={vocalsBusy ? "is-working" : singingKeys.has(key) ? "is-enabled" : ""} onClick={() => prepareVocals(source)}><MicVocal size={14} /></ToolButton>
+      <ToolButton data-vocal-track={source + 1} data-vocal-status={vocalsBusy ? "working" : vocalsReady ? "ready" : job?.status ?? "idle"} data-vocal-playback={loading ? "loading" : loadError ? "error" : enabled ? "enabled" : "disabled"} aria-label={`${vocalsBusy ? "Cancel vocals" : loadError ? "Retry singing" : loading ? "Cancel singing" : vocalsReady ? singingKeys.has(key) ? "Disable singing" : "Enable singing" : "Prepare vocals"} track ${source + 1}`} title={job?.status === "error" ? job.error : vocalsBusy ? `${job.phase} · Click to cancel` : loadError ? `${loadError} · Click to retry loading` : loading ? "Loading vocal timing · Singing will start automatically" : vocalsReady ? enabled ? "Vocal lip sync · Disable singing" : "Vocal lip sync · Enable singing" : "Vocal lip sync · Prepare vocals (first download: 172 MiB)"} disabled={source > 0 && comparisons.clearing || !ready && !vocalsBusy} aria-pressed={vocalsReady ? enabled : undefined} className={vocalsBusy || loading ? "is-working" : enabled ? "is-enabled" : ""} onClick={() => prepareVocals(source)}><MicVocal size={14} /></ToolButton>
     </span>;
   }
   function cardProgress(source: number) {
@@ -1584,9 +1671,14 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     return progress ? <CardProgress progress={progress.progress} label={`Track ${source + 1}: ${progress.phase}`} /> : null;
   }
   function cardVocalStatus(source: number) {
-    const job = currentTrack ? jobsSnapshot[vocalJobKey(currentTrack, source)] : undefined;
-    if (!job || job.status === "idle" || job.status === "ready") return null;
-    return <span className={`card-vocal-status is-${job.status}`} role="status" title={job.error ?? job.phase}>{job.status === "error" ? job.error : `${job.phase} · ${Math.round(job.progress * 100)}%`}</span>;
+    const key = currentTrack ? vocalJobKey(currentTrack, source) : "", job = jobsSnapshot[key];
+    const selected = key === activeKey && singingKeys.has(key);
+    const loadError = selected && vocalPlayback.error;
+    // Cached timing loads through the button state without replacing the footer.
+    if (!loadError && !["queued", "working", "error"].includes(job?.status ?? "")) return null;
+    const label = loadError ? "Vocal timing unavailable · Retry" : job?.status === "error" ? job.error
+      : `${job?.phase}${job?.phase.includes("MotionSync") ? "" : " · MotionSync"} · ${Math.round((job?.progress ?? 0) * 100)}%`;
+    return <span className={`card-vocal-status is-${loadError ? "error" : job?.status}`} role="status" title={loadError || [label, ...(job?.phases ?? [])].join("\n")}>{label}</span>;
   }
 
   useEffect(() => {
@@ -1642,6 +1734,34 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [timingTrackId, patchTracks]);
   const closeTimingEditor = useCallback(() => setTimingTrackId(""), []);
   const toggleTimingPlayback = useCallback(() => { void shortcutTogglePlayRef.current(); }, []);
+
+  const rowHandlers = useRef<TrackRowHandlers | null>(null);
+  useLayoutEffect(() => {
+    rowHandlers.current = {
+      play: track => { void playLibraryTrack(track.id); },
+      select: (id, selected) => setSelectedVocalTracks(ids => selected ? [...ids, id] : ids.filter(item => item !== id)),
+      dragStart: (event, id) => {
+        event.dataTransfer.setData(TRACK_DRAG_TYPE, id); event.dataTransfer.effectAllowed = "all";
+        albumDragRef.current = activeAlbum ? { albumId: activeAlbum.id, trackId: id } : null;
+        if (activeAlbum) { setAlbumDrag(id); setMenuTrackId(""); }
+      },
+      dragOver: previewAlbumDrop, drop: dropAlbumTrack,
+      toggleMenu: id => setMenuTrackId(current => current === id ? "" : id),
+      closeMenu: id => setMenuTrackId(current => current === id ? "" : current),
+      openPlayer: track => openComparison(track.id), next: track => addPlayNext(track.id), queue: track => appendQueue(track.id),
+      prepare: track => libraryVocals.prepare([track]), cancel: track => libraryVocals.cancel(vocalJobKey(track)),
+      attach: track => openLyricsPicker(track.id), removeLyrics: track => removeTrackLyrics(track.id), editTiming: track => { void openTimingEditor(track.id); },
+      cache: track => { void toggleTrackCache(track); }, reconnect: () => openFiles(true), addToAlbum: (track, id) => addTrackToAlbum(id, track.id),
+      removeFromAlbum: track => { setAlbums(current => current.map(album => album.id === activeAlbumId ? { ...album, trackIds: album.trackIds.filter(id => id !== track.id) } : album)); setMenuTrackId(""); },
+      moveInAlbum: (track, edge) => {
+        if (!activeAlbum) return;
+        const position = activeAlbum.trackIds.indexOf(track.id), targetId = activeAlbum.trackIds[position + (edge === "before" ? -1 : 1)];
+        if (!targetId) return;
+        setAlbums(current => current.map(album => album.id === activeAlbum.id ? reorderAlbumTrack(album, track.id, targetId, edge) : album));
+        setMenuTrackId(""); setMessage("Album order saved.");
+      },
+    };
+  });
 
   const albumCollections = <AlbumCollections albums={albums} tracks={tracks} activeId={activeAlbumId} browsing={browsingAlbums} onBrowse={setBrowsingAlbums}
     onSelect={(id) => { setActiveAlbumId(id); setMenuTrackId(""); }}
@@ -1734,7 +1854,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 <div className="version-a-zone">
                   <article className={`waveform-card version-a ${activeSource === 0 ? "is-active" : ""}`} data-track-number="1">
                     <div className="waveform-card-heading"><button className="source-selector" type="button" aria-label="Listen to track 1" onClick={() => switchSource(0)} aria-pressed={activeSource === 0}>1</button><div><small>ORIGINAL</small><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Choose a track"}</strong></div><span className="waveform-card-tools">{formatTime(primaryDuration)}</span></div>
-                    <PrecisionWaveform peaks={primaryPeaks} currentTime={currentTime} duration={primaryDuration} label="Track 1" source={0} onSeek={time => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={time => { void finishWaveformScrub(time); }} />
+                    <PrecisionWaveform playing={isPlaying && visualActive} readTime={getTimelineTime} peaks={primaryPeaks} currentTime={currentTime} duration={primaryDuration} label="Track 1" source={0} onSeek={time => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={time => { void finishWaveformScrub(time); }} />
                     <div className="waveform-card-foot">{cardTools(0, !!currentTrack && primaryLoad.stage === "idle" && !!primaryPeaks.length)}{cardVocalStatus(0)}<span className={currentTrack && ["working", "queued", "error"].includes(jobsSnapshot[vocalJobKey(currentTrack)]?.status ?? "") ? "is-job-hidden" : ""}>{primaryLoad.stage !== "idle" ? "LOADING AUDIO" : comparisons.jobs[0] ? `${comparisons.jobs[0].phase} · ${Math.round(comparisons.jobs[0].progress * 100)}%` : activeSource === 0 && isPlaying ? "AUDIBLE" : "ORIGINAL · UNCHANGED"}</span></div>
                     {cardProgress(0)}
                   </article>
@@ -1748,7 +1868,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                     return <article key={slot.id} data-track-number={slot.slot + 1} data-expanded={expanded} className={`waveform-card version-b ${activeSource === slot.slot ? "is-active" : ""} ${expanded ? "is-expanded" : "is-compact"} is-${slot.status}`} onClick={event => { if (!expanded && slot.status === "ready" && !(event.target as Element).closest("button, summary, details, input")) switchSource(slot.slot); }} onDragOver={event => event.preventDefault()} onDrop={event => handleComparisonDrop(event, slot.slot)}>
                     <div className="waveform-card-heading"><button className="source-selector" type="button" aria-label={`Listen to track ${slot.slot + 1}`} disabled={comparisons.clearing || slot.status === "reconnect" || slot.status === "error" || Object.values(comparisons.jobs).some(job => job.target === slot.slot)} onClick={() => switchSource(slot.slot)} aria-pressed={activeSource === slot.slot} aria-expanded={expanded}>{slot.slot + 1}</button><div><small title={slot.source ? `From track ${slot.source.number} · ${slot.source.name}` : "Imported comparison"}>{slot.mastering?.settings.mode === "mastering" ? "EQ + MASTERING" : slot.eq ? `EQ · ${EQ_PRESETS.find(preset => preset.id === slot.eq?.presetId)?.name ?? "Custom"}` : slot.remaster ? `AUDIO REPAIR · ${REPAIR_PRESETS.find(preset => preset.id === slot.remaster?.presetId)?.name}` : "COMPARISON"}{slot.source && ` · FROM ${slot.source.number}`}</small><strong title={slot.name}>{!expanded && cardVocalStatus(slot.slot) || trackDisplayName(slot.name)}</strong></div><ComparisonActions number={slot.slot + 1} ready={slot.status === "ready"} onDownload={() => void comparisons.download(slot.slot)} onReplace={() => pickComparison(slot.slot)} onRemove={() => void comparisons.remove(slot.slot)} /></div>
                     <ComparisonCardBody expanded={expanded}>
-                    <PrecisionWaveform peaks={slot.peaks ?? []} currentTime={expanded ? currentTime : 0} duration={slot.duration} label={`Track ${slot.slot + 1}`} source={slot.slot} onSeek={time => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={time => { void finishWaveformScrub(time); }} />
+                    <PrecisionWaveform playing={isPlaying && visualActive} readTime={getTimelineTime} peaks={slot.peaks ?? []} currentTime={expanded ? currentTime : 0} duration={slot.duration} label={`Track ${slot.slot + 1}`} source={slot.slot} onSeek={time => { void seekTo(time); }} onScrubStart={beginWaveformScrub} onScrub={previewWaveformSeek} onScrubEnd={time => { void finishWaveformScrub(time); }} />
                     {Math.abs(primaryDuration - slot.duration) > .05 && <div className="comparison-duration-alert"><strong>Different lengths</strong><span>Shared timeline: {formatTime(timelineDuration, true)}</span></div>}
                     </ComparisonCardBody>
                     <div className="waveform-card-foot">{cardTools(slot.slot, slot.status === "ready")}{cardVocalStatus(slot.slot)}<span className={currentTrack && ["working", "queued", "error"].includes(jobsSnapshot[vocalJobKey(currentTrack, slot.slot)]?.status ?? "") ? "is-job-hidden" : ""} title={slot.error}>{slot.status === "loading" ? `LOADING · ${Math.round(slot.loadProgress)}%` : slot.status === "reconnect" || slot.status === "error" ? <button type="button" className="reconnect-version" onClick={() => pickComparison(slot.slot)}>Reconnect audio</button> : comparisons.jobs[slot.slot] ? `${comparisons.jobs[slot.slot].phase} · ${Math.round(comparisons.jobs[slot.slot].progress * 100)}%` : `${formatTime(slot.duration)} · ${activeSource === slot.slot && isPlaying ? "AUDIBLE" : "READY"}`}</span></div>
@@ -1762,7 +1882,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 {activeSourceEnded && <div className="comparison-status-lane" aria-live="polite">
                   <div className="comparison-ended-alert">Track {activeSource + 1} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>
                 </div>}
-                <div className="console-lower"><LyricsPanel timing={currentTrack?.lyricTiming} onTiming={() => { if (currentTrack) void openTimingEditor(currentTrack.id); }} lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+                <div className="console-lower"><LyricsPanel playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack?.lyricTiming} onTiming={() => { if (currentTrack) void openTimingEditor(currentTrack.id); }} lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
               </div>
             </div>
           ) : (
@@ -1790,40 +1910,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
             <FileDropRegion albumName={activeAlbum?.name} onFilesDrop={(event) => void handleDrop(event)}>
             <div className="track-table" role="table" aria-label="Local music library">
               <div className="track-row track-table-header" role="row"><span>#</span><span>Track</span><span>Status</span><span>Time</span><span /></div>
-              {filteredTracks.map((track, index) => {
-                const jobKey = vocalJobKey(track);
-                const vocalJob = libraryVocals.jobs[jobKey];
-                const active = track.id === session.currentTrackId;
-                const unavailable = track.availability === "reconnect" || track.availability === "missing";
-                return (
-                  <div className={`track-row ${active ? "is-active" : ""} ${unavailable ? "is-unavailable" : ""} ${albumDrag === track.id ? "is-album-dragging" : ""} ${albumDrop?.id === track.id ? `album-drop-${albumDrop.edge}` : ""}`} role="row" key={track.id} data-track-id={track.id} draggable
-                    onDragStart={(event) => { event.dataTransfer.setData(TRACK_DRAG_TYPE, track.id); event.dataTransfer.effectAllowed = "all"; albumDragRef.current = activeAlbum ? { albumId: activeAlbum.id, trackId: track.id } : null; if (activeAlbum) { setAlbumDrag(track.id); setMenuTrackId(""); } }}
-                    onDragOver={(event) => previewAlbumDrop(event, track.id)}
-                    onDrop={(event) => dropAlbumTrack(event, track.id)}
-                    onDoubleClick={event => { if (!(event.target as Element).closest("button, input, [role='dialog']")) void playLibraryTrack(track.id); }}>
-                    <button className="track-index" type="button" aria-label={`Play ${trackDisplayName(track.name)}`} title={activeAlbum ? "Drag row to reorder · Click to play" : undefined} onClick={() => void playLibraryTrack(track.id)}>{active && isPlaying ? <AudioLines size={14} /> : String(index + 1).padStart(2, "0")}{activeAlbum && <GripVertical className="album-drag-grip" size={14} aria-hidden="true" />}</button>
-                    <span className="track-title"><label className="vocal-track-select">{vocalSelectionMode && <input type="checkbox" checked={selectedVocalTracks.includes(track.id)} aria-label={`Select ${trackDisplayName(track.name)} for vocal preparation`} onDoubleClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedVocalTracks((ids) => event.target.checked ? [...ids, track.id] : ids.filter((id) => id !== track.id))} />}<strong>{trackDisplayName(track.name)}</strong></label><small title={track.name}>{track.sourceLabel} · {track.name}</small>
-                      <TrackVocalProgress trackName={trackDisplayName(track.name)} job={vocalJob} onCancel={() => libraryVocals.cancel(jobKey)} onRetry={() => libraryVocals.prepare([track])} />
-                    </span>
-                    <TrackStatus track={track} job={vocalJob} />
-                    <span className="track-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
-                    <TrackActions track={track} trackName={trackDisplayName(track.name)} job={vocalJob} open={menuTrackId === track.id} albums={albums} activeAlbum={activeAlbum ?? undefined}
-                      onToggle={() => setMenuTrackId(menuTrackId === track.id ? "" : track.id)} onClose={() => setMenuTrackId(current => current === track.id ? "" : current)}
-                      onOpenPlayer={() => openComparison(track.id)} onNext={() => addPlayNext(track.id)} onQueue={() => appendQueue(track.id)}
-                      onPrepare={() => libraryVocals.prepare([track])} onCancelVocals={() => libraryVocals.cancel(jobKey)}
-                      onAttachLyrics={() => openLyricsPicker(track.id)} onRemoveLyrics={() => removeTrackLyrics(track.id)} onEditTiming={() => void openTimingEditor(track.id)}
-                      onToggleCache={() => void toggleTrackCache(track)} onReconnect={() => openFiles(true)} onAddToAlbum={id => addTrackToAlbum(id, track.id)}
-                      onRemoveFromAlbum={() => { setAlbums(current => current.map(album => album.id === activeAlbumId ? { ...album, trackIds: album.trackIds.filter(id => id !== track.id) } : album)); setMenuTrackId(""); }}
-                      onMoveInAlbum={edge => {
-                        if (!activeAlbum) return;
-                        const position = activeAlbum.trackIds.indexOf(track.id), targetId = activeAlbum.trackIds[position + (edge === "before" ? -1 : 1)];
-                        if (!targetId) return;
-                        setAlbums(current => current.map(album => album.id === activeAlbum.id ? reorderAlbumTrack(album, track.id, targetId, edge) : album));
-                        setMenuTrackId(""); setMessage("Album order saved.");
-                      }} />
-                  </div>
-                );
-              })}
+              <TrackRows tracks={filteredTracks} activeId={session.currentTrackId} playing={isPlaying} album={activeAlbum ?? undefined} albums={albums}
+                selectedIds={selectedVocalTracks} selecting={vocalSelectionMode} menuId={menuTrackId} draggedId={albumDrag} drop={albumDrop}
+                jobs={libraryVocals.jobs} handlers={rowHandlers} displayName={trackDisplayName} duration={formatTime} />
               {!filteredTracks.length && <p className="library-empty-results">{search ? "No songs match your search." : "This album is empty. Drop music here, or use Edit album to choose songs from your library."}</p>}
             </div>
             </FileDropRegion>
@@ -1833,8 +1922,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           </section>
 
           <aside className="persistent-stage-panel">
-            {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
-            <div className="persistent-stage-canvas"><Live2DStage companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} playerZoomOffset={desktopPlayerZoomOffset} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
+            {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
+            <div className="persistent-stage-canvas"><Live2DStage renderActive={visualActive} companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} playerZoomOffset={desktopPlayerZoomOffset} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><span className={`is-active source-${activeSource === 0 ? "a" : "b"}`}>{activeSource + 1}</span><small>{comparisonReady ? `Listening to track ${activeSource + 1}` : "Solo playback"}</small></div>
           </aside>
         </div>
@@ -1844,7 +1933,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         <div className="transport-track"><span className={`transport-disc ${playbackAlbum?.cover ? "has-album-cover" : ""}`}>{playbackAlbum?.cover ? <img src={playbackAlbum.cover} alt={`${playbackAlbum.name} cover`} draggable={false} /> : <Music2 size={20} />}</span><span><strong>{currentTrack ? trackDisplayName(currentTrack.name) : "Nothing selected"}</strong><small>{currentTrack ? currentTrack.persistence === "cached" ? "Kept on this device" : currentTrack.sourceLabel : `${session.queue.length} tracks in queue`}</small></span></div>
         <div className="transport-center">
           <div className="transport-buttons"><button className={session.shuffle ? "is-active" : ""} type="button" aria-label="Shuffle" aria-pressed={session.shuffle} onClick={toggleShuffle}><Shuffle size={17} /></button><button type="button" aria-label="Back 5 seconds" onClick={() => void seekTo(currentTime - 5)}><Rewind size={18} /></button><button type="button" aria-label="Previous track" onClick={() => void previousTrack()}><SkipBack size={20} /></button><button className="transport-play" type="button" aria-label={isPlaying ? "Pause" : "Play"} onClick={() => void togglePlay()}>{isPlaying ? <Pause size={21} fill="currentColor" /> : <Play size={21} fill="currentColor" />}</button><button type="button" aria-label="Next track" onClick={() => void nextTrack(false)}><SkipForward size={20} /></button><button type="button" aria-label="Forward 5 seconds" onClick={() => void seekTo(currentTime + 5)}><FastForward size={18} /></button><button className={session.repeat !== "off" ? "is-active" : ""} type="button" aria-label={repeatLabel(session.repeat)} onClick={cycleRepeat}>{session.repeat === "one" ? <Repeat1 size={17} /> : <Repeat size={17} />}</button></div>
-          <div className="transport-progress"><span>{formatTime(currentTime, comparisonReady)}</span><input aria-label="Playback position" type="range" min="0" max={Math.max(timelineDuration, 1)} step="0.001" value={Math.min(currentTime, Math.max(timelineDuration, 1))} onChange={(event) => void seekTo(Number(event.target.value))} /><span>{formatTime(timelineDuration, comparisonReady)}</span></div>
+          <PlaybackPosition time={currentTime} duration={timelineDuration} precise={comparisonReady} playing={isPlaying && visualActive} readTime={getTimelineTime} onSeek={seekTo} />
           {activeSourceEnded && <span className="transport-source-ended">Track {activeSource + 1} has ended · switch source</span>}
         </div>
         <div className="transport-secondary">{comparisonVisible && <TrackSelector key={currentTrack?.id} sources={[0, ...comparisonSlots.map(slot => slot.slot)]} active={activeSource} comparison={expandedComparison} names={Object.fromEntries([[0, "Original"], ...comparisonSlots.map(slot => [slot.slot, trackDisplayName(slot.name)])])} onSelect={switchSource} unavailable={[...comparisonSlots.filter(slot => comparisons.clearing || slot.status !== "ready").map(slot => slot.slot), ...Object.values(comparisons.jobs).map(job => job.target)]} />}<label><Volume2 size={17} /><input aria-label="Volume" type="range" min="0" max="1" step="0.01" value={session.volume} onChange={(event) => patchSession({ volume: Number(event.target.value) })} /></label><button type="button" className={queueOpen ? "is-active" : ""} onClick={() => setQueueOpen(true)}><ListMusic size={18} /><span>Queue</span></button></div>
@@ -1860,7 +1949,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         onScrubStart={beginWaveformScrub} onScrubEnd={finishWaveformScrub} onSeek={seekTo} onTogglePlay={toggleTimingPlayback} onSave={saveTimedLyrics} onClose={closeTimingEditor} />}
       {(importing || importSummary) && <div className="modal-backdrop"><section className="import-summary" role="dialog" aria-modal="true" aria-labelledby="import-title"><button className="sheet-close" type="button" aria-label="Close import summary" onClick={() => { if (!importing) setImportSummary(null); }}><X size={20} /></button><p>LOCAL INDEX</p><h2 id="import-title">{importing ? "Reading your music…" : "Import complete"}</h2>{importing ? <div className="import-loader"><span /><small>Indexing audio and matching lyrics without decoding every track.</small></div> : importSummary && <><div className="import-stats"><div><strong>{importSummary.accepted}</strong><span>New tracks</span></div><div><strong>{importSummary.lyrics}</strong><span>Lyrics matched</span></div><div><strong>{importSummary.duplicates}</strong><span>Reconnected / duplicate</span></div><div><strong>{importSummary.ignored}</strong><span>Ignored</span></div></div>{importSummary.errors.length > 0 && <div className="import-errors">{importSummary.errors.map((error) => <span key={error}>{error}</span>)}</div>}<button className="primary-action" type="button" onClick={() => setImportSummary(null)}>Open library</button></>}</section></div>}
 
-      <div className={`side-sheet-backdrop ${queueOpen ? "is-open" : ""}`} onClick={() => setQueueOpen(false)}><aside className="side-sheet queue-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" type="button" aria-label="Close queue" onClick={() => setQueueOpen(false)}><X size={20} /></button><p>UP NEXT</p><h2>Current queue</h2><span>{session.queue.length} tracks · {session.shuffle ? "shuffle" : "in order"}</span><div className="queue-list">{session.queue.map((trackId, index) => { const track = tracks.find((candidate) => candidate.id === trackId); if (!track) return null; return <div className={trackId === session.currentTrackId ? "is-active" : ""} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", trackId)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveQueueTrack(event.dataTransfer.getData("text/plain"), trackId)} key={trackId}><span>{String(index + 1).padStart(2, "0")}</span><button type="button" onClick={() => void startTrack(trackId, true, 0)}><strong>{trackDisplayName(track.name)}</strong><small>{track.sourceLabel}</small></button><span className="queue-move"><button type="button" aria-label="Move up" onClick={() => reorderQueue(trackId, -1)}><ArrowUp size={13} /></button><button type="button" aria-label="Move down" onClick={() => reorderQueue(trackId, 1)}><ArrowDown size={13} /></button></span><button type="button" aria-label="Remove from queue" onClick={() => patchSession((current) => ({ ...current, queue: current.queue.filter((id) => id !== trackId) }))}><X size={14} /></button></div>; })}</div><button className="destructive-text-button" type="button" onClick={() => setConfirmAction("queue")}><Trash2 size={14} /> Clear queue only</button></aside></div>
+      <div className={`side-sheet-backdrop ${queueOpen ? "is-open" : ""}`} onClick={() => setQueueOpen(false)}><aside className="side-sheet queue-sheet" onClick={(event) => event.stopPropagation()}><button className="sheet-close" type="button" aria-label="Close queue" onClick={() => setQueueOpen(false)}><X size={20} /></button><p>UP NEXT</p><h2>Current queue</h2><span>{session.queue.length} tracks · {session.shuffle ? "shuffle" : "in order"}</span><div className="queue-list">{session.queue.map((trackId, index) => { const track = tracksById.get(trackId); if (!track) return null; return <div className={trackId === session.currentTrackId ? "is-active" : ""} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", trackId)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveQueueTrack(event.dataTransfer.getData("text/plain"), trackId)} key={trackId}><span>{String(index + 1).padStart(2, "0")}</span><button type="button" onClick={() => void startTrack(trackId, true, 0)}><strong>{trackDisplayName(track.name)}</strong><small>{track.sourceLabel}</small></button><span className="queue-move"><button type="button" aria-label="Move up" onClick={() => reorderQueue(trackId, -1)}><ArrowUp size={13} /></button><button type="button" aria-label="Move down" onClick={() => reorderQueue(trackId, 1)}><ArrowDown size={13} /></button></span><button type="button" aria-label="Remove from queue" onClick={() => patchSession((current) => ({ ...current, queue: current.queue.filter((id) => id !== trackId) }))}><X size={14} /></button></div>; })}</div><button className="destructive-text-button" type="button" onClick={() => setConfirmAction("queue")}><Trash2 size={14} /> Clear queue only</button></aside></div>
 
       <div className={`side-sheet-backdrop ${storageOpen ? "is-open" : ""}`} onClick={() => setStorageOpen(false)}>
         <aside className="side-sheet storage-sheet" onClick={(event) => event.stopPropagation()}>

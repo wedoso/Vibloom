@@ -16,17 +16,20 @@ export function makeWaveformPeaks(buffer: AudioBuffer, count = 144) {
   return peaks;
 }
 
-export function readAudioFile(file: File, onProgress: (progress: number) => void) {
+export function readAudioFile(file: File, onProgress: (progress: number) => void, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   return new Promise<ArrayBuffer>((resolve, reject) => {
     const reader = new FileReader();
+    const cleanup = () => { signal?.removeEventListener("abort", abort); reader.onload = reader.onerror = reader.onabort = reader.onprogress = null; };
+    const fail = (error: unknown) => { cleanup(); reject(error); };
+    const abort = () => { reader.abort(); fail(new DOMException("File reading was cancelled.", "AbortError")); };
     reader.onprogress = (event) => {
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 52));
     };
-    reader.onload = () => reader.result instanceof ArrayBuffer
-      ? resolve(reader.result)
-      : reject(new Error("The audio file could not be read."));
-    reader.onerror = () => reject(reader.error ?? new Error("The audio file could not be read."));
-    reader.onabort = () => reject(new DOMException("File reading was cancelled.", "AbortError"));
-    reader.readAsArrayBuffer(file);
+    reader.onload = () => { const result = reader.result; cleanup(); if (result instanceof ArrayBuffer) resolve(result); else reject(new Error("The audio file could not be read.")); };
+    reader.onerror = () => fail(reader.error ?? new Error("The audio file could not be read."));
+    reader.onabort = () => fail(new DOMException("File reading was cancelled.", "AbortError"));
+    signal?.addEventListener("abort", abort, { once: true });
+    try { reader.readAsArrayBuffer(file); } catch (error) { fail(error); }
   });
 }

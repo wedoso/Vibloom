@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readAudioFile } from "../audio/audioFiles";
 import { SynchronizedAudioEngine } from "../audio/SynchronizedAudioEngine";
 import { mobileComparisons } from "./comparison";
 import { useComparisonWorkspace } from "../comparison/useComparisonWorkspace";
-import { albumForTrack, comparisonCacheKey, comparisonsOf, createShuffleBag, EMPTY_SESSION, makeTrackFingerprint, matchLyricFile, migrateLibrarySnapshot, withComparisons, type LibraryAlbum, type LibrarySession, type LibraryTrack } from "../domain/library";
+import { albumForTrack, isVocalAnalysisReference, comparisonCacheKey, comparisonsOf, createShuffleBag, EMPTY_SESSION, makeTrackFingerprint, matchLyricFile, migrateLibrarySnapshot, withComparisons, type LibraryAlbum, type LibrarySession, type LibraryTrack } from "../domain/library";
 import { decodeLrc, parseLyricsFile } from "../lrc";
 import { useMediaSession } from "../platform/useMediaSession";
 import { mobilePlatform } from "./platform";
+import { librarySaveMessage } from "../platform/indexedLibraryRepository";
 import { VocalJobStore, vocalJobKey } from "../audio/vocals/jobStore";
+import { releaseIdleVocalWorkers } from "../audio/vocals/analyzeVocals";
 import { useMobileVocals } from "./useMobileVocals";
 import type { LibraryPlatform, StorageState } from "../platform/libraryPlatform";
 
@@ -28,8 +31,12 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     };
   }, []);
   const [engine] = useState(() => new SynchronizedAudioEngine());
-  const [vocalJobs] = useState(() => new VocalJobStore());
-  const forgetVocals = useCallback((track: LibraryTrack, source: number) => vocalJobs.forget(vocalJobKey(track, source)), [vocalJobs]);
+  const [vocalJobs] = useState(() => new VocalJobStore(undefined, platform.vocalAnalyses));
+  const forgetVocals = useCallback((track: LibraryTrack, source: number) => {
+    const analysis = source === 0 ? track.vocalAnalysis : comparisonsOf(track).find(item => item.slot === source)?.vocalAnalysis;
+    if (isVocalAnalysisReference(analysis)) void platform.vocalAnalyses?.remove(analysis.cacheKey).catch(() => undefined);
+    vocalJobs.forget(vocalJobKey(track, source));
+  }, [vocalJobs, platform]);
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
   const [albums, setAlbums] = useState<LibraryAlbum[]>([]);
   const [session, setSession] = useState<LibrarySession>({ ...EMPTY_SESSION, queue: [], history: [] });
@@ -43,6 +50,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   const [source, setSource] = useState(0);
   const [storage, setStorage] = useState(emptyStorage);
   const tracksRef = useRef(tracks), sessionRef = useRef(session), files = useRef(new Map<string, File>());
+  const playerRead = useRef<AbortController | null>(null);
   const loaded = useRef(""), epoch = useRef(0), importLock = useRef(false), shuffleBag = useRef<string[]>([]);
   const shuffleCycleStarted = useRef(false);
   const mounted = useRef(true), saveTail = useRef(Promise.resolve());
@@ -76,21 +84,25 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   const current = tracks.find(track => track.id === session.currentTrackId) ?? null;
   const duration = Math.max(current?.duration ?? 0, ...mobileComparisons(current).map(item => item.duration));
 
-  const readVocalBuffer = useCallback(async (track: LibraryTrack, vocalSource: number) => {
+  const readVocalBuffer = useCallback(async (track: LibraryTrack, vocalSource: number, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
     if (vocalSource > 0) {
       if (readRoot()?.id !== track.id) throw new Error("Open this song in Player to prepare its comparison tracks.");
-      return ensureComparisonBuffer(vocalSource);
+      return ensureComparisonBuffer(vocalSource, signal);
     }
     const warm = loaded.current === track.id ? engine.getBuffer(0) : null;
     if (warm) return warm;
     const file = files.current.get(track.id) ?? await platform.audioFiles.get(track.id);
+    signal?.throwIfAborted();
     if (!file) throw new Error("Reconnect this song's original file, then retry lip sync.");
     // Decode background library preparation independently: never load/pause the player.
-    const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(await file.arrayBuffer());
+    const bytes = await readAudioFile(file, () => {}, signal); signal?.throwIfAborted();
+    const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(bytes);
+    signal?.throwIfAborted();
     patchTracks(items => items.map(item => item.id === track.id && item.fingerprint === track.fingerprint ? { ...item, duration: buffer.duration } : item));
     return buffer;
   }, [readRoot, ensureComparisonBuffer, engine, platform, patchTracks]);
-  const vocals = useMobileVocals({ store: vocalJobs, engine, current, tracks, readTracks, patchTracks, readBuffer: readVocalBuffer });
+  const vocals = useMobileVocals({ store: vocalJobs, engine, current, tracks, readTracks, patchTracks, readBuffer: readVocalBuffer, storage: platform.vocalAnalyses, onMessage: setMessage });
   const { forgetTrack: forgetVocalTrack, reset: resetVocals, cancelAll: cancelVocalJobs } = vocals;
 
   const refreshStorage = useCallback(async () => {
@@ -116,25 +128,36 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     })();
     return () => { cancelled = true; };
   }, [platform, patchTracks, patchSession, refreshStorage]);
+  const fallbackSession = platform.repository.saveSession ? null : session;
   useEffect(() => {
     if (!ready) return;
-    const snapshot = { version: 3 as const, tracks, albums, session };
     const timer = window.setTimeout(() => {
-      saveTail.current = saveTail.current.then(() => platform.repository.save(snapshot)).catch(() => {
-        if (mounted.current) setMessage("This browser could not save your mobile library. Keep the source files to reconnect.");
+      const snapshot = { version: 3 as const, tracks, albums, session: sessionRef.current };
+      saveTail.current = saveTail.current.then(() => platform.repository.save(snapshot)).catch(error => {
+        if (mounted.current && error?.name !== "AbortError") setMessage(librarySaveMessage(error, "This browser could not save your mobile library. Keep the source files to reconnect."));
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [ready, tracks, albums, session, platform]);
-  useEffect(() => () => { mounted.current = false; epoch.current++; void engine.close(); }, [engine]);
+  }, [ready, tracks, albums, fallbackSession, platform]);
+  useEffect(() => {
+    if (!ready || !platform.repository.saveSession) return;
+    const timer = window.setTimeout(() => {
+      saveTail.current = saveTail.current.then(() => platform.repository.saveSession!(session)).catch(error => {
+        if (mounted.current && error?.name !== "AbortError") setMessage(librarySaveMessage(error, "This browser could not save playback settings."));
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [ready, session, platform]);
+  useEffect(() => () => { mounted.current = false; epoch.current++; playerRead.current?.abort(); vocalJobs.dispose(); releaseIdleVocalWorkers(); platform.vocalAnalyses?.release(); void engine.close(); }, [engine, vocalJobs, platform]);
 
   const pause = useCallback(() => {
-    epoch.current++; const position = engine.pause();
+    epoch.current++; playerRead.current?.abort(); const position = engine.pause();
     setPlaying(false); setTime(position); patchSession({ currentTime: position }); setBusy("");
   }, [engine, patchSession]);
   const load = useCallback(async (trackId: string, autoplay = true, resumeAt = 0) => {
     const track = tracksRef.current.find(item => item.id === trackId); if (!track || !ready) return false;
     const request = ++epoch.current;
+    playerRead.current?.abort(); const controller = new AbortController(); playerRead.current = controller;
     // Unlock Web Audio in the original tap before cloud/disk reads or decoding.
     const graph = engine.ensureGraph(autoplay, sessionRef.current.volume).then(async context => {
       if (autoplay && context.state !== "running" && context.state !== "closed") await context.resume();
@@ -152,7 +175,9 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
           patchTracks(items => items.map(item => item.id === trackId ? { ...item, availability: "missing" } : item));
           throw new Error("Reconnect this song: import its original file again.");
         }
-        buffer = await resolved.context.decodeAudioData(await file.arrayBuffer());
+        const bytes = await readAudioFile(file, () => {}, controller.signal);
+        if (request !== epoch.current) return false;
+        buffer = await resolved.context.decodeAudioData(bytes);
         if (request !== epoch.current) return false;
         engine.pause(); setPlaying(false);
         if (loaded.current !== trackId) {
