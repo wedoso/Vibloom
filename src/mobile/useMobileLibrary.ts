@@ -16,6 +16,17 @@ const emptyStorage: StorageState = { usage: 0, quota: 0, persistent: false };
 export type MobileImportSummary = { accepted: number; reconnected: number; lyrics: number; ignored: number; errors: string[] };
 
 export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
+  useEffect(() => {
+    // iOS can classify Web Audio as ambient, which can suspend when Safari is
+    // backgrounded. Declare music playback only while the mobile UI is mounted.
+    const audioSession = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (!audioSession) return;
+    const previousType = audioSession.type;
+    try { audioSession.type = "playback"; } catch { return; }
+    return () => {
+      try { if (audioSession.type === "playback") audioSession.type = previousType; } catch { /* Optional browser API. */ }
+    };
+  }, []);
   const [engine] = useState(() => new SynchronizedAudioEngine());
   const [vocalJobs] = useState(() => new VocalJobStore());
   const forgetVocals = useCallback((track: LibraryTrack, source: number) => vocalJobs.forget(vocalJobKey(track, source)), [vocalJobs]);
