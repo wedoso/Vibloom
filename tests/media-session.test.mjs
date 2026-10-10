@@ -5,7 +5,16 @@ import ts from "typescript";
 
 const source = await readFile(new URL("../src/platform/mediaSession.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { bindMediaSession, updateMediaPosition } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const { bindMediaSession, mediaMetadataDetails, updateMediaPosition } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+
+test("system artwork follows cover changes without changing desktop metadata", () => {
+  const desktop = { title: "Song", artist: "Vibloom", album: "Collection" };
+  assert.deepEqual(mediaMetadataDetails("Song", "Collection"), desktop);
+  const cover = "data:image/png;base64,AA==";
+  assert.deepEqual(mediaMetadataDetails("Song", "Collection", cover).artwork, [{ src: cover, sizes: "any" }]);
+  assert.equal(mediaMetadataDetails("Next song", "Other collection", "next.jpg").artwork[0].src, "next.jpg");
+  assert.deepEqual(mediaMetadataDetails("Song", "Collection", ""), desktop, "removing artwork cannot retain the previous song's image");
+});
 
 test("routes explicit headset commands, tolerates unsupported actions and cleans up", async () => {
   const handlers = new Map();

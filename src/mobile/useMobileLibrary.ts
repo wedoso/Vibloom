@@ -223,7 +223,8 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     }, 100);
     return () => window.clearInterval(timer);
   }, [playing, engine, patchSession, next]);
-  useMediaSession({ enabled: !!current, title: current?.name ?? "Vibloom", album: albumForTrack(albums, current?.id ?? "", session.playbackAlbumId)?.name ?? "Mobile library", isPlaying: playing, duration, position: time }, {
+  const playbackAlbum = albumForTrack(albums, current?.id ?? "", session.playbackAlbumId);
+  useMediaSession({ enabled: !!current, title: current?.name ?? "Vibloom", album: playbackAlbum?.name ?? "Mobile library", artwork: playbackAlbum?.cover || `${import.meta.env.BASE_URL}vibloom-icon.png`, isPlaying: playing, duration, position: time }, {
     play, pause, next, previous, seek, getTime: () => engine.getTimelineTime(), onError: () => setMessage("Playback needs another tap. Press Play to resume."),
   });
 
