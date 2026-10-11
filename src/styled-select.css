@@ -13,11 +13,15 @@
 .library-app .styled-select-menu > button:hover:not(:disabled), .library-app .styled-select-menu > button:focus-visible { background: color-mix(in srgb, var(--library-accent) 12%, transparent); }
 .library-app .styled-select-menu > button:disabled { opacity: .4; cursor: not-allowed; }
 .library-app .styled-select-trigger:focus-visible, .library-app .styled-select-menu > button:focus-visible { outline: 2px solid var(--library-accent); outline-offset: 1px; }
-.companion-selector .styled-select-trigger { min-height: 38px; max-width: 116px; border-radius: 10px; }
+.companion-selector .styled-select-trigger { min-height: 38px; width: 116px; max-width: 116px; border-radius: 10px; }
+/* Keep this frequently used menu still while pointing at a full-height row. */
+.library-app .companion-selector .styled-select-menu:popover-open { animation-name: companion-select-enter; }
+.library-app .companion-selector .styled-select-menu > button { min-height: 44px; padding: 10px 12px; font-size: 12px; }
 .track-album-select .styled-select, .track-album-select .styled-select-trigger { width: 100%; }
 .sound-format .styled-select-trigger { min-height: 26px; padding: 3px 5px; font-size: 10px; }
 .processing-destination .styled-select-trigger { max-width: 145px; }
 @keyframes styled-select-enter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes companion-select-enter { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 400px) { .companion-selector .styled-select-trigger { max-width: 94px; } }
 @media (max-width: 680px) { .is-eq-dialog .processing-destination .styled-select-trigger { max-width: 120px; } }
 @media (prefers-reduced-motion: reduce) { .library-app .styled-select-menu:popover-open { animation: none; } .styled-select-trigger > svg { transition: none; } }

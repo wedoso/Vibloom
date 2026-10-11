@@ -12,7 +12,7 @@ import { snapshot, seedMobile, waveBytes } from './mobile-ui-fixtures.mjs';
 const argument=name=>{const index=process.argv.indexOf(name);return index>=0?process.argv[index+1]:null};
 const module=argument('--playwright-module')??'playwright';
 const {chromium,webkit}=await import(path.isAbsolute(module)?pathToFileURL(module).href:module);
-const modelDirectory=path.resolve(argument('--model-dir')??'outputs/iphone-vocal-memory/spleeter');
+const modelDirectory=path.resolve(argument('--model-dir')??'.cache/spleeter');
 const modelFiles=['vocals.fp16.onnx','accompaniment.fp16.onnx'];
 const runtimeBackend=argument('--runtime-backend')==='webgpu'?'webgpu':'wasm';
 const output=path.resolve('outputs/mobile-ui');await mkdir(output,{recursive:true});
@@ -57,7 +57,7 @@ try{for(const [name,engine] of Object.entries({chromium,webkit})){
    window.__ticks=0;window.__heartbeat=setInterval(()=>window.__ticks++,50);
   });
   await choose(page,'Hiyori');await page.getByRole('button',{name:'Play',exact:true}).click();await vocals(page);
-  await page.getByRole('button',{name:'Prepare lip sync track A',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-vocal-track="A"]')?.textContent.includes('Downloading mobile vocal model'),{},{timeout:60000});
+  await page.getByRole('button',{name:'Prepare lip sync track A',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-vocal-track="A"]')?.textContent.includes('Downloading vocal model'),{},{timeout:60000});
   assert.equal(await page.locator('.m-stage-vocals').getAttribute('aria-busy'),'true','stage icon shows preparing state');await page.screenshot({path:path.join(output,`${name}-vocal-downloading.jpg`)});
   const requestsBeforeMinimize=modelRequests;
   await close(page);
@@ -101,7 +101,7 @@ try{for(const [name,engine] of Object.entries({chromium,webkit})){
    await page.waitForFunction(()=>['ready','error'].includes(document.querySelector('[data-vocal-track="A"]')?.dataset.vocalStatus),{},{timeout:240000});
    assert.equal(await page.locator('[data-vocal-track="A"]').getAttribute('data-vocal-status'),'ready',await page.locator('[data-vocal-track="A"]').innerText());
    const trace=await page.evaluate(()=>JSON.parse(localStorage.getItem('vibloom-mobile-vocal-diagnostics-v1')??'[]').at(-1));
-   assert.equal(trace.requestedBackend,runtimeBackend);assert.equal(trace.status,'ready');assert.equal(trace.phase,'Analyzing mouth shapes · MotionSync');assert.equal(trace.backend,runtimeBackend==='webgpu'?'WebGPU':'WASM CPU');assert.equal(await page.evaluate(()=>window.__glLost),0,'disposing inference GPU never loses the Live2D renderer context');
+   assert.equal(trace.requestedBackend,runtimeBackend);assert.equal(trace.status,'ready');assert.equal(trace.phase,'Mouth shapes analyzed · MotionSync');assert.equal(trace.backend,runtimeBackend==='webgpu'?'WebGPU':'WASM CPU');assert.equal(await page.evaluate(()=>window.__glLost),0,'disposing inference GPU never loses the Live2D renderer context');
    await page.goto(origin+'/vocal-diagnostics.html');await page.waitForSelector('#report');assert.match(await page.locator('#report').innerText(),/WebGPU|WASM CPU|MotionSync/,'diagnostics remain readable after navigation');
   }
   assert.deepEqual(errors,[]);results.engines.push({engine:name,status:'passed',modelRequests,modelChecks,checks:['real Spleeter and MotionSync workers','download/cancel/network error/retry','minimized real progress stroke in portrait and landscape','one player vocal icon; Library header reopens the same background job','B progress remains visible while A is audible and enabled','cancel/ready remove rings; failure retains attention state','playback continues and UI responsive','voice/silent source preparation','actual Cubism open + vowel shape, both companions','pause and disabled close mouth','source switch + direct seeking','analysis and disabled preference survive reload','small portrait/landscape panel bounds']});console.log(name,'mobile lips passed');

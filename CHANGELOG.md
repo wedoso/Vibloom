@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.11.2](https://github.com/wedoso/Vibloom/compare/v1.11.1...v1.11.2) (2026-10-11)
+
+- Unify desktop and mobile lip sync on the lightweight local Spleeter/MotionSync pipeline, with GPU acceleration and CPU fallback.
+- Keep sustained vowels open through brief analysis gaps without shifting mouth timing or adding a setting.
+- Keep preparation progress clear and steady, and prevent model menus from closing during lyric scrolling.
+
 ## [1.11.1](https://github.com/wedoso/Vibloom/compare/v1.11.0...v1.11.1) (2026-10-11)
 
 - Fix iPhone vocal-analysis crashes with a lightweight local model, GPU acceleration, CPU fallback, and bounded GPU resource lifetimes.

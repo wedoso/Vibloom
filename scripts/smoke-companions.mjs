@@ -149,7 +149,7 @@ async function smoke() {
       const transfer = new DataTransfer();
       transfer.items.add(window.__testWav('Companion test.wav', 220));
       transfer.items.add(window.__testWav('Queue test.wav', 330));
-      transfer.items.add(new File(['[00:00.00]Together with the music\\n[00:05.00]Keep the same clock\\n[00:20.00]Still listening'], 'Companion test.lrc', { type: 'text/plain' }));
+      transfer.items.add(new File(['[00:00.00]Together with the music\\n[00:05.00]Keep the same clock\\n[00:20.00]Still listening\\n[00:30.00]Another verse\\n[00:40.00]The chorus\\n[00:50.00]One more line\\n[01:00.00]Still together\\n[01:10.00]Keep listening'], 'Companion test.lrc', { type: 'text/plain' }));
       const input = document.querySelector('input[type="file"][multiple]'); input.files = transfer.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
@@ -160,6 +160,26 @@ async function smoke() {
     await waitFor(`document.querySelector('.transport-play') && !document.querySelector('.transport-play').disabled`, "transport ready");
     if (!await playing()) await click('.transport-play');
     await waitFor(`document.querySelector('button[aria-label="Pause"]') && Number(document.querySelector('[aria-label="Playback position"]').value) > 0.5`, "playback starts");
+    await click('[aria-label="Music companion"]');
+    await waitFor(`document.querySelector('.companion-selector .styled-select-menu:popover-open')`, "companion menu opens during playback");
+    await run(`(() => {
+      const viewport = document.querySelector('.console-lower .library-lyrics-viewport');
+      if (!viewport || viewport.scrollHeight <= viewport.clientHeight) throw new Error('Lyrics must overflow for the scroll regression');
+      window.__lyricsScrolled = false;
+      viewport.addEventListener('scroll', () => { window.__lyricsScrolled = true; }, { once: true });
+      viewport.scrollTo({ top: viewport.scrollTop > 0 ? 0 : 40, behavior: 'instant' });
+    })()`);
+    await waitFor(`window.__lyricsScrolled`, "lyrics actually scroll");
+    assert.ok(await run(`Boolean(document.querySelector('.companion-selector .styled-select-menu:popover-open'))`), "lyrics scrolling cannot dismiss the model menu");
+    const modelOption = await run(`(() => {
+      const option = document.querySelector('.companion-selector [role="option"][data-value="hiyori"]'), r = option.getBoundingClientRect();
+      return { x: Math.round(r.x + 12), y: Math.round(r.y + r.height / 2) };
+    })()`);
+    window.webContents.sendInputEvent({ type: "mouseDown", ...modelOption, button: "left", clickCount: 1 });
+    window.webContents.sendInputEvent({ type: "mouseUp", ...modelOption, button: "left", clickCount: 1 });
+    await ready("hiyori");
+    assert.equal(await run(`document.querySelector('[aria-label="Music companion"]').getAttribute('aria-expanded')`), "false");
+    console.log("PASS model menu survives lyrics scrolling and accepts a physical option click");
     await run(`(() => { const transfer = new DataTransfer(); transfer.items.add(window.__testWav('Mix B.wav', 440)); const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])'); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     await waitFor(`document.querySelector('.source-switch-comparison:not(:disabled)')`, "comparison ready");
     for (const source of ["a", "b"]) {

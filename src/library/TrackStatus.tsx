@@ -46,7 +46,7 @@ export function TrackVocalProgress({ trackName, job, onCancel, onRetry }: { trac
   if (!job || !["queued", "working", "error"].includes(job.status)) return null;
   const error = job.status === "error";
   return <span className={`track-vocal-job ${error ? "is-error" : ""}`} role="status">
-    <span className="track-vocal-phase" title={error ? job.error : job.phase} aria-label={error ? job.error : undefined}>
+    <span className="track-vocal-phase" title={error ? job.error : job.detail ?? job.phase} aria-label={error ? job.error : undefined}>
       {error ? <><LibraryIcon name="CircleAlert" size={10} /> Lip sync preparation failed</> : `${job.phase} · ${Math.round(job.progress * 100)}%`}
     </span>
     <button type="button" aria-label={`${error ? "Retry" : "Cancel"} vocal preparation for ${trackName}`} onClick={error ? onRetry : onCancel}>{error ? "Retry" : "Cancel"}</button>

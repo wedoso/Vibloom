@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 
-test("mobile worker distinguishes GPU initialization failures from downloads and inference", async () => {
+test("shared Spleeter worker distinguishes GPU initialization failures from downloads and inference", async () => {
   const original = { self: globalThis.self, fixture: globalThis.__mobileWorkerFixture };
   const messages = [];
   let failure = "", destroyed = 0;
@@ -20,7 +20,7 @@ test("mobile worker distinguishes GPU initialization failures from downloads and
     async mobileModelSource() { if (failure === "download") throw new Error(failure); return { url: "fixture", blob: new Blob(), release() {} }; },
     async separateSpleeter() { throw new Error("inference"); },
   };
-  const source = ts.transpileModule(await readFile(new URL("../src/audio/vocals/mobileSeparation.worker.ts", import.meta.url), "utf8"), {
+  const source = ts.transpileModule(await readFile(new URL("../src/audio/vocals/separation.worker.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText.replace(/^import .*;$/gm, "");
   const mocks = "const { loadSeparationRuntime, mobileModelSource, separateSpleeter } = globalThis.__mobileWorkerFixture; const objectSource = mobileModelSource; class SpleeterWorkspace {} const vocalEnvelope = () => {};";

@@ -1,11 +1,11 @@
-Mobile vocal separation uses Spleeter 2-stems by Deezer:
+Vocal separation on desktop and mobile uses Spleeter 2-stems by Deezer:
 https://github.com/deezer/spleeter
 
 The FP16 ONNX weights are downloaded on demand from the sherpa-onnx conversion:
 https://huggingface.co/csukuangfj/sherpa-onnx-spleeter-2stems-fp16
 Pinned revision: 93ba771920ade509f8cbd6825b1a90856c797e08
 Model weights are not bundled in this repository or desktop installers.
-Desktop vocal separation continues to use Demucs. MotionSync terms are in
+MotionSync terms are in
 public/live2d/motionsync/LICENSE.md.
 
 MIT License
