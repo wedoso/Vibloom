@@ -162,9 +162,13 @@ async function smoke() {
     await waitFor(`window.__motionCoreStarts > ${coreBeforeCancel}`, "Core initialized before deliberate worker cancellation");
     await click('[data-vocal-track="1"]');
     await closed("cancelled analysis");
+    // Start the repeat scenario from a known paused state, including the case
+    // where cold Core initialization already outlasted this short fixture.
+    if (await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`)) await click('[aria-label="Pause"]');
     await range("Playback position", 0);
     await click('[aria-label="Repeat off"]');
     await click('[aria-label="Repeat all"]');
+    await click('.transport-play');
     await run("window.__uiTicks = 0; window.__heartbeat = setInterval(() => window.__uiTicks++, 50)");
     await click('button[title="Library"]');
     await waitFor(`document.querySelector(".library-vocal-toolbar button")`, "library mode entry");
