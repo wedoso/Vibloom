@@ -12,12 +12,12 @@ const { chromium, webkit } = await import(path.isAbsolute(modulePath) ? pathToFi
 const root = process.cwd(), output = path.join(root, "outputs/vocal-worker-perf"), base = path.join(output, "build");
 const seconds = Number(argument("--seconds") ?? 4);
 assert.ok(Number.isInteger(seconds) && seconds >= 4 && seconds <= 24);
-const model = path.resolve(argument("--model") ?? "outputs/vocal-lip-sync/htdemucs.onnx");
+const modelDirectory = path.resolve(argument("--model-dir") ?? ".cache/spleeter");
 const mime = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm" };
 const server = createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://test").pathname);
-    if (pathname === "/model.onnx") { response.setHeader("Content-Type", "application/octet-stream"); createReadStream(model).pipe(response); return; }
+    if (pathname.startsWith("/models/")) { response.setHeader("Content-Type", "application/octet-stream"); createReadStream(path.join(modelDirectory, path.basename(pathname))).pipe(response); return; }
     const file = pathname === "/voice.wav" ? path.join(root, "tests/fixtures/vocal-speech.wav")
       : pathname === "/" ? path.join(base, "outputs/vocal-worker-perf/index.html") : path.resolve(base, `.${pathname}`);
     if (pathname !== "/voice.wav") assert.ok(file.startsWith(`${base}${path.sep}`));
@@ -46,11 +46,10 @@ try {
         assert.equal(round.frames, seconds * 50); assert.equal(round.vowels, seconds * 250);
         assert.equal(round.rmsMaxAbsDiff, 0); assert.equal(round.vowelDiffCount, 0);
       }
-      const warm = result.rounds.filter(r => r.variant === "optimized");
-      assert.equal(warm[0].measures.filter(m => m.type === "init").length, 1);
-      assert.ok(warm.slice(1).every(r => !r.measures.some(m => m.type === "init")));
-      assert.equal(result.beforeIdleWorkers, 2); assert.equal(result.afterIdleWorkers, 0);
-      console.log(`PASS ${engine} real cold/warm parity, one model session and idle release`);
+      assert.ok(result.rounds.every(round => round.activeWorkers === 0));
+      assert.ok(result.rounds.every(round => round.measures.some(measure => measure.type === "init")));
+      assert.equal(result.afterJobsWorkers, 0);
+      console.log(`PASS ${engine} real desktop/mobile parity, cached weights and immediate worker release`);
     } finally { await browser.close(); }
   }
 } finally { await new Promise(resolve => server.close(resolve)); }

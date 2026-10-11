@@ -32,6 +32,31 @@ test('failure is shared and retryable without poisoning another source',async()=
  assert.equal(store.getSnapshot().A.status,'error');assert.equal(store.getSnapshot().A.error,'fixture failure');
  store.cancel('A');assert.equal(store.getSnapshot().A.status,"idle");
 });
+test('chunk substeps keep one readable phase and monotonic song progress, including GPU reloads',async()=>{
+ let progress,finish;
+ const store=new VocalJobStore((_source,_signal,report)=>{progress=report;return new Promise(resolve=>{finish=resolve;});});
+ store.prepare('song',{},()=>{});
+ const report=(phase,value,chunk=1)=>{progress({phase,progress:value,chunk,chunks:4});return store.getSnapshot().song;};
+ let job=report('Separating vocals · WebGPU',.1);
+ assert.equal(job.phase,'Preparing lip sync · Part 1/4');
+ assert.equal(job.backend,'WebGPU');
+ job=report('Analyzing mouth shapes · MotionSync',.225);
+ assert.equal(job.phase,'Preparing lip sync · Part 1/4');
+ assert.equal(job.detail,'Analyzing mouth shapes · MotionSync');
+ assert.ok(job.phases.includes('Analyzing mouth shapes · MotionSync'));
+ job=report('Separating vocals · WebGPU',.25,2);
+ assert.equal(job.phase,'Preparing lip sync · Part 2/4');
+ report('Refreshing GPU resources',.5,3);
+ job=report('Loading vocal model · Spleeter FP16',0,3);
+ assert.equal(job.phase,'Preparing lip sync · Part 3/4');
+ assert.equal(job.progress,.5,'model reload cannot reset song progress');
+ report('Separating vocals · WebGPU',.9,4);
+ finish({rms:Float32Array.of(.1),vowels:Uint8Array.of(0,0,255,0,0)});await flush();
+ assert.equal(store.getSnapshot().song.status,'ready');
+ store.forget('song');store.prepare('song',{},()=>{});
+ assert.equal(store.getSnapshot().song.progress,0,'a fresh task resets its progress');
+ store.dispose();
+});
 test('replacing B forgets its analysis and aborts pending work without late publication',async()=>{
  const tasks=[],saves=[];
  const store=new VocalJobStore((source,signal,progress)=>new Promise(resolve=>tasks.push({source,signal,progress,resolve})));

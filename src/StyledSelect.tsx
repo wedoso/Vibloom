@@ -34,7 +34,12 @@ export default function StyledSelect({ label, value, options, disabled = false, 
     if (!open) return;
     const popup = menu.current;
     const dismiss = () => popup?.hidePopover();
-    const scroll = (event: Event) => { if (!popup?.contains(event.target as Node)) dismiss(); };
+    const scroll = (event: Event) => {
+      // Lyrics and other independent panes scroll during playback. Only a
+      // scrolling ancestor of the trigger can invalidate the menu's position.
+      const target = event.target;
+      if (target instanceof Node && trigger.current && target.contains(trigger.current)) dismiss();
+    };
     window.addEventListener("resize", dismiss); window.addEventListener("scroll", scroll, true);
     return () => { window.removeEventListener("resize", dismiss); window.removeEventListener("scroll", scroll, true); };
   }, [open]);

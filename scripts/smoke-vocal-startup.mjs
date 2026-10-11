@@ -17,12 +17,12 @@ const timeout = setTimeout(() => app.exit(1), 300000);
 async function main() { try {
   server = await createServer({ root, cacheDir, server: { host: '127.0.0.1', port: 0, open: false } });
   await server.listen(); await app.whenReady();
-  const modelPath = process.env.VIBLOOM_TEST_VOCAL_MODEL;
+  const modelPath = process.env.VIBLOOM_TEST_VOCAL_MODEL_DIR;
   if (modelPath) {
-    const bytes = await readFile(path.resolve(modelPath));
+    const files = Object.fromEntries(await Promise.all(["vocals.fp16.onnx", "accompaniment.fp16.onnx"].map(async name => [name, await readFile(path.resolve(modelPath, name))])));
     // A local throttled stream makes the download phase observable without network variability.
-    protocol.handle('vibloom', () => { let offset = 0; return new Response(new ReadableStream({ async pull(controller) { await delay(25); if (offset >= bytes.length) { controller.close(); return; } const end = Math.min(bytes.length, offset + 1024 * 1024); controller.enqueue(bytes.subarray(offset, end)); offset = end; } }), { headers: { 'Content-Length': String(bytes.length) } }); });
-    session.defaultSession.webRequest.onBeforeRequest({ urls: ['https://huggingface.co/*'] }, (_request, callback) => callback({ redirectURL: 'vibloom://app/model.onnx' }));
+    protocol.handle('vibloom', request => { const bytes = files[path.basename(new URL(request.url).pathname)]; let offset = 0; return new Response(new ReadableStream({ async pull(controller) { await delay(25); if (offset >= bytes.length) { controller.close(); return; } const end = Math.min(bytes.length, offset + 1024 * 1024); controller.enqueue(bytes.subarray(offset, end)); offset = end; } }), { headers: { 'Content-Length': String(bytes.length) } }); });
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['https://huggingface.co/*'] }, (request, callback) => callback({ redirectURL: 'vibloom://app/'+path.basename(new URL(request.url).pathname) }));
   }
   window = new BrowserWindow({ show: false, width: 1280, height: 900, webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true, backgroundThrottling: false } });
   window.webContents.setAudioMuted(true);
@@ -51,7 +51,7 @@ async function main() { try {
   assert.equal(await run(`document.querySelector('[data-vocal-status="error"]')?.dataset.tooltip??''`), '');
   assert.equal(await run(`document.querySelector('[aria-label="Disable singing track 1"]').getAttribute('aria-pressed')`), 'true');
   const phases = await run(`[...window.__phases]`);
-  assert.ok(phases.includes('Downloading vocal model')); assert.ok(phases.some(phase => phase.startsWith('Loading vocal model'))); assert.ok(phases.includes('Separating vocals'));
+  assert.ok(phases.includes('Downloading vocal model')); assert.ok(phases.some(phase => phase.startsWith('Loading vocal model'))); assert.ok(phases.includes('Preparing lip sync'));
   assert.equal(navigations.length, 1, 'first worker imports never reload the page');
   assert.deepEqual(errors, []);
   const result = { navigations, phases, automaticallyEnabled: true, rendererErrors: errors };

@@ -1,79 +1,86 @@
-import * as ort from "onnxruntime-web/webgpu";
-import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
-import wasmModuleUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url";
-import { DemucsProcessor } from "demucs-web";
+import type * as Ort from "onnxruntime-web";
+import { loadSeparationRuntime } from "./separationRuntime";
+import { mobileModelSource, objectSource } from "./mobileModel";
 import { vocalEnvelope } from "./envelope";
+import { separateSpleeter, SpleeterWorkspace } from "./spleeterSeparation";
 
-// Pin weights independently of changes to the upstream repository's main branch.
-const MODEL_URL = "https://huggingface.co/timcsy/demucs-web-onnx/resolve/92e33df61cfc9eb820272aaa62d2ef6dcf4d950d/htdemucs_embedded.onnx";
-const scope = self as unknown as {
-  onmessage: ((event: MessageEvent) => void) | null;
-  postMessage: (message: unknown, transfer?: Transferable[]) => void;
+// Shared Spleeter worker. The job owner selects GPU first and handles initialization-only
+// CPU fallback in a fresh worker. Explicit diagnostics retain their backend.
+const MODEL_BASE = "https://huggingface.co/csukuangfj/sherpa-onnx-spleeter-2stems-fp16/resolve/93ba771920ade509f8cbd6825b1a90856c797e08";
+let ort: typeof Ort;
+let runtime = "", backend = "";
+const sessions: Ort.InferenceSession[] = [];
+const workspace = new SpleeterWorkspace();
+type GpuDevice = {
+  addEventListener: (name: string, listener: (event: { error: { message: string } }) => void) => void;
+  lost: Promise<{ message: string }>;
+  queue: { onSubmittedWorkDone: () => Promise<void> };
+  destroy: () => void;
 };
-let processor: DemucsProcessor | null = null;
-let chunkSamples = 0;
-let backend = "WASM CPU";
-
-async function loadWeights() {
-  let cache: Cache | null = null;
-  try { cache = await caches.open("vibloom-demucs-v1"); } catch { /* Private storage can be unavailable. */ }
-  const cached = await cache?.match(MODEL_URL);
-  if (cached) return cached.arrayBuffer();
-  const response = await fetch(MODEL_URL, { credentials: "omit" });
-  if (!response.ok || !response.body) throw new Error("Could not download the vocal model. Check your connection and retry.");
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0, lastProgress = -1;
-  const total = Number(response.headers.get("content-length")) || 180534758;
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    length += value.length;
-    chunks.push(value);
-    const progress = Math.min(1, length / total);
-    if (progress - lastProgress >= 0.01) {
-      lastProgress = progress;
-      scope.postMessage({ type: "progress", phase: "Downloading vocal model", progress });
-    }
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  try { await cache?.put(MODEL_URL, new Response(bytes)); } catch { /* Analysis still works without a persistent cache. */ }
-  return bytes.buffer;
-}
-
-scope.onmessage = async ({ data }) => {
+let device: GpuDevice | undefined, disposing = false;
+const report = (phase: string, progress: number, step: string) => self.postMessage({ type: "progress", phase, progress, step, runtime });
+self.onmessage = async ({ data }) => {
+  let gpuInitialization = false;
   try {
     if (data.type === "init") {
-      scope.postMessage({ type: "progress", phase: "Loading vocal model", progress: 0 });
-      // A single WASM thread also works on static GitHub Pages without COOP/COEP.
-      ort.env.wasm.numThreads = 1;
-      ort.env.wasm.proxy = false;
-      ort.env.webgpu.powerPreference = "high-performance";
-      ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: wasmModuleUrl };
-      const weights = await loadWeights();
-      scope.postMessage({ type: "progress", phase: "Loading vocal model · preparing inference", progress: 0 });
-      processor = new DemucsProcessor({
-        ort,
-        sessionOptions: { executionProviders: ["webgpu", "wasm"], graphOptimizationLevel: "basic" },
-        onProgress: ({ currentSegment }) => scope.postMessage({
-          type: "progress", phase: `Separating vocals · ${backend}`,
-          progress: currentSegment / Math.ceil(chunkSamples / Math.floor(343980 * 0.75)),
-        }),
-      });
-      await processor.loadModel(weights);
-      backend = await ort.env.webgpu.device ? "WebGPU" : "WASM CPU";
-      scope.postMessage({ type: "ready", backend });
-    } else if (data.type === "separate" && processor) {
-      chunkSamples = data.left.length;
-      const result = await processor.separate(data.left, data.right);
+      if (disposing) throw new Error("Vocal worker has been released");
+      if (sessions.length) throw new Error("Vocal model already initialized");
+      const cpu = data.backend !== "webgpu";
+      backend = cpu ? "WASM CPU" : "WebGPU";
+      gpuInitialization = !cpu;
+      ({ ort, runtime } = await loadSeparationRuntime(cpu));
+      gpuInitialization = false;
+      const models: Blob[] = [];
+      for (const [index, name] of ["vocals", "accompaniment"].entries()) {
+        report("Loading vocal model · Spleeter FP16", index / 2, "model-loading");
+        const size = index ? 19681024 : 19681017;
+        const saved = data.models?.[index];
+        const model = saved instanceof Blob && saved.size === size ? objectSource(saved) : await mobileModelSource(`${MODEL_BASE}/${name}.fp16.onnx`, size,
+          value => report("Downloading vocal model · Spleeter FP16", (index + value) / 2, "download"));
+        if (!cpu) models.push(model.blob);
+        try {
+          gpuInitialization = !cpu;
+          sessions.push(await ort.InferenceSession.create(model.url, {
+            executionProviders: [cpu ? "wasm" : "webgpu"], graphOptimizationLevel: "all",
+          }));
+          gpuInitialization = false;
+        } finally { model.release(); }
+      }
+      if (!cpu) {
+        gpuInitialization = true;
+        device = await ort.env.webgpu.device as GpuDevice | undefined;
+        if (!device) throw new Error("WebGPU did not initialize. Use the CPU test on this device.");
+        device.addEventListener("uncapturederror", event => { if (!disposing) self.postMessage({ type: "error", message: `WebGPU: ${event.error.message}` }); });
+        void device.lost.then(info => { if (!disposing) self.postMessage({ type: "error", message: `WebGPU device lost: ${info.message}` }); }).catch(() => undefined);
+        gpuInitialization = false;
+      }
+      // Share disk-backed Files / immutable Blobs with the job owner. This
+      // avoids re-downloading on rotation even if persistent storage is denied.
+      self.postMessage({ type: "ready", backend, runtime, models: cpu ? undefined : models });
+    } else if (data.type === "dispose") {
+      // Waiting for tensor disposal alone did not bound WebKit process memory.
+      // Finish submitted work and destroy this worker's inference-only device.
+      // The Live2D renderer owns a separate context and continues rendering.
+      disposing = true;
+      await device?.queue.onSubmittedWorkDone();
+      try { for (const session of sessions.splice(0)) await session.release(); }
+      finally { device?.destroy(); }
+      self.postMessage({ type: "result" });
+    } else if (data.type === "separate") {
+      if (sessions.length !== 2) throw new Error("Vocal model is not initialized");
+      report(`Separating vocals · ${backend}`, 0, "preprocessing");
+      const result = await separateSpleeter(ort, sessions, data.left, data.right,
+        value => report(`Separating vocals · ${backend}`, value, "inference"), workspace);
       const frames = vocalEnvelope(result.vocals.left, result.vocals.right, data.left, data.right);
-      const mono = new Float32Array(result.vocals.left.length);
-      for (let i = 0; i < mono.length; i++) mono[i] = (result.vocals.left[i] + result.vocals.right[i]) / 2;
-      scope.postMessage({ type: "result", frames, mono }, [frames.buffer, mono.buffer]);
+      const mono = Float32Array.from(result.vocals.left, (value, index) => (value + result.vocals.right[index]) / 2);
+      self.postMessage({ type: "result", frames, mono }, [frames.buffer, mono.buffer]);
     }
   } catch (error) {
-    scope.postMessage({ type: "error", message: error instanceof Error ? error.message : "Vocal analysis failed." });
+    // A failed session cannot be reused; the owning pool terminates this worker.
+    if (data.type === "init" && data.backend === "webgpu") {
+      disposing = true;
+      try { (await ort?.env.webgpu.device as GpuDevice | undefined)?.destroy(); } catch { /* Initialization may not have created a device. */ }
+    }
+    self.postMessage({ type: "error", gpuInitialization, message: error instanceof Error ? error.message : String(error) });
   }
 };

@@ -14,12 +14,11 @@ const source = (await readFile(new URL("../src/audio/vocals/analyzeVocals.ts", i
   .replace('"./envelope"', JSON.stringify(envelope))
   .replace('"./mobileDiagnostics"', JSON.stringify(diagnostics))
   .replaceAll('new URL("./separation.worker.ts", import.meta.url)', '"separation.worker.ts"')
-  .replaceAll('new URL("./mobileSeparation.worker.ts", import.meta.url)', '"mobileSeparation.worker.ts"')
   .replaceAll('import.meta.env.BASE_URL', '"./"');
 const { analyzeVocals, analyzeMobileVocals, releaseIdleVocalWorkers, mobileVocalBackendPreference } = await import(moduleUrl(source));
 const { runAudioJob } = await import(processingQueue);
 
-test("multi-window jobs preserve timing, reuse one model, expire idle workers and cancel safely", async (t) => {
+test("shared 12-second jobs preserve timing, release heaps and cancel queued work safely", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const original = { Worker: globalThis.Worker, document: globalThis.document, OfflineAudioContext: globalThis.OfflineAudioContext };
   const workers = [], windows = [];
@@ -43,6 +42,7 @@ test("multi-window jobs preserve timing, reuse one model, expire idle workers an
       } else {
         const count = Math.ceil(data.left.length / 882);
         const frames = Float32Array.from({ length: count }, (_, i) => Math.round(data.left[i * 882]) % 100 / 100);
+        queueMicrotask(() => this.onmessage({ data: { type: "progress", phase: "Separating vocals · fixture", progress: 1 } }));
         queueMicrotask(() => this.onmessage({ data: { type: "result", frames, mono: data.left } }));
       }
     }
@@ -59,8 +59,19 @@ test("multi-window jobs preserve timing, reuse one model, expire idle workers an
   globalThis.Worker = Worker; globalThis.OfflineAudioContext = Offline; globalThis.document = { baseURI: "https://example.test/Vibloom/index.html" };
   try {
     const controller = new AbortController();
-    const result = await analyzeVocals({ duration: 50.013 }, controller.signal, () => {});
-    assert.deepEqual(windows.map(window => window.from), [0, 22, 46]);
+    const updates = [];
+    const result = await analyzeVocals({ duration: 50.013 }, controller.signal, update => updates.push(update));
+    const processing = updates.filter(update => update.chunk !== undefined);
+    assert.deepEqual([...new Set(processing.map(update => update.chunk))], [1, 2, 3, 4, 5]);
+    assert.ok(processing.every(update => update.chunks === 5));
+    for (let i = 1; i < processing.length; i++) assert.ok(processing[i].progress >= processing[i - 1].progress, "processing progress cannot go backwards between substeps or windows");
+    const separation = processing.find(update => update.phase.startsWith("Separating") && update.progress > 0);
+    const mouth = processing.find(update => update.phase.startsWith("Analyzing mouth"));
+    const analyzed = processing.find(update => update.phase.startsWith("Mouth shapes analyzed"));
+    assert.equal(separation.progress, mouth.progress, "separation leaves a share of the part for mouth analysis");
+    assert.ok(analyzed.progress > mouth.progress, "only completed mouth analysis advances to the next part");
+    assert.ok(processing.every(update => update.progress < 1), "100% is reserved for the saved result");
+    assert.deepEqual(windows.map(window => window.from), [0, 10, 22, 34, 46]);
     assert.equal(result.rms.length, Math.ceil(50.013 * 50));
     assert.equal(result.vowels.length, result.rms.length * 5);
     for (let i = 0; i < result.rms.length; i++) {
@@ -70,9 +81,9 @@ test("multi-window jobs preserve timing, reuse one model, expire idle workers an
     assert.equal(workers.length, 2);
     assert.equal(initializations, 1);
     const again = await analyzeVocals({ duration: 50.013 }, new AbortController().signal, () => {});
-    assert.deepEqual(again, result, "warm model cannot change aligned outputs");
-    assert.equal(workers.length, 2, "successful jobs share the same pair");
-    assert.equal(initializations, 1, "weights and inference session initialize once");
+    assert.deepEqual(again, result, "fresh sessions cannot change aligned outputs");
+    assert.equal(workers.length, 4, "jobs release their heaps and initialize fresh workers");
+    assert.equal(initializations, 2, "one initialization per completed job");
     assert.ok(requests.filter(r => r.type === "separate").every(r => r.transfer.length === 2));
     assert.ok(requests.filter(r => r.type === "motion").every(r => r.transfer.length === 1));
     mode = "hold";
@@ -81,27 +92,23 @@ test("multi-window jobs preserve timing, reuse one model, expire idle workers an
     await new Promise(resolve => setImmediate(resolve));
     assert.ok(held);
     t.mock.timers.tick(30_000);
-    assert.ok(workers.every(worker => !worker.terminated), "idle deadline cannot expire an active lease");
+    assert.ok(!workers.at(-1).terminated, "idle deadline cannot expire an active lease");
     const queuedCancel = new AbortController();
     const skipped = analyzeVocals({ duration: 1 }, queuedCancel.signal, () => {});
     queuedCancel.abort();
     await assert.rejects(skipped, { name: "AbortError" });
-    assert.ok(workers.every(worker => !worker.terminated), "cancelled waiting jobs cannot kill the active model");
+    assert.ok(!workers.at(-1).terminated, "cancelled waiting jobs cannot kill the active model");
     mode = "normal";
     const retry = analyzeVocals({ duration: .03 }, new AbortController().signal, () => {});
-    assert.equal(workers.length, 2, "retry waits while the previous job owns workers");
+    assert.equal(workers.length, 5, "retry waits while the previous job owns workers");
     cancel.abort();
     await assert.rejects(aborted, error => error.name === "AbortError");
     const next = await retry;
     assert.equal(next.rms.length, 2);
-    assert.equal(workers.length, 4, "cancelled inference gets fresh workers on retry");
-    assert.ok(workers.slice(0, 2).every(worker => worker.terminated));
-    t.mock.timers.tick(14_999);
-    assert.ok(workers.slice(2).every(worker => !worker.terminated));
-    t.mock.timers.tick(1);
-    assert.ok(workers.every(worker => worker.terminated), "idle pair is released after 15 seconds");
+    assert.equal(workers.length, 7, "cancelled inference gets fresh workers on retry");
+    assert.ok(workers.every(worker => worker.terminated), "completed jobs release both heaps immediately");
     await analyzeVocals({ duration: .03 }, new AbortController().signal, () => {});
-    assert.equal(workers.length, 6, "expired model is recreated lazily");
+    assert.equal(workers.length, 9, "next job recreates its workers lazily");
     await runAudioJob(new AbortController().signal, async () => {
       assert.ok(workers.every(worker => worker.terminated), "other processing jobs release the warm model before allocating PCM");
     });
@@ -176,7 +183,7 @@ test("mobile initializes before deferred decode, starts Core after separation an
     postMessage(data) {
       const reply = () => {
         if (data.type === "init") {
-          assert.equal(data.mobile, true);
+          assert.equal(this.motion, false);
           this.onmessage({ data: { type: "progress", phase: "Loading vocal model", progress: 0, runtime: "wasm-simd" } });
           events.push("model ready"); this.onmessage({ data: { type: "ready", backend: "fixture" } });
         } else if (fail === "inference") this.onmessage({ data: { type: "error", message: "inference failed" } });
@@ -317,7 +324,7 @@ test("mobile slices mono PCM into bounded windows without extra contexts and pre
   try {
     const pcm = Float32Array.from({ length: Math.ceil(50.013 * 44100) }, (_, i) => Math.floor(i / 882));
     const result = await analyzeMobileVocals({ duration: pcm.length / 44100, sampleRate: 44100, numberOfChannels: 1, getChannelData: () => pcm }, new AbortController().signal, () => {});
-    assert.equal(workers[0].url, "mobileSeparation.worker.ts", "mobile cannot initialize the desktop model");
+    assert.equal(workers[0].url, "separation.worker.ts", "both interfaces initialize the same Spleeter worker");
     assert.deepEqual(windows.map(window => window.first), [0, 500, 1100, 1700, 2300]);
     assert.ok(windows.every(window => window.seconds <= 16));
     for (let i = 0; i < result.rms.length; i++) {
@@ -325,6 +332,8 @@ test("mobile slices mono PCM into bounded windows without extra contexts and pre
       assert.equal(result.vowels[i * 5 + i % 5], 255, `vowel frame ${i}`);
     }
     assert.ok(workers.every(worker => worker.terminated));
+    const desktop = await analyzeVocals({ duration: pcm.length / 44100, sampleRate: 44100, numberOfChannels: 1, getChannelData: () => pcm }, new AbortController().signal, () => {});
+    assert.deepEqual(desktop, result, "desktop and mobile use identical windows and timing frames");
     backend = "WebGPU"; windows.length = 0;
     const gpuStart = workers.length;
     const input = { duration: pcm.length / 44100, sampleRate: 44100, numberOfChannels: 1, getChannelData: () => pcm };

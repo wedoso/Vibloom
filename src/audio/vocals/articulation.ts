@@ -1,4 +1,5 @@
 import { VOCAL_FRAME_RATE, type VocalPose, SILENT_VOCAL_POSE } from "./envelope";
+import { bridgeSustainedDropouts, localizeRepairs } from "./sustainedDropouts";
 
 export type VocalCurves = { open: Float32Array; form: Float32Array; vowels?: Float32Array[] };
 const VOWEL_FORMS = [.15, .5, 1, -.8, -1];
@@ -9,8 +10,16 @@ const median = (a: number, b: number, c: number) => a + b + c - Math.min(a, b, c
  * Preserve the lab's native smoothing without adding a delayed visual chase.
  */
 export function buildVocalCurves(rms: Float32Array, weights: Uint8Array): VocalCurves {
+  if (weights.length !== rms.length * 5) throw new Error("Incomplete MotionSync vowel timeline.");
+  const original = buildBaseVocalCurves(rms, weights);
+  const patched = bridgeSustainedDropouts({ rms, vowels: weights });
+  return patched.repairs.length
+    ? localizeRepairs(original, buildBaseVocalCurves(patched.rms, patched.vowels), patched.repairs)
+    : original;
+}
+
+function buildBaseVocalCurves(rms: Float32Array, weights: Uint8Array): VocalCurves {
   const n = rms.length;
-  if (weights.length !== n * 5) throw new Error("Incomplete MotionSync vowel timeline.");
   const energy = rms.slice();
   for (let i = 1; i < n - 1; i++) energy[i] = median(rms[i - 1], rms[i], rms[i + 1]);
   // Bridge <=40 ms internal gate dropouts, retaining longer actual silence.

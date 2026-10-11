@@ -105,9 +105,9 @@ When pause lands partway through an authored gesture or synthesized transition, 
 
 ### Vocal-driven lip sync
 
-[HTDemucs](https://github.com/facebookresearch/demucs) via
-[`demucs-web` 1.0.2](https://github.com/timcsy/demucs-web) and ONNX Runtime Web
-1.24.3 isolates vocals. The official
+[Spleeter 2-stems FP16](https://github.com/deezer/spleeter) and ONNX Runtime Web
+1.24.3 isolate vocals through the same worker on desktop web, Electron and mobile.
+`demucs-web` supplies FFT utilities only. The official
 [Cubism MotionSync Web plugin](https://github.com/Live2D/CubismWebMotionSyncComponents)
 R2 / CRI Core 5.0.4 then supplies continuous A/E/I/O/U strengths. The runtime is
 bundled unchanged under its [Live2D license](../public/live2d/motionsync/LICENSE.md).
@@ -117,7 +117,7 @@ and the projection onto the two mouth parameters available in these Live2D rigs.
 
 ```text
 Library selection / decoded A or B → shared job queue → worker
-  → HTDemucs vocals → MotionSync vowel weights + short-time RMS → saved 50 Hz frames
+  → Spleeter vocals → MotionSync vowel weights + short-time RMS → saved 50 Hz frames
 Playback's shared AudioContext time + selected source + volume
   → stabilized energy / vowel curves → Cubism mouth openness and form
 ```
@@ -136,13 +136,19 @@ available. Results belong to the original track fingerprint. A newly completed j
 then toggles it. Reloaded timing caches wait for explicit activation. Preparation
 never starts another audio path.
 
-The 172 MiB pinned Demucs weights are cached locally. Processing uses 24-second
+The 37.5 MiB pinned Spleeter weights are cached locally. Processing uses 12-second
 windows with two seconds of context on each side, resampled to 44.1 kHz stereo.
 The worker is terminated on cancellation/completion; source identity keeps results
 attached to the submitted source. WebGPU is preferred, with single-thread WASM fallback for
-static hosting without cross-origin isolation. Progress reports the initialized
+static hosting without cross-origin isolation. GPU resources rotate every 24 seconds of audio; GPU initialization failure falls
+back to a fresh CPU worker. Progress reports the initialized
 ONNX GPU device or CPU fallback. FFT/resampling and viseme classification still
 use the CPU; this is not a claim of full GPU utilization. No audio is uploaded.
+
+Playback conservatively repairs 60–100 ms internal energy gaps only when surrounded
+by 120 ms of continuous voiced context and consistent dominant vowel evidence.
+Changes stay local to the gap and the existing 40 ms kernels; no timeline shift
+or extra live smoothing is added. Prepared version-4 caches remain compatible.
 
 RMS gating rejects separator leakage below 0.006 or 1% of mixture power.
 MotionSync consumes the identical 44.1 kHz mono downmix of the separated stereo
@@ -201,7 +207,7 @@ models do not require additional `.motionsync3.json` files.
 mixed with synthetic instruments. It checks actual Core openness/form changes,
 instrumental rejection, background playback and repeat, cancellation, Library
 selection/queue, A/B, volume, seeking, pause and persisted reuse. CI also exercises
-WASM with WebGPU disabled. Set `VIBLOOM_TEST_VOCAL_MODEL` to reuse local weights.
+WASM with WebGPU disabled. Set `VIBLOOM_TEST_VOCAL_MODEL_DIR` to a directory containing the two Spleeter FP16 weights for local tests.
 Private song/LRC cross-checks are diagnostic only and stay outside the repository;
 line timing validates rough vocal entry, not phoneme recognition accuracy.
 
@@ -314,7 +320,7 @@ restarts as well as export, draft persistence and LRC adjustment.
 
 The comparison switch keeps the original on its left and the most recently selected version on its right in a 70 px bordered capsule. A 3×3 picker exposes tracks 1–9; comparison numbers roll in 160 ms, while the selection background moves only between original and comparison. The picker supports arrow navigation, number keys and Escape; navigating it does not seek or toggle playback, and closing it restores normal shortcuts. Returning to the original preserves the last expanded comparison. In-app tooltips inherit the card palette across a body portal. `clearAll` invalidates pending reads/commits, cancels transformations and comparison vocal jobs, switches to the original before disconnecting comparison buffers, drops session files/timing, revokes download URLs and deletes persisted comparison audio. The original and shared model cache remain available.
 
-Development explicitly prebundles worker-only Demucs/ONNX imports from `index.html`; fixtures and generated artifacts are excluded from the file watcher. This prevents first-use optimization from reloading playback.
+Development explicitly prebundles worker-only FFT/ONNX imports from `index.html`; fixtures and generated artifacts are excluded from the file watcher. This prevents first-use optimization from reloading playback.
 
 Transformation completion never selects or starts its output. A selected output cannot be replaced; its processing destination is reserved against card/reel/keyboard selection while the update runs. This prevents a background commit from forcing playback to another source. The temporary preview session now shares the existing AudioContext and timeline, routes only its input source through a disposable graph, retains the user selection, and restores it on exit. A 25 ms warmup and 18 ms fade avoid compressor-start gaps. EQ drafts and repair presets are keyed by immutable input identity; output settings snapshots are separate from drafts. Full mastering renders tone/dynamics/M-S first, measures processed LUFS in a terminating Worker, then runs an isolated limiter and 4× clipping pass. Resident preview LUFS caches are bounded to 32 scalar entries; no extra source PCM is cached. See [audio processing](audio-processing.md).
 

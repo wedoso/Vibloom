@@ -12,10 +12,9 @@ import { build } from "vite";
 
 const argument = name => { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; };
 const root = process.cwd(), output = path.join(root, "outputs/iphone-vocal-memory"), base = path.join(output, "build");
-const model = path.resolve(argument("--model") ?? path.join(output, "htdemucs.onnx"));
 const seconds = Number(argument("--seconds") ?? 8);
 assert.ok(Number.isFinite(seconds) && seconds > 0 && seconds <= 120);
-const modelDirectory = path.resolve(argument("--model-dir") ?? path.join(output, "spleeter"));
+const modelDirectory = path.resolve(argument("--model-dir") ?? ".cache/spleeter");
 const modulePath = argument("--playwright-module") ?? "playwright";
 const { chromium, webkit } = await import(path.isAbsolute(modulePath) ? pathToFileURL(modulePath).href : modulePath);
 await mkdir(output, { recursive: true });
@@ -60,7 +59,7 @@ const mime = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/jav
 const serve = async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://test").pathname);
-    const file = pathname.startsWith("/models/") ? (pathname.endsWith("htdemucs_embedded.onnx") ? model : path.join(modelDirectory,path.basename(pathname))) : pathname === "/voice.wav" ? path.join(root, "tests/fixtures/vocal-speech.wav")
+    const file = pathname.startsWith("/models/") ? path.join(modelDirectory,path.basename(pathname)) : pathname === "/voice.wav" ? path.join(root, "tests/fixtures/vocal-speech.wav")
       : pathname === "/" ? path.join(base, "outputs/iphone-vocal-memory/index.html") : path.resolve(base, `.${pathname}`);
     if (!pathname.startsWith("/models/") && pathname !== "/voice.wav") assert.ok(file.startsWith(`${base}${path.sep}`));
     response.setHeader("Content-Type", mime[path.extname(file)] ?? "application/octet-stream");
@@ -100,17 +99,15 @@ try {
       assert.ok(result.done, result.error); assert.deepEqual(errors, []); assert.equal(result.activeAfterRelease, 0);
       if (engine === "chromium") assert.equal(result.diskModelBytes, 39362041);
       if (result.diskModelBytes === 39362041) {
-        assert.equal(downloads, process.argv.includes("--mobile-only") ? 2 : 3);
-        assert.ok(!result.rounds[1].phases.some(phase => phase.phase.startsWith("Downloading mobile vocal model")));
+        assert.equal(downloads, 2);
+        assert.ok(!result.rounds[1].phases.some(phase => phase.phase.startsWith("Downloading vocal model")));
       } else assert.ok(downloads <= 5, "storage-unavailable fallback must not repeatedly fetch within a job");
       const referenceBackend = result.rounds[0].events.find(event => event.event === "ready").backend;
       for (const round of result.rounds) {
         assert.equal(round.frames, seconds * 50); assert.equal(round.vowels, seconds * 250);
         const backend = round.events.find(event => event.event === "ready").backend;
-        if (round.name.startsWith("mobile")) {
-          assert.equal(backend, referenceBackend);assert.equal(round.rmsMaxAbsDiff, 0);assert.equal(round.vowelDiffCount, 0);
-        } // Desktop uses a different model; only cached mobile curves must match.
-        if (round.name.startsWith("mobile")) {
+        assert.equal(backend, referenceBackend); assert.equal(round.rmsMaxAbsDiff, 0); assert.equal(round.vowelDiffCount, 0);
+        {
           assert.equal(round.active, 0);
           if (!argument("--backend")) {
             assert.equal(backend, engine === "webkit" ? "WebGPU" : "WASM CPU", "automatic mobile backend selects GPU or falls back when no adapter is available");
@@ -123,9 +120,9 @@ try {
           const firstSeparation = round.events.findIndex(event => event.role === "separator" && event.kind === "separate" && event.event === "result");
           const motionCreated = round.events.findIndex(event => event.role === "motion" && event.event === "created");
           assert.ok(firstSeparation >= 0 && motionCreated > firstSeparation);
-        } else assert.equal(round.active, 2, "desktop keeps its existing warm worker pair");
+        }
       }
-      console.log(`PASS ${engine}: real inference, storage/cache fallback, curve parity and immediate mobile heap release`);
+      console.log(`PASS ${engine}: real inference, storage/cache fallback, curve parity and immediate heap release`);
     } finally { await browser.close(); }
   }
 } finally {

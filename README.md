@@ -13,8 +13,8 @@ A private music player for desktop and mobile browsers, macOS, and Windows. List
 - **Local library:** import music and matching LRC/TXT lyrics, organize albums with covers, search, manage the queue, and resume playback. Storage controls manage cached audio and reconnect missing files.
 - **Synchronized comparison:** switch between the original and alternate versions at the same playback position. Desktop uses waveform cards with up to nine tracks; mobile offers a compact A/B view.
 - **Audio processing on desktop:** preview EQ and mastering, apply Audio Repair presets, chain treatments into comparison tracks, and export WAV files. Desktop web and Electron share the processing implementation.
-- **Lyrics:** follow synchronized lyrics, edit text and timing, and export TXT/LRC. Desktop Library uses aligned status icons and grouped song actions for lyrics, albums, and local storage.
-- **Live2D companions:** Hong Xi and Hiyori, camera presets, adjustable framing, Focus mode, and music-reactive backgrounds. Local vocal lip sync with responsive mouth animation, progress, cancellation, and retry. Mobile uses lightweight Spleeter with GPU acceleration and CPU fallback; desktop retains Demucs. Both use MotionSync.
+- **Lyrics:** follow synchronized lyrics, edit text and timing, and export TXT/LRC.
+- **Live2D companions:** Hong Xi and Hiyori with camera controls, Focus mode, and reactive backgrounds. All platforms share local Spleeter/MotionSync lip sync with GPU acceleration, CPU fallback, clear progress, and smoother sustained vowels.
 - **Playback controls:** shuffle, repeat, volume, direct seeking, and system media controls. Background playback depends on the platform; macOS keeps playing when the app window closes.
 
 ![Waveform cards with chained audio processing](docs/assets/processing-chain.png)

@@ -24,7 +24,7 @@ async function smoke() {
     protocol.handle("vibloom", async (request) => {
       const url = new URL(request.url);
       if (url.pathname === "/__test__/voice.wav") return net.fetch(pathToFileURL(path.join(root, "tests/fixtures/vocal-speech.wav")).href);
-      if (url.pathname === "/__test__/model.onnx" && process.env.VIBLOOM_TEST_VOCAL_MODEL) return net.fetch(pathToFileURL(path.resolve(process.env.VIBLOOM_TEST_VOCAL_MODEL)).href);
+      if (url.pathname.startsWith("/__test__/models/") && process.env.VIBLOOM_TEST_VOCAL_MODEL_DIR) return net.fetch(pathToFileURL(path.resolve(process.env.VIBLOOM_TEST_VOCAL_MODEL_DIR, path.basename(url.pathname))).href);
       const file = path.resolve(root, "dist", `.${url.pathname}`);
       if (!file.startsWith(`${path.join(root, "dist")}${path.sep}`)) return new Response("Not found", { status: 404 });
       if (url.pathname === "/live2d/motionsync/motionsync.worker.js") {
@@ -36,8 +36,8 @@ async function smoke() {
       }
       return net.fetch(pathToFileURL(file).href);
     });
-    if (process.env.VIBLOOM_TEST_VOCAL_MODEL) {
-      session.defaultSession.webRequest.onBeforeRequest({ urls: ["https://huggingface.co/*"] }, (_request, callback) => callback({ redirectURL: "vibloom://app/__test__/model.onnx" }));
+    if (process.env.VIBLOOM_TEST_VOCAL_MODEL_DIR) {
+      session.defaultSession.webRequest.onBeforeRequest({ urls: ["https://huggingface.co/*"] }, (request, callback) => callback({ redirectURL: "vibloom://app/__test__/models/" + path.basename(new URL(request.url).pathname) }));
     }
     window = new BrowserWindow({ width: 1280, height: 900, show: process.env.CI === "true",
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
@@ -120,7 +120,8 @@ async function smoke() {
       const Worker = window.Worker;
       window.__workerStarts = 0;
       window.__motionCoreStarts = 0;
-      window.Worker = class extends Worker { constructor(...args) { super(...args); window.__workerStarts++; this.addEventListener('message', ({data}) => { if(data.type === 'test-core-ready')window.__motionCoreStarts++; }); } };
+      window.__gpuFallbacks = 0;
+      window.Worker = class extends Worker { constructor(...args) { super(...args); window.__workerStarts++; this.addEventListener('message', ({data}) => { if(data.type === 'test-core-ready')window.__motionCoreStarts++;if(data.type === 'error'&&data.gpuInitialization)window.__gpuFallbacks++; }); } };
       const start = AudioBufferSourceNode.prototype.start;
       window.__sourceStarts = 0;
       AudioBufferSourceNode.prototype.start = function(...args) { if (this.context instanceof AudioContext) window.__sourceStarts++; return start.apply(this, args); };
@@ -161,9 +162,13 @@ async function smoke() {
     await waitFor(`window.__motionCoreStarts > ${coreBeforeCancel}`, "Core initialized before deliberate worker cancellation");
     await click('[data-vocal-track="1"]');
     await closed("cancelled analysis");
+    // Start the repeat scenario from a known paused state, including the case
+    // where cold Core initialization already outlasted this short fixture.
+    if (await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`)) await click('[aria-label="Pause"]');
     await range("Playback position", 0);
     await click('[aria-label="Repeat off"]');
     await click('[aria-label="Repeat all"]');
+    await click('.transport-play');
     await run("window.__uiTicks = 0; window.__heartbeat = setInterval(() => window.__uiTicks++, 50)");
     await click('button[title="Library"]');
     await waitFor(`document.querySelector(".library-vocal-toolbar button")`, "library mode entry");
@@ -173,16 +178,18 @@ async function smoke() {
     await waitFor(`!document.documentElement.classList.contains("is-scene-transitioning")`, "library transition complete");
     await capture("library-selection");
     const workersBeforeSubmission = await run("window.__workerStarts");
+    const fallbacksBeforeSubmission = await run("window.__gpuFallbacks");
     const decodesBeforeSubmission = await run("window.__decodeCount");
     await click('.library-vocal-toolbar button');
     await waitFor(`document.querySelector('.track-vocal-job progress')`, "Library progress");
-    // Progress is published while the file is still being read/decoded. That
-    // does not mean runAnalysis has constructed its worker yet (especially CPU CI).
-    await waitFor(`window.__workerStarts > ${workersBeforeSubmission}`, "Library analysis worker starts after decoding");
+    // Model initialization precedes deferred decode; wait for an actual part
+    // before checking reuse. MotionSync starts only after the first separation.
+    await waitFor(`document.querySelector('.track-vocal-job')?.textContent.includes('Preparing lip sync')`, "Library separation starts after decoding");
     assert.equal(await run("window.__decodeCount"), decodesBeforeSubmission + (await run("window.__playbackRate") === 44100 ? 0 : 1), "Library reuses only an original at its existing 44.1 kHz input rate");
     console.log("PASS Library input reuse/fallback at playback rate", await run("window.__playbackRate"));
     const sharedWorkers = await run("window.__workerStarts");
-    assert.equal(sharedWorkers, workersBeforeSubmission + 2, "one separation and one MotionSync worker start for the submitted source");
+    const fallbackWorkers = await run("window.__gpuFallbacks") - fallbacksBeforeSubmission;
+    assert.ok(sharedWorkers >= workersBeforeSubmission + 1 + fallbackWorkers && sharedWorkers <= workersBeforeSubmission + 2 + fallbackWorkers, "separator starts first; CPU fallback uses a fresh worker and Core is lazy");
     await click('[aria-label="Actions for Voice A"]');
     assert.equal(await run(`[...document.querySelectorAll('.track-popover button')].some(b=>b.textContent==='Prepare vocal lip sync')`), false, "busy menu does not offer a duplicate submission");
     assert.ok(await run(`[...document.querySelectorAll('.track-popover button')].some(b=>b.textContent==='Cancel preparation')`), "busy menu offers cancellation");
@@ -191,7 +198,6 @@ async function smoke() {
     await click('button[title="Player"]');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')`, 'Player card mounted');
     await waitFor(`document.querySelector('.version-a .card-perimeter-progress')`, "progress bar");
-    const workersBeforeLoop = await run("window.__workerStarts");
     const decodesBeforeLoop = await run("window.__decodeCount");
     await range("Playback position", 11.5);
     await waitFor(`Number(document.querySelector('[aria-label="Playback position"]').value) < 2 && Boolean(document.querySelector('[aria-label="Pause"]'))`, "repeat during preparation");
@@ -205,8 +211,7 @@ async function smoke() {
     assert.ok(await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`), "playback continues during analysis");
     assert.ok(await run("window.__uiTicks") > 10, "renderer remains responsive");
     await run("clearInterval(window.__heartbeat)");
-    assert.equal(await run("window.__workerStarts"), workersBeforeLoop, "repeat does not restart vocal separation");
-    assert.equal(await run("window.__workerStarts"), sharedWorkers, "no duplicate worker starts before analysis completes");
+    assert.equal(await run("window.__workerStarts"), workersBeforeSubmission + 2 + fallbackWorkers, "one initialized separator and one lazy Core; only initialization fallback adds a worker");
     assert.equal(await run("window.__decodeCount"), decodesBeforeLoop, "repeat reuses decoded audio");
     assert.equal(await run(`document.querySelector('[data-vocal-track="1"]').getAttribute("aria-pressed")`), "true", "newly prepared vocals automatically enable");
     await range("Playback position", 4.2);
@@ -216,7 +221,7 @@ async function smoke() {
     assert.equal(await run(`Boolean(document.querySelector('.version-a .card-vocal-status'))`), false, "completion text stays removed after the progress transition");
     await click('[aria-label="Pause"]');
     await click('[aria-label="Repeat one"]');
-    console.log("PASS background Demucs analysis, uninterrupted repeat, visible phases, automatic singing, cancellation and retry");
+    console.log("PASS background Spleeter analysis, uninterrupted repeat, visible phases, automatic singing, cancellation and retry");
     await run(`(() => {
       const transfer = new DataTransfer(); transfer.items.add(window.__wav('Silent B.wav', true));
       const input = document.querySelector('input[type="file"]:not([multiple]):not([accept^=".lrc"])');

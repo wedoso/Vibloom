@@ -5,7 +5,8 @@ import ts from "typescript";
 
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64")}`;
 const envelope = moduleUrl(await readFile(new URL("../src/audio/vocals/envelope.ts", import.meta.url), "utf8"));
-const source = (await readFile(new URL("../src/audio/vocals/articulation.ts", import.meta.url), "utf8")).replace('"./envelope"', JSON.stringify(envelope));
+const dropouts = moduleUrl(await readFile(new URL("../src/audio/vocals/sustainedDropouts.ts", import.meta.url), "utf8"));
+const source = (await readFile(new URL("../src/audio/vocals/articulation.ts", import.meta.url), "utf8")).replace('"./envelope"', JSON.stringify(envelope)).replace('"./sustainedDropouts"', JSON.stringify(dropouts));
 const { buildVocalCurves, sampleVocalCurves, smoothVocalCurves } = await import(moduleUrl(source));
 const { isCurrentVocalAnalysis, migrateLibrarySnapshot } = await import(moduleUrl(await readFile(new URL("../src/domain/library.ts", import.meta.url), "utf8")));
 const weights = (n, channel) => Uint8Array.from({ length: n * 5 }, (_, i) => i % 5 === channel ? 255 : 0);
@@ -34,7 +35,7 @@ test("continuous O/U blends retain identity without discrete winner holds", () =
 });
 
 test("short gate holes bridge; meaningful silence and quiet valleys remain closed or shallow", () => {
-  const rms = voice(); rms.fill(0, 30, 32); rms.fill(0, 50, 55); rms.fill(.006, 70, 85);
+  const rms = voice(); rms.fill(0, 30, 32); rms.fill(0, 50, 56); rms.fill(.006, 70, 85);
   const curves = buildVocalCurves(rms, weights(100, 4));
   assert.ok(curves.open[31] > .5);
   assert.equal(curves.open[52], 0);
@@ -89,4 +90,36 @@ test("continuously changing vowels stay centered on the acoustic timeline instea
   const silent = buildVocalCurves(rms, weights(n, 2));
   assert.equal(sampleVocalCurves(silent, 1, 1).open, 0);
   assert.deepEqual(sampleVocalCurves(silent, 1, 1).vowels, [0, 0, 0, 0, 0], "centered shapes cannot create speech in a silent gap");
+});
+
+
+test("consistent sustained vowels bridge 60–100ms holes without shifting onsets or changing other phrases", () => {
+  for (const frames of [3, 4, 5]) {
+    const rms = voice(), data = weights(100, 3);
+    rms.fill(0, 0, 10); rms.fill(0, 80); rms.fill(0, 40, 40 + frames);
+    const savedRms = rms.slice(), savedWeights = data.slice();
+    const curves = buildVocalCurves(rms, data), uninterrupted = buildVocalCurves(voice(), data);
+    assert.ok(curves.open[41] > .8, `long vowel remains open across ${frames * 20}ms`);
+    assert.ok(curves.vowels[3][41] > .99);
+    assert.equal(curves.open[9], 0, "no anticipation before acoustic onset");
+    assert.ok(curves.open[10] > .4, "no new onset delay");
+    assert.equal(curves.open[82], 0, "final closure retains its finite tail");
+    assert.deepEqual(rms, savedRms); assert.deepEqual(data, savedWeights);
+    for (let i = 15; i < 35; i++) assert.equal(curves.open[i], uninterrupted.open[i], "unrelated phrase is unchanged");
+    assert.deepEqual(sampleVocalCurves(curves, .84, 1), sampleVocalCurves(curves, .84, 1), "seeking does not depend on prior playback");
+  }
+});
+
+test("long pauses, weak or interrupted context, missing or changing vowels are not filled", () => {
+  for (const mode of ["pause", "weak", "context", "missing", "changed", "ambiguous", "unbalanced"]) {
+    const rms = voice(), data = weights(100, 0);
+    rms.fill(0, 40, mode === "pause" ? 46 : 44);
+    if (mode === "weak") rms.fill(.007, 34, 40);
+    if (mode === "context") rms[36] = rms[37] = 0;
+    if (mode === "missing") data.fill(0);
+    if (mode === "unbalanced") rms.fill(.02, 34, 40);
+    if (mode === "changed") for (let i = 44; i < 100; i++) { data[i * 5] = 0; data[i * 5 + 4] = 255; }
+    if (mode === "ambiguous") for (let i = 0; i < 100; i++) { data[i * 5] = 128; data[i * 5 + 1] = 127; }
+    assert.equal(buildVocalCurves(rms, data).open[42], 0, `${mode} retains closure`);
+  }
 });
