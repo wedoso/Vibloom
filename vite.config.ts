@@ -12,7 +12,7 @@ export default defineConfig({
   plugins: [react()],
   // Worker-only dependencies otherwise trigger a page reload on the first
   // vocal request, interrupting playback and restarting its model download.
-  optimizeDeps: { entries: ["index.html"], include: ["demucs-web", "onnxruntime-web/webgpu"] },
+  optimizeDeps: { entries: ["index.html"], include: ["demucs-web", "onnxruntime-web/webgpu", "onnxruntime-web/wasm"] },
   server: { watch: { ignored: ["**/.cache/**", "**/outputs/**", "**/work/**", "**/release/**"] } },
   worker: { format: "es" },
   build: {

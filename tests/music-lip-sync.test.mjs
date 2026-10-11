@@ -62,6 +62,19 @@ test("short bilabial closures reach the rig within 60 ms and do not alter other 
   assert.equal(values[1], .5);
 });
 
+test("precomputed poses reach the rig on the same render frame and seek/pause cannot retain a stale opening", () => {
+  for (const dt of [1 / 30, 1 / 60, 1 / 120]) {
+    const { values, sync } = fixture();
+    sync.update({ open: .7, form: .4 }, true, dt);
+    assert.equal(values[0], .7, "the baked curve is not smoothed a second time");
+    sync.update({ open: .2, form: -.5 }, true, dt);
+    assert.equal(values[0], .2, "a seek samples its destination immediately");
+    sync.update({ open: .9, form: .7 }, false, dt);
+    assert.equal(values[0], 0, "pause closes the rig immediately");
+    assert.equal(values[1], .5, "expressions keep their own channel");
+  }
+});
+
 
 function richFixture(bound = true) {
   const ids=["ParamMouthOpenY","ParamMouthForm","Mouthfunnel","MouthPuckerWiden","Jawopen","smile"], values=[0,0,0,0,0,.5];

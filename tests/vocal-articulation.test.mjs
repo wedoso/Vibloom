@@ -6,7 +6,7 @@ import ts from "typescript";
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64")}`;
 const envelope = moduleUrl(await readFile(new URL("../src/audio/vocals/envelope.ts", import.meta.url), "utf8"));
 const source = (await readFile(new URL("../src/audio/vocals/articulation.ts", import.meta.url), "utf8")).replace('"./envelope"', JSON.stringify(envelope));
-const { buildVocalCurves, sampleVocalCurves } = await import(moduleUrl(source));
+const { buildVocalCurves, sampleVocalCurves, smoothVocalCurves } = await import(moduleUrl(source));
 const { isCurrentVocalAnalysis, migrateLibrarySnapshot } = await import(moduleUrl(await readFile(new URL("../src/domain/library.ts", import.meta.url), "utf8")));
 const weights = (n, channel) => Uint8Array.from({ length: n * 5 }, (_, i) => i % 5 === channel ? 255 : 0);
 const voice = (n = 100) => new Float32Array(n).fill(.2);
@@ -73,4 +73,20 @@ test("only complete version 4 caches are reused; legacy metadata survives migrat
     assert.equal(migrated.tracks[0].lyrics[0].text, "歌");
     assert.equal(isCurrentVocalAnalysis(old), false);
   }
+});
+
+test("continuously changing vowels stay centered on the acoustic timeline instead of restarting a delayed transition", () => {
+  const n = 100;
+  const form = Float32Array.from({ length: n }, (_, i) => 1 - 2 * i / (n - 1));
+  const vowels = Array.from({ length: 5 }, (_, channel) => Float32Array.from({ length: n }, (_, i) => channel === 2 ? 1 - i / (n - 1) : channel === 4 ? i / (n - 1) : 0));
+  const curves = smoothVocalCurves({ open: voice(), form, vowels });
+  for (let i = 2; i < n - 2; i++) {
+    assert.ok(Math.abs(curves.form[i] - form[i]) < 1e-6, `vowel form at ${i} has no accumulated lag`);
+    assert.ok(Math.abs(curves.vowels[2][i] - vowels[2][i]) < 1e-6);
+    assert.ok(Math.abs(curves.vowels.reduce((sum, values) => sum + values[i], 0) - 1) < 1e-6);
+  }
+  const rms = voice(); rms.fill(0, 40, 55);
+  const silent = buildVocalCurves(rms, weights(n, 2));
+  assert.equal(sampleVocalCurves(silent, 1, 1).open, 0);
+  assert.deepEqual(sampleVocalCurves(silent, 1, 1).vowels, [0, 0, 0, 0, 0], "centered shapes cannot create speech in a silent gap");
 });

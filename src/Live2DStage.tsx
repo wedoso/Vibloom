@@ -16,6 +16,7 @@ type Live2DStageProps = {
   companionId?: CompanionId;
   featuresRef: MutableRefObject<AudioVisualFeatures>;
   vocalLevelRef: MutableRefObject<VocalPose>;
+  readVocalPose?: () => VocalPose;
   variant: StageVariant;
   trackLabel: string;
   activeSource: number;
@@ -243,6 +244,7 @@ export default function Live2DStage({
   companionId: requestedCompanionId = "hong-xi",
   featuresRef,
   vocalLevelRef,
+  readVocalPose,
   variant,
   trackLabel,
   activeSource,
@@ -255,6 +257,8 @@ export default function Live2DStage({
   playerZoomOffset,
   onPickAudio,
 }: Live2DStageProps) {
+  const readVocalPoseRef = useRef(readVocalPose);
+  useLayoutEffect(() => { readVocalPoseRef.current = readVocalPose; }, [readVocalPose]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [companionId, setCompanionId] = useState(requestedCompanionId);
   const switchingCompanion = requestedCompanionId !== companionId;
@@ -722,7 +726,7 @@ export default function Live2DStage({
         const applyMusicLipSync = () => {
           const now = performance.now();
           musicLipSync.update(
-            vocalLevelRef.current,
+            readVocalPoseRef.current?.() ?? vocalLevelRef.current,
             variantRef.current === "player" && featuresRef.current.isPlaying,
             (now - lipSyncUpdatedAt) / 1000,
           );

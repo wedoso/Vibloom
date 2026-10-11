@@ -92,10 +92,12 @@ export class MusicLipSync {
   update(vocalLevel: number | VocalPose, playing: boolean, dt: number) {
     const level = playing ? typeof vocalLevel === "number" ? vocalLevel : vocalLevel.open : 0;
     const target = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
-    // Follow the stabilized acoustic envelope without adding another amplitude scale.
+    // Timeline poses already have smoothing and cubic interpolation. Applying
+    // another live filter would delay jaw and vowel changes a second time.
+    const timelinePose = typeof vocalLevel !== "number";
     const seconds = Number.isFinite(dt) ? Math.max(0, dt) : 0;
     const response = target > this.openness ? 0.012 : 0.018;
-    this.openness += (target - this.openness) * (1 - Math.exp(-seconds / response));
+    this.openness = timelinePose ? target : this.openness + (target - this.openness) * (1 - Math.exp(-seconds / response));
     if (this.openness < 0.001) this.openness = 0;
     const vowels = playing && typeof vocalLevel !== "number" ? vocalLevel.vowels : undefined;
     const validVowels = vowels?.length === 5 && vowels.every(v => Number.isFinite(v) && v >= 0 && v <= 1);
@@ -103,7 +105,7 @@ export class MusicLipSync {
     const calibrated = this.calibratedMouth && vowelWeight > 1e-6;
     const desiredScale = calibrated
       ? HONG_XI_VOWELS.reduce((sum, pose, i) => sum + pose.aperture * vowels![i], 0) / vowelWeight : 1;
-    this.apertureScale += (desiredScale - this.apertureScale) * (1 - Math.exp(-seconds / .025));
+    this.apertureScale = timelinePose ? desiredScale : this.apertureScale + (desiredScale - this.apertureScale) * (1 - Math.exp(-seconds / .025));
     let desiredForm = calibrated
       ? HONG_XI_VOWELS.reduce((sum, pose, i) => sum + pose.form * vowels![i], 0) / vowelWeight
       : playing && typeof vocalLevel !== "number" ? vocalLevel.form : null;
@@ -114,14 +116,14 @@ export class MusicLipSync {
       desiredForm = Math.max(-1, Math.min(1, desiredForm! + Math.max(-.2, Math.min(.2, vocalLevel.form - genericForm))));
     }
     if (desiredForm !== null && Number.isFinite(desiredForm) && this.formIndex >= 0 && this.formIndex < this.model.getParameterCount()) {
-      this.form += (desiredForm - this.form) * (1 - Math.exp(-seconds / .025));
+      this.form = timelinePose ? desiredForm : this.form + (desiredForm - this.form) * (1 - Math.exp(-seconds / .025));
       this.model.setParameterValueByIndex(this.formIndex, this.form);
     }
     for (const channel of this.channels) {
       const blend = validVowels ? Math.max(-1, Math.min(1, channel.weights.reduce((sum, weight, i) => sum + weight * vowels![i], 0))) : 0;
       const amount = channel.jaw ? (validVowels ? this.openness : 0) : blend * Math.min(1, this.openness / .25);
       const desired = channel.neutral + amount * (amount >= 0 ? channel.max - channel.neutral : channel.neutral - channel.min);
-      channel.value = channel.jaw ? desired : channel.value + (desired - channel.value) * (1 - Math.exp(-seconds / .025));
+      channel.value = timelinePose || channel.jaw ? desired : channel.value + (desired - channel.value) * (1 - Math.exp(-seconds / .025));
       if (this.openness === 0) channel.value = channel.neutral;
       this.model.setParameterValueByIndex(channel.index, Math.max(channel.min, Math.min(channel.max, channel.value)));
     }
