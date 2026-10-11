@@ -1,0 +1,31 @@
+Mobile vocal separation uses Spleeter 2-stems by Deezer:
+https://github.com/deezer/spleeter
+
+The FP16 ONNX weights are downloaded on demand from the sherpa-onnx conversion:
+https://huggingface.co/csukuangfj/sherpa-onnx-spleeter-2stems-fp16
+Pinned revision: 93ba771920ade509f8cbd6825b1a90856c797e08
+Model weights are not bundled in this repository or desktop installers.
+Desktop vocal separation continues to use Demucs. MotionSync terms are in
+public/live2d/motionsync/LICENSE.md.
+
+MIT License
+
+Copyright (c) 2019-present, Deezer SA.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

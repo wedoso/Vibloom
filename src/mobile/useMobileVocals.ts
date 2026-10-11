@@ -37,11 +37,11 @@ export function useMobileVocals({ store, engine, current, tracks, readTracks, pa
     const key = vocalJobKey(track, source);
     return states.get(key) ?? { key, ready: false, working: false, enabled: false, analysis: undefined, job: undefined };
   }, [states]);
-  const prepare = (track: LibraryTrack, source = 0) => {
+  const prepare = (track: LibraryTrack, source = 0, rerun = false) => {
     if (source !== 0 && !mobileComparisons(track).some(item => item.slot === source)) return;
     const status = state(track, source);
     if (status.working) { store.cancel(status.key); return; }
-    if (status.ready) { setDisabled(old => { const next = new Set(old); if (next.has(status.key)) next.delete(status.key); else next.add(status.key); return next; }); return; }
+    if (status.ready && !rerun) { setDisabled(old => { const next = new Set(old); if (next.has(status.key)) next.delete(status.key); else next.add(status.key); return next; }); return; }
     // Captured identity prevents a replaced comparison, removed song or late worker
     // response from attaching mouth data to another source.
     const valid = () => readTracks().find(item => item.id === track.id && vocalJobKey(item, source) === status.key);
@@ -54,6 +54,9 @@ export function useMobileVocals({ store, engine, current, tracks, readTracks, pa
     }, analysis => {
       if (!valid()) return;
       patchTracks(items => items.map(item => item.id !== track.id || vocalJobKey(item, source) !== status.key ? item : source === 0 ? { ...item, vocalAnalysis: analysis } : withComparisons(item, comparisonsOf(item).map(version => version.slot === source ? { ...version, vocalAnalysis: analysis } : version))));
+      // A diagnostic re-run replaces the old curve only after success. Keep it
+      // usable during analysis/errors and remove its durable record afterwards.
+      if (rerun && isVocalAnalysisReference(status.analysis) && (!isVocalAnalysisReference(analysis) || status.analysis.cacheKey !== analysis.cacheKey)) void storage?.remove(status.analysis.cacheKey).catch(() => undefined);
       setDisabled(old => { const next = new Set(old); next.delete(status.key); return next; });
     });
   };

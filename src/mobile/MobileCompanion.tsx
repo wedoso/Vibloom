@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MicVocal, ScanFace } from "lucide-react";
 import { EMPTY_AUDIO_VISUAL, sampleAnalyser } from "../audioVisual";
@@ -54,14 +54,15 @@ export default function MobileCompanion({ library, focus, onVocals, visible = tr
     return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
   }, [cameraOpen, capsule]);
   const { sampleVocals } = library.vocals;
+  const readVocalPose = useCallback(() => library.playing && library.engine.getContext()?.state === "running"
+    ? sampleVocals(library.engine.getTimelineTime(), library.session.volume) : SILENT_VOCAL_POSE,
+  [library.engine, library.playing, library.session.volume, sampleVocals]);
   const visual = useRef({ ...EMPTY_AUDIO_VISUAL }), vocals = useRef(SILENT_VOCAL_POSE);
   useEffect(() => {
     if (!renderActive) return;
     let frame = 0;
     const frequency = new Uint8Array(512), samples = new Uint8Array(1024);
     const tick = () => {
-      const active = library.playing && library.engine.getContext()?.state === "running";
-      vocals.current = active ? sampleVocals(library.engine.getTimelineTime(), library.session.volume) : SILENT_VOCAL_POSE;
       const analyser = library.engine.getAnalyser(library.engine.audibleSource);
       visual.current = library.playing && analyser
         ? sampleAnalyser(analyser, frequency, samples, visual.current, library.engine.getTimelineTime(), library.source)
@@ -71,7 +72,7 @@ export default function MobileCompanion({ library, focus, onVocals, visible = tr
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [library.engine, library.playing, library.source, library.comparisons.slots, sampleVocals, library.session.volume, renderActive]);
+  }, [library.engine, library.playing, library.source, library.comparisons.slots, renderActive]);
   const vocalStatus = library.current ? library.vocals.state(library.current, library.source) : null;
   const tasks = library.vocals.activeJobs.filter(task => task.track.id === library.current?.id);
   const vocalTask = tasks.find(task => task.job?.status === "working") ?? tasks.find(task => task.job?.status === "queued") ?? tasks[0];
@@ -84,7 +85,7 @@ export default function MobileCompanion({ library, focus, onVocals, visible = tr
     if (!button.classList.contains("m-stage-vocals")) requestAnimationFrame(() => capsule?.querySelector<HTMLButtonElement>(".m-stage-camera")?.focus());
   }}>
     <Suspense fallback={<p className="m-muted">Opening your listening room…</p>}>
-      <Live2DStage renderActive={renderActive} companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" playerZoomOffset={mobileModelZoomOffset} />
+      <Live2DStage renderActive={renderActive} companionId={library.session.companionId} featuresRef={visual} vocalLevelRef={vocals} readVocalPose={readVocalPose} variant="player" trackLabel="" activeSource={library.source} isComparing={Object.keys(library.comparisons.slots).length > 0} isPlaying={library.playing} focusMode={focus} containModel layoutKey="mobile" playerZoomOffset={mobileModelZoomOffset} />
     </Suspense>
     <output ref={zoomReadout} className="m-pinch-readout" aria-label="Model zoom" hidden />
     {capsule && createPortal(<>

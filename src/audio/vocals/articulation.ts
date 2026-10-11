@@ -6,7 +6,7 @@ const median = (a: number, b: number, c: number) => a + b + c - Math.min(a, b, c
 
 /** MotionSync weights keep their continuous A/E/I/O/U identity. Vocal energy
  * owns jaw timing; shape recognition never invents openings during silence.
- * Preserve the selected lab's native smoothing + 100 ms visual transitions.
+ * Preserve the lab's native smoothing without adding a delayed visual chase.
  */
 export function buildVocalCurves(rms: Float32Array, weights: Uint8Array): VocalCurves {
   const n = rms.length;
@@ -47,37 +47,33 @@ export function buildVocalCurves(rms: Float32Array, weights: Uint8Array): VocalC
   return smoothVocalCurves({ open, form, vowels });
 }
 
-/** Bake asymmetric attack/release into the saved-time domain. Forward filtering
- * starts at the acoustic onset; finite tails reach exact silence in 40 ms.
- * Shape changes use a 100 ms smoothstep, keeping both endpoint velocities zero. */
+/** Jaw attack/release retains finite 40 ms tails. Shapes use a centered kernel
+ * on the already-analyzed timeline, so changing weights cannot repeatedly
+ * restart a causal transition and accumulate lag. Silence stays unvoiced. */
 export function smoothVocalCurves(input: VocalCurves): VocalCurves {
   const open = new Float32Array(input.open.length), form = input.form.slice();
-  let from = .15, target = .15, elapsed = 5;
   for (let i = 0; i < open.length; i++) {
     const desired = input.open[i];
     const previous = input.open[i - 1] ?? 0, older = input.open[i - 2] ?? 0;
     // Finite kernels taper all the way to zero without truncating an exponential
     // tail. Faster opening, softer closing; no lookahead into preceding silence.
     open[i] = desired >= previous ? .55 * desired + .3 * previous + .15 * older : .35 * desired + .4 * previous + .25 * older;
-    const next = input.form[i];
-    if (!Number.isFinite(next)) { form[i] = NaN; continue; }
-    if (next !== target) { from = i > 0 && Number.isFinite(form[i - 1]) ? form[i - 1] : target; target = next; elapsed = 0; }
-    const t = Math.min(1, ++elapsed / 5), ease = t * t * (3 - 2 * t);
-    form[i] = from + (target - from) * ease;
   }
+  const centered = (values: Float32Array) => Float32Array.from(values, (value, index) => {
+    if (!Number.isFinite(value) || input.open[index] === 0) return value;
+    let sum = 0, total = 0;
+    for (let offset = -2; offset <= 2; offset++) {
+      const at = index + offset, neighbor = values[at];
+      if (at < 0 || at >= values.length || input.open[at] === 0 || !Number.isFinite(neighbor)) continue;
+      const weight = 3 - Math.abs(offset);
+      sum += neighbor * weight; total += weight;
+    }
+    return total > 0 ? sum / total : value;
+  });
   // Preserve vowel identity as a blend, rather than reconstructing it from
   // ParamMouthForm (whose intermediate values are ambiguous).
-  const vowels = input.vowels?.map(values => {
-    const result = new Float32Array(values.length);
-    let from = 0, target = 0, elapsed = 5;
-    for (let i = 0; i < values.length; i++) {
-      if (values[i] !== target) { from = result[i - 1] ?? 0; target = values[i]; elapsed = 0; }
-      const t = Math.min(1, ++elapsed / 5);
-      result[i] = from + (target - from) * t * t * (3 - 2 * t);
-    }
-    return result;
-  });
-  return { open, form, vowels };
+  const vowels = input.vowels?.map(centered);
+  return { open, form: centered(form), vowels };
 }
 
 export function sampleVocalCurves(curves: VocalCurves, time: number, volume: number): VocalPose {

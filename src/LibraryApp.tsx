@@ -660,6 +660,9 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [vocalJobs, patchTracks]);
   const vocalPlayback = useVocalPlaybackState(activeAnalysis, activeDuration, singingKeys.has(activeKey), platform.vocalAnalyses, missingVocalReference);
   const sampleVocals = vocalPlayback.sample;
+  const readVocalPose = useCallback(() => playingRef.current && audioEngine.getContext()?.state === "running"
+    ? sampleVocals(audioEngine.getTimelineTime(), sessionRef.current.volume) : SILENT_VOCAL_POSE,
+  [audioEngine, sampleVocals]);
   const { cancelAll: cancelTransforms, reset: resetComparisons } = comparisons;
 
   const patchSession = useCallback((patch: Partial<LibrarySession> | ((current: LibrarySession) => LibrarySession)) => {
@@ -1016,7 +1019,6 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     const tick = (now: number) => {
       if (!playingRef.current) return;
       const reference = getTimelineTime();
-      if (visualActive) vocalLevelRef.current = audioEngine.getContext()?.state === "running" ? sampleVocals(reference, sessionRef.current.volume) : SILENT_VOCAL_POSE;
       const maxDuration = audioEngine.getMaxDuration();
       const nextTime = Math.min(reference, maxDuration);
       // Local playheads keep painting smoothly; page state needs only 10 Hz.
@@ -1053,7 +1055,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
       if (backgroundTimer !== null) clearTimeout(backgroundTimer);
     };
-  }, [activeSource, audioEngine, getTimelineTime, isPlaying, timingTrackId, sampleVocals, visualActive]);
+  }, [activeSource, audioEngine, getTimelineTime, isPlaying, timingTrackId, visualActive]);
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -1923,7 +1925,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
           <aside className="persistent-stage-panel">
             {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
-            <div className="persistent-stage-canvas"><Live2DStage renderActive={visualActive} companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} playerZoomOffset={desktopPlayerZoomOffset} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
+            <div className="persistent-stage-canvas"><Live2DStage renderActive={visualActive} companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} playerZoomOffset={desktopPlayerZoomOffset} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} readVocalPose={readVocalPose} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><span className={`is-active source-${activeSource === 0 ? "a" : "b"}`}>{activeSource + 1}</span><small>{comparisonReady ? `Listening to track ${activeSource + 1}` : "Solo playback"}</small></div>
           </aside>
         </div>

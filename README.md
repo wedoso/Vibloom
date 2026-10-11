@@ -14,7 +14,7 @@ A private music player for desktop and mobile browsers, macOS, and Windows. List
 - **Synchronized comparison:** switch between the original and alternate versions at the same playback position. Desktop uses waveform cards with up to nine tracks; mobile offers a compact A/B view.
 - **Audio processing on desktop:** preview EQ and mastering, apply Audio Repair presets, chain treatments into comparison tracks, and export WAV files. Desktop web and Electron share the processing implementation.
 - **Lyrics:** follow synchronized lyrics, edit text and timing, and export TXT/LRC. Desktop Library uses aligned status icons and grouped song actions for lyrics, albums, and local storage.
-- **Live2D companions:** Hong Xi and Hiyori, camera presets, adjustable framing, Focus mode, and music-reactive backgrounds. Vocal lip sync runs separation and vowel analysis locally in background jobs, with progress, cancellation, and retry. First use downloads the vocal model.
+- **Live2D companions:** Hong Xi and Hiyori, camera presets, adjustable framing, Focus mode, and music-reactive backgrounds. Local vocal lip sync with responsive mouth animation, progress, cancellation, and retry. Mobile uses lightweight Spleeter with GPU acceleration and CPU fallback; desktop retains Demucs. Both use MotionSync.
 - **Playback controls:** shuffle, repeat, volume, direct seeking, and system media controls. Background playback depends on the platform; macOS keeps playing when the app window closes.
 
 ![Waveform cards with chained audio processing](docs/assets/processing-chain.png)
@@ -59,6 +59,6 @@ See [player and Library](docs/library-player.md), [mobile UI](docs/mobile-ui.md)
 
 ## License
 
-Source code: [MIT](LICENSE). Audio Repair follows [TheApeMachine/deshimmer](https://github.com/TheApeMachine/deshimmer); EQ follows [SUP3RMASS1VE/Suno-Song-Remaster](https://github.com/SUP3RMASS1VE/Suno-Song-Remaster). Third-party terms are retained in the [EQ](public/eq-NOTICES.txt) and [audio runtime](public/remaster-NOTICES.txt) notices. Hiyori and Live2D runtimes have separate terms: [Hiyori](public/live2d/hiyori/LICENSE-HIYORI.txt), [MotionSync](public/live2d/motionsync/LICENSE.md).
+Source code: [MIT](LICENSE). Audio Repair follows [TheApeMachine/deshimmer](https://github.com/TheApeMachine/deshimmer); EQ follows [SUP3RMASS1VE/Suno-Song-Remaster](https://github.com/SUP3RMASS1VE/Suno-Song-Remaster). Third-party terms are retained in the [EQ](public/eq-NOTICES.txt), [audio runtime](public/remaster-NOTICES.txt), and [vocal model](public/vocal-NOTICES.txt) notices. Hiyori and Live2D runtimes have separate terms: [Hiyori](public/live2d/hiyori/LICENSE-HIYORI.txt), [MotionSync](public/live2d/motionsync/LICENSE.md).
 
 **Hong Xi's model, artwork, textures, expressions, and related assets are not covered by MIT. Commercial use requires prior permission from the rights holder.** Repository distribution does not grant that permission; see the [model usage notice](public/live2d/hong-xi/NOTICE.md).

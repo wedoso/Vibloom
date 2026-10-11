@@ -9,7 +9,7 @@ import { useMediaSession } from "../platform/useMediaSession";
 import { mobilePlatform } from "./platform";
 import { librarySaveMessage } from "../platform/indexedLibraryRepository";
 import { VocalJobStore, vocalJobKey } from "../audio/vocals/jobStore";
-import { releaseIdleVocalWorkers } from "../audio/vocals/analyzeVocals";
+import { analyzeMobileVocals, releaseIdleMobileVocalWorkers } from "../audio/vocals/analyzeVocals";
 import { useMobileVocals } from "./useMobileVocals";
 import type { LibraryPlatform, StorageState } from "../platform/libraryPlatform";
 
@@ -31,7 +31,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     };
   }, []);
   const [engine] = useState(() => new SynchronizedAudioEngine());
-  const [vocalJobs] = useState(() => new VocalJobStore(undefined, platform.vocalAnalyses));
+  const [vocalJobs] = useState(() => new VocalJobStore(analyzeMobileVocals, platform.vocalAnalyses));
   const forgetVocals = useCallback((track: LibraryTrack, source: number) => {
     const analysis = source === 0 ? track.vocalAnalysis : comparisonsOf(track).find(item => item.slot === source)?.vocalAnalysis;
     if (isVocalAnalysisReference(analysis)) void platform.vocalAnalyses?.remove(analysis.cacheKey).catch(() => undefined);
@@ -148,7 +148,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     }, 300);
     return () => window.clearTimeout(timer);
   }, [ready, session, platform]);
-  useEffect(() => () => { mounted.current = false; epoch.current++; playerRead.current?.abort(); vocalJobs.dispose(); releaseIdleVocalWorkers(); platform.vocalAnalyses?.release(); void engine.close(); }, [engine, vocalJobs, platform]);
+  useEffect(() => () => { mounted.current = false; epoch.current++; playerRead.current?.abort(); vocalJobs.dispose(); releaseIdleMobileVocalWorkers(); platform.vocalAnalyses?.release(); void engine.close(); }, [engine, vocalJobs, platform]);
 
   const pause = useCallback(() => {
     epoch.current++; playerRead.current?.abort(); const position = engine.pause();

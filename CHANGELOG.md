@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.11.1](https://github.com/wedoso/Vibloom/compare/v1.11.0...v1.11.1) (2026-10-11)
+
+- Fix iPhone vocal-analysis crashes with a lightweight local model, GPU acceleration, CPU fallback, and bounded GPU resource lifetimes.
+- Remove duplicate vocal progress icons from the mobile Player while preserving background task access in Library.
+- Reduce lip-sync animation lag across desktop and mobile by removing repeated smoothing and sampling mouth poses on the render frame.
+
 ## [1.11.0](https://github.com/wedoso/Vibloom/compare/v1.10.0...v1.11.0) (2026-10-10)
 
 - Add a dedicated mobile listening room with portrait and landscape layouts, direct seeking, A/B comparison, synchronized lyrics, compact lyric editing, and Live2D pinch zoom and camera controls.

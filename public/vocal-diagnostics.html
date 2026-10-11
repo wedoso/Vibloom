@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vocal runtime diagnostics</title>
+<style>
+body { margin: 24px; font: 16px/1.5 system-ui, sans-serif; color: #25354c; background: #f5f8fc; }
+h1 { font-size: 22px; } pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+button { padding: 12px 16px; font: inherit; cursor: pointer; }
+</style>
+<h1>Vocal runtime diagnostics</h1>
+<p>Recent mobile analysis stages. An unfinished record indicates an interruption; it does not establish whether memory or GPU compatibility caused it. No audio, file names or lyrics are recorded.</p>
+<button id="copy">Copy diagnostics</button>
+<pre id="report"></pre>
+<script>
+let text;
+try { text = JSON.stringify(JSON.parse(localStorage.getItem("vibloom-mobile-vocal-diagnostics-v1") || "[]"), null, 2); }
+catch { text = "Diagnostics storage is unavailable."; }
+document.getElementById("report").textContent = text;
+document.getElementById("copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(text); document.getElementById("copy").textContent = "Copied"; }
+  catch { const range = document.createRange(); range.selectNodeContents(document.getElementById("report")); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range); }
+});
+</script>
+</html>
