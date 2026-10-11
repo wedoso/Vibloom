@@ -1,6 +1,6 @@
 import { app, BrowserWindow, net, protocol, session } from "electron";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -21,12 +21,19 @@ async function smoke() {
   try {
     await app.whenReady();
     await mkdir(output, { recursive: true });
-    protocol.handle("vibloom", (request) => {
+    protocol.handle("vibloom", async (request) => {
       const url = new URL(request.url);
       if (url.pathname === "/__test__/voice.wav") return net.fetch(pathToFileURL(path.join(root, "tests/fixtures/vocal-speech.wav")).href);
       if (url.pathname === "/__test__/model.onnx" && process.env.VIBLOOM_TEST_VOCAL_MODEL) return net.fetch(pathToFileURL(path.resolve(process.env.VIBLOOM_TEST_VOCAL_MODEL)).href);
       const file = path.resolve(root, "dist", `.${url.pathname}`);
       if (!file.startsWith(`${path.join(root, "dist")}${path.sep}`)) return new Response("Not found", { status: 404 });
+      if (url.pathname === "/live2d/motionsync/motionsync.worker.js") {
+        // Mark actual Core startup in the test worker, keeping production
+        // assets unchanged. Terminating during importScripts can itself emit
+        // a Chromium NetworkError when the pending protocol request aborts.
+        const source = await readFile(file, "utf8");
+        return new Response(source.replace('importScripts("live2dcubismmotionsynccore.min.js");', 'importScripts("live2dcubismmotionsynccore.min.js"); self.postMessage({type:"test-core-ready"});'), { headers: { "Content-Type": "text/javascript" } });
+      }
       return net.fetch(pathToFileURL(file).href);
     });
     if (process.env.VIBLOOM_TEST_VOCAL_MODEL) {
@@ -112,7 +119,8 @@ async function smoke() {
       }
       const Worker = window.Worker;
       window.__workerStarts = 0;
-      window.Worker = class extends Worker { constructor(...args) { super(...args); window.__workerStarts++; } };
+      window.__motionCoreStarts = 0;
+      window.Worker = class extends Worker { constructor(...args) { super(...args); window.__workerStarts++; this.addEventListener('message', ({data}) => { if(data.type === 'test-core-ready')window.__motionCoreStarts++; }); } };
       const start = AudioBufferSourceNode.prototype.start;
       window.__sourceStarts = 0;
       AudioBufferSourceNode.prototype.start = function(...args) { if (this.context instanceof AudioContext) window.__sourceStarts++; return start.apply(this, args); };
@@ -147,8 +155,10 @@ async function smoke() {
     if (!await run(`Boolean(document.querySelector('[aria-label="Pause"]'))`)) await click('.transport-play');
     await range("Playback position", 4.2);
     await closed("unprepared vocals never fall back to the audible mix");
+    const coreBeforeCancel = await run("window.__motionCoreStarts");
     await click('[data-vocal-track="1"]');
     await waitFor(`document.querySelector('[data-vocal-track="1"]')?.dataset.vocalStatus === 'working'`, "analysis starts");
+    await waitFor(`window.__motionCoreStarts > ${coreBeforeCancel}`, "Core initialized before deliberate worker cancellation");
     await click('[data-vocal-track="1"]');
     await closed("cancelled analysis");
     await range("Playback position", 0);
