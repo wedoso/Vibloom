@@ -48,6 +48,26 @@ async function smoke() {
       for (let i = 0; i < 150; i++) { if (await run(code)) return; await delay(100); }
       throw new Error(`Timed out: ${label}`);
     };
+    // Saving is debounced and the IndexedDB transaction is asynchronous.
+    // Wait for the actual committed draft before navigating away; a fixed
+    // sleep can reload the preceding snapshot on a busy CI renderer.
+    const waitForStoredTiming = (predicate, label) => waitFor(`(async () => {
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('vibloom-library', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        const snapshot = await new Promise((resolve, reject) => {
+          const transaction = db.transaction('state'), request = transaction.objectStore('state').get('library');
+          transaction.oncomplete = () => resolve(request.result);
+          transaction.onabort = () => reject(transaction.error);
+          transaction.onerror = () => reject(transaction.error);
+        });
+        const track = snapshot?.tracks.find(track => track.name === 'Timing test.wav');
+        return !!track && (${predicate});
+      } finally { db.close(); }
+    })()`, label);
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
     const button = (text) => run(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)}).click()`);
     const key = (code, key) => run(`(document.activeElement?.closest('.lyric-timing-editor') ? document.activeElement : document.querySelector('.lyric-timing-editor')).dispatchEvent(new KeyboardEvent('keydown', {code: ${JSON.stringify(code)}, key: ${JSON.stringify(key)}, bubbles: true, cancelable: true}))`);
@@ -143,7 +163,7 @@ async function smoke() {
     await key("KeyZ", "z");
     assert.equal(await run(`document.querySelectorAll('.lyric-timing-lines time')[1].textContent`), "--:--.--");
     await key("KeyT", "t");
-    await delay(500);
+    await waitForStoredTiming(`track.lyricTiming?.[1]?.time === 2.34`, "timestamp draft committed");
     await click('[aria-label="Close timestamp editor"]');
     await window.loadURL("vibloom://app/index.html");
     await waitFor(`document.querySelector('[aria-label="Actions for Timing test"]') || document.querySelector('.open-library-button')`, "restored");
@@ -224,7 +244,7 @@ async function smoke() {
     assert.equal(await readFile(await lrcDownload, "utf8"), "[ti:Existing song]\n[ar:Artist]\n[00:01.125]原文\n[00:01.125]Translation\n[00:03.60]Next\n[00:06.60]\n");
     await writeFile(path.join(output, "existing-lrc-editor.png"), (await window.webContents.capturePage()).toPNG());
     await click('[aria-label="Close timestamp editor"]');
-    await delay(500);
+    await waitForStoredTiming(`track.lyricTiming?.[0]?.time === 1.125 && track.lyricTiming[1]?.time === 3.6 && track.lyricTiming[2]?.time === 6.6`, "LRC edits committed");
     await window.loadURL("vibloom://app/index.html");
     await waitFor(`document.querySelector('.open-library-button')`, "reloaded player");
     await button("Edit timing");
@@ -277,7 +297,7 @@ async function smoke() {
     window.setSize(1280, 900); await delay(200);
     await writeFile(path.join(output, "text-and-row-editor.png"), (await window.webContents.capturePage()).toPNG());
     await button("Save draft");
-    await delay(500);
+    await waitForStoredTiming(`track.lyricTiming?.length === 4 && track.lyricTiming[0].text === '修改后的歌词\\nTranslation edited'`, "edited draft committed");
     await window.loadURL("vibloom://app/index.html");
     await waitFor(`document.querySelector('.open-library-button')`, "text edits restored");
     await button("Edit timing");
@@ -291,8 +311,10 @@ async function smoke() {
     await waitFor(`document.querySelector('.lyrics-plain')`, "plain lyrics attached");
     await button("Timestamp lyrics");
     await waitFor(`document.querySelector('.lyric-text-edit textarea')`, "plain editor opens");
-    await button("Delete line"); await button("Save draft");
-    await delay(500);
+    await button("Delete line");
+    await waitFor(`document.querySelector('.lyric-empty-lines')`, "empty draft displayed before closing");
+    await button("Save draft");
+    await waitForStoredTiming(`Array.isArray(track.lyricTiming) && track.lyricTiming.length === 0 && track.lyricsFileName === 'rebuild.txt'`, "empty draft committed");
     await window.loadURL("vibloom://app/index.html");
     await waitFor(`document.querySelector('.lyrics-plain')?.textContent.includes('0 lines')`, "empty draft restored");
     await button("Timestamp lyrics");
