@@ -204,6 +204,11 @@ export function withoutExtension(value: string) {
   return value.replace(/\.[^.]+$/u, "");
 }
 
+/** Shared display-only formatting; keep source filenames for matching/export. */
+export function trackDisplayName(name: string) {
+  return withoutExtension(name).replace(/^\d{1,3}[\s._-]+/u, "").trim() || withoutExtension(name);
+}
+
 /** Prefer lyrics beside the audio; flat imports may match only unambiguous names. */
 export function matchLyricFile<T extends { name: string; relativePath: string }>(
   track: { name: string; relativePath: string }, files: T[], peers: { name: string; relativePath: string }[],

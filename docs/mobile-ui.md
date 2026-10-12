@@ -58,3 +58,11 @@ Song titles now use the same mobile system sans stack, weight 500 and `font-synt
 ## Album ordering
 
 Hold a song for 450 ms in an album, drag to an insertion line, and release to save its position. Ordinary swipes scroll the list; dragging near the edge auto-scrolls the active portrait or landscape pane. Cancelled gestures leave the order intact. Filtering preserves hidden album members, and sorting does not change the current song or queue. Keyboard users can move a focused song with Alt + Up/Down.
+
+## Player without lyrics
+
+Without synced or plain-text lyrics, Player reserves only a compact Add lyrics invitation. Portrait gives the remaining height to the companion; landscape narrows the empty lyrics column. Attaching LRC/TXT restores the normal lyric viewport, including in Focus mode.
+
+## Lock-screen and car lyrics (Beta)
+
+**Beta:** Mobile publishes the current timed LRC line in Media Session’s artist field, retaining the song title, album and artwork. It writes only changed lines, reads the actual audio clock independently of visual rendering, follows paused seeks, and restores Vibloom during blank lyric segments, at track end or on songs without synced lyrics. Plain TXT requires timing before it can be synchronized. Desktop metadata remains unchanged. Lock-screen and Bluetooth display depend on iOS/browser/receiver support; physical-device testing is required, and this is not a dedicated multi-line lyrics protocol.

@@ -10,10 +10,11 @@ A private music player for desktop and mobile browsers, macOS, and Windows. List
 
 ## Features
 
-- **Local library:** import music and matching LRC/TXT lyrics, organize albums with covers, hold and drag songs to reorder mobile albums, search, manage the queue, and resume playback. Storage controls manage cached audio and reconnect missing files.
+- **Local library:** import music and matching LRC/TXT lyrics, organize albums with covers, search, manage the queue, and resume playback. Hold and drag to reorder mobile albums. Song titles hide track-number prefixes; storage controls manage cached audio and reconnect files.
 - **Synchronized comparison:** switch between the original and alternate versions at the same playback position. Desktop uses waveform cards with up to nine tracks; mobile offers a compact A/B view.
 - **Audio processing on desktop:** preview EQ and mastering, apply Audio Repair presets, chain treatments into comparison tracks, and export WAV files. Desktop web and Electron share the processing implementation.
-- **Lyrics:** follow synchronized lyrics, edit text and timing, and export TXT/LRC.
+- **Lyrics:** follow synchronized lyrics, edit text and timing, and export TXT/LRC. Without lyrics, mobile Player gives more space to the companion while keeping an upload shortcut.
+- **Lock-screen / car lyrics (Beta):** mobile publishes each timed lyric line in the system artist field while keeping the song title and cover. Display and background updates depend on the browser, OS, and Bluetooth receiver; actual iPhone/car compatibility is not yet verified.
 - **Live2D companions:** Hong Xi and Hiyori with camera controls, Focus mode, and reactive backgrounds. All platforms share local Spleeter/MotionSync lip sync with GPU acceleration, CPU fallback, clear progress, and smoother sustained vowels.
 - **Playback controls:** shuffle, repeat, volume, direct seeking, and system media controls. Installed apps check for updates automatically and retain manual checking. Background playback depends on the platform; macOS keeps playing when the app window closes.
 

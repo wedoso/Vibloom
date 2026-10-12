@@ -98,6 +98,7 @@ import {
   normalizeFileName,
   RepeatMode,
   withoutExtension,
+  trackDisplayName,
   TRACK_DRAG_TYPE,
   type LibraryAlbum,
   type VocalAnalysis,
@@ -389,10 +390,6 @@ async function filesFromDrop(dataTransfer: DataTransfer) {
 function sourceLabelFor(relativePath: string) {
   const parts = relativePath.split("/").filter(Boolean);
   return parts.length > 1 ? parts[0] : "Imported files";
-}
-
-function trackDisplayName(name: string) {
-  return withoutExtension(name).replace(/^\d{1,3}[\s._-]+/u, "").trim() || withoutExtension(name);
 }
 
 function repeatLabel(mode: RepeatMode) {

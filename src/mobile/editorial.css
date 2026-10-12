@@ -267,3 +267,16 @@
   .mobile-app.has-compact-keyboard .m-lyrics-editor-bottom { padding:0; }
   .mobile-app.has-compact-keyboard .m-lyrics-editor-fields textarea { min-height:44px; height:44px; padding-block:8px; }
 }
+
+/* Empty lyrics need an invitation, not a full lyric viewport. Give that space
+   back to the real companion without changing populated or expanded lyrics. */
+.mobile-app.is-room.has-no-lyrics .m-content { grid-template-rows:minmax(0,1fr) auto; gap:4px; }
+.mobile-app.has-no-lyrics .m-content > .m-live-lyrics { align-self:end; }
+.mobile-app .m-content > .m-live-lyrics .m-lyrics-empty { min-height:48px; padding:4px 12px; display:flex; align-items:center; justify-content:center; gap:10px; line-height:1.4; }
+.mobile-app .m-content > .m-live-lyrics .m-lyrics-empty small { display:block; margin-top:2px; }
+@media (orientation:landscape) and (min-width:600px) {
+  .mobile-app.is-room.has-no-lyrics .m-content { grid-template-columns:minmax(144px,.32fr) minmax(0,1.68fr); grid-template-rows:minmax(0,1fr); }
+  .mobile-app.has-no-lyrics .m-room-orbit { min-height:0; }
+  .mobile-app.has-no-lyrics .m-content > .m-live-lyrics { padding-inline:0; }
+  .mobile-app.has-no-lyrics .m-content > .m-live-lyrics .m-lyrics-empty { padding-inline:0; justify-content:flex-start; text-align:left; }
+}
