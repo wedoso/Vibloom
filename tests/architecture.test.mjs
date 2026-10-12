@@ -358,3 +358,17 @@ test("playback artwork uses album provenance, updates with edits, and falls back
   assert.equal(restored.session.playbackAlbumId,"second");
   assert.equal(migrateLibrarySnapshot({version:1,tracks:[],session:{}}).session.playbackAlbumId,"");
 });
+
+
+test("shared song titles strip track prefixes without changing numeric titles or matching names", async () => {
+  const { trackDisplayName, matchLyricFile } = await importTypeScriptModule(new URL("src/domain/library.ts", root));
+  for (const [name, title] of [
+    ["01 万象归音.mp3", "万象归音"], ["002 - Song.wav", "Song"],
+    ["03. 境界線.flac", "境界線"], ["1_Title.m4a", "Title"],
+    ["1989.mp3", "1989"], ["1000 Years.mp3", "1000 Years"],
+    ["7rings.mp3", "7rings"], ["01 .mp3", "01 "],
+  ]) assert.equal(trackDisplayName(name), title);
+  const track = { name: "01 万象归音.mp3", relativePath: "Album/01 万象归音.mp3" };
+  const lyric = { name: "01 万象归音.lrc", relativePath: "Album/01 万象归音.lrc" };
+  assert.equal(matchLyricFile(track, [lyric], [track]), lyric, "original numbered filenames still match lyrics");
+});

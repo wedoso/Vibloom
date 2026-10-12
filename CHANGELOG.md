@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.13.0](https://github.com/wedoso/Vibloom/compare/v1.12.0...v1.13.0) (2026-10-12)
+
+- Add Beta lock-screen and Bluetooth car lyrics on mobile through the system artist field; device support varies.
+- Give the companion more Player space when lyrics are missing, while keeping an LRC/TXT upload shortcut.
+- Match mobile song titles to desktop by removing leading track numbers from display names.
+
 ## [1.12.0](https://github.com/wedoso/Vibloom/compare/v1.11.2...v1.12.0) (2026-10-11)
 
 - Hold and drag songs to reorder mobile albums, with edge scrolling and saved order in portrait and landscape.

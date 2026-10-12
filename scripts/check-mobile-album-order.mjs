@@ -22,15 +22,17 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 await mkdir(output, { recursive: true });
 const origin = `http://127.0.0.1:${server.address().port}`;
 const fixture = snapshot();
-fixture.tracks = Array.from({ length: 24 }, (_, i) => ({ ...fixture.tracks[0], id: `song-${i}`, fingerprint: `song-${i}`, name: i === 0 ? 'Common first.wav' : i === 2 ? 'Common second.wav' : `Song ${i}.wav`, comparison: null, comparisons: [] }));
+fixture.tracks = Array.from({ length: 24 }, (_, i) => ({ ...fixture.tracks[0], id: `song-${i}`, fingerprint: `song-${i}`, name: i === 0 ? '01 Common first.wav' : i === 2 ? '03 Common second.wav' : `${String(i + 1).padStart(2, '0')} Song ${i}.wav`, comparison: null, comparisons: [] }));
 fixture.albums = [{ id: 'album', name: 'Touch sorting', trackIds: fixture.tracks.map(track => track.id) }];
 fixture.session = { ...fixture.session, currentTrackId: 'song-0', queue: fixture.albums[0].trackIds, playbackAlbumId: 'album', currentTime: 0 };
 const ready = page => page.waitForFunction(() => document.querySelector('.m-content')?.getAttribute('aria-busy') === 'false');
 const openAlbum = async page => {
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'Albums', exact: true }).click();
-  await page.locator('.m-album-open').first().click();
+  if (!await page.locator('.is-album-reorderable').count()) {
+    await page.getByRole('button', { name: 'Albums', exact: true }).click();
+    await page.locator('.m-album-open').first().click();
+  }
   await page.waitForSelector('.is-album-reorderable');
 };
 const ids = page => page.locator('.m-song-list [data-song-id]').evaluateAll(rows => rows.map(row => row.dataset.songId));
@@ -50,6 +52,17 @@ try {
         const errors = []; page.on('pageerror', error => errors.push(error.message));
         await page.addInitScript(() => { window.__starts = 0; const start = AudioBufferSourceNode.prototype.start; AudioBufferSourceNode.prototype.start = function (...args) { if (this.context instanceof AudioContext) window.__starts++; return start.apply(this, args); }; });
         await page.goto(origin + '/?ui=mobile'); await ready(page); await seedMobile(page, fixture, waveBytes()); await page.reload(); await ready(page); await openAlbum(page);
+        assert.equal(await page.locator('[data-song-id="song-0"] .m-song-copy strong').textContent(), 'Common first', 'mobile Library uses desktop song formatting');
+        assert.equal(await page.locator('.m-footer-track strong').textContent(), 'Common first', 'bottom playback uses the same clean title');
+        await page.getByRole('button', { name: 'Options for Common first', exact: true }).click();
+        assert.equal(await page.locator('dialog h2').textContent(), 'Common first', 'song menu uses the clean title');
+        await page.getByRole('button', { name: 'Vocal lip sync', exact: true }).click();
+        assert.equal(await page.locator('.m-vocal-heading strong').first().textContent(), 'Common first', 'vocal preparation uses the clean title');
+        await page.getByRole('button', { name: 'Close panel', exact: true }).click();
+        await page.getByRole('button', { name: 'Open full player', exact: true }).click();
+        assert.equal(await page.locator('.m-song-title').textContent(), 'Common first', 'Player uses the clean title');
+        assert.equal(await page.locator('.m-orbit-original').getAttribute('title'), 'Common first');
+        await openAlbum(page);
         const cdp = engine === 'chromium' ? await context.newCDPSession(page) : null;
         let point;
         const touch = async (kind, p = point) => {

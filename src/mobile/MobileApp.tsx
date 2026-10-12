@@ -4,7 +4,7 @@ import BrandMark from "../BrandMark";
 import RenderGroups from "../library/RenderGroups";
 import { LibraryIcon, LibraryIcons } from "../library/LibraryIcons";
 import { APP_VERSION } from "../appVersion";
-import { comparisonsOf, reorderAlbumTrack, withoutExtension, type LibraryAlbum, type LibraryTrack } from "../domain/library";
+import { comparisonsOf, reorderAlbumTrack, trackDisplayName, type LibraryAlbum, type LibraryTrack } from "../domain/library";
 import { COMPANIONS, type CompanionId } from "../live2d/models";
 import { filePickerPolicy } from "../platform/filePickerPolicy";
 import MobileSheet from "./MobileSheet";
@@ -26,7 +26,7 @@ import "./editorial.css";
 type Page = "library" | "player";
 type Panel = { kind: "vocals"; id?: string } | { kind: "import" | "queue" | "clear" | "lyrics" | "words" | "volume" | "room" | "navigation" | "versions" | "storage" | "companion" | "clear-cache" | "clear-queue" } | { kind: "track" | "remove"; id: string } | { kind: "version"; source: number } | { kind: "album"; album?: LibraryAlbum } | null;
 const sizeLabel = (bytes: number) => bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-const trackName = (track: { name: string }) => withoutExtension(track.name);
+const trackName = (track: { name: string }) => trackDisplayName(track.name);
 
 const SongRow = memo(function SongRow({ track, index, current, playing, ready, importing, working, vocalsReady, load, onOptions, reorderable }: { reorderable: boolean; track: LibraryTrack; index: number; current: boolean; playing: boolean; ready: boolean; importing: boolean; working: boolean; vocalsReady: boolean; load: MobileLibrary["load"]; onOptions: (id: string) => void }) {
   return <div data-song-id={track.id} className={`m-song-row ${current ? "is-current" : ""}`}>
@@ -99,6 +99,7 @@ export default function MobileApp() {
     const query = search.trim().toLocaleLowerCase(); return rows.filter(track => `${track.name} ${track.relativePath}`.toLocaleLowerCase().includes(query));
   }, [activeAlbum, library.tracks, tracksById, search]);
   const roomPage = page === "player";
+  const hasLyrics = !!library.current && (!!library.current.lyrics.length || !!library.current.lyricTiming?.length);
   const mini = !!library.current && !roomPage;
   const close = () => setPanel(null);
   const navigate = (next: Page) => { close(); setFocus(false); setPage(next); window.scrollTo({ top: 0 }); };
@@ -141,7 +142,7 @@ export default function MobileApp() {
   const vocalTask = library.vocals.activeJobs.find(task => task.job?.status === "working") ?? library.vocals.activeJobs.find(task => task.job?.status === "queued") ?? library.vocals.activeJobs[0];
   const showHeaderVocalTask = !roomPage || vocalTask?.track.id !== library.current?.id;
   const vocalTaskButton = vocalTask && <button className="m-icon m-vocal-task" aria-label="Open vocal preparation" title={vocalTask.job?.status === "error" ? "Vocal preparation needs attention" : `${vocalTask.job?.phase} · ${Math.round((vocalTask.job?.progress ?? 0) * 100)}%`} onClick={() => setPanel({ kind: "vocals", id: vocalTask.track.id })}><MicVocal size={19} /><MobileVocalProgress job={vocalTask.job} label={`Vocal preparation for ${trackName(vocalTask.track)} · track ${mobileTrackLabel(vocalTask.source)}`} /><small>{library.vocals.activeJobs.length}</small></button>;
-  return <div ref={root} className={`mobile-app ${library.current ? "has-playback" : ""} ${mini ? "has-library-playback" : ""} ${roomPage ? "is-room" : ""} ${focus && roomPage ? "is-focus" : ""}`} data-companion={library.session.companionId}>
+  return <div ref={root} className={`mobile-app ${library.current ? "has-playback" : ""} ${mini ? "has-library-playback" : ""} ${roomPage ? "is-room" : ""} ${roomPage && library.current && !hasLyrics ? "has-no-lyrics" : ""} ${focus && roomPage ? "is-focus" : ""}`} data-companion={library.session.companionId}>
     <input ref={filesInput} type="file" accept={policy.libraryAccept} multiple hidden data-picker="files" onChange={importSelection} />
     <input ref={folderInput} type="file" accept={policy.libraryAccept} multiple hidden data-picker="folder" onChange={importSelection} />
     <input ref={compareInput} type="file" accept={policy.audioAccept} hidden data-picker="comparison" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; const target = comparisonTarget.current; if (file && target !== null) {
@@ -202,6 +203,7 @@ export default function MobileApp() {
       <button className="m-menu-action" onClick={() => setPanel({ kind: "words" })}><FileText size={19} />Lyrics</button><button className="m-menu-action" aria-label="Adjust volume" onClick={() => setPanel({ kind: "volume" })}><Volume2 size={19} />Volume</button>
       <button className="m-menu-action" aria-pressed={focus && roomPage} onClick={toggleFocus}>{focus ? <Minimize2 size={19} /> : <Maximize2 size={19} />}{focus ? "Exit focus mode" : "Focus mode"}</button>
       <button className="m-menu-action" onClick={() => setPanel({ kind: "companion" })}><ScanFace size={19} />Choose companion</button>
+      <p className="m-picker-hint"><strong>Lock-screen &amp; car lyrics · Beta</strong><br />Timed lyrics appear in the system artist field. Display and background updates depend on your phone, browser and Bluetooth receiver.</p>
     </MobileSheet>}
     {panel?.kind === "volume" && <MobileSheet title="Volume" onClose={close}>            <label className="m-volume"><Volume2 size={17} /><input aria-label="Volume" type="range" min="0" max="1" step="0.01" value={library.session.volume} onChange={event => library.setVolume(Number(event.target.value))} /></label></MobileSheet>}
     {panel?.kind === "words" && library.current && <MobileSheet title="Words, in time" onClose={close}><MobileLyrics key={library.current.id} expanded library={library} onAttach={() => pickLyrics(library.current!.id)} onEdit={() => setPanel({ kind: "lyrics" })} /></MobileSheet>}

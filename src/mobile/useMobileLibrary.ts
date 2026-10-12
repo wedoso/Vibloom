@@ -3,7 +3,7 @@ import { readAudioFile } from "../audio/audioFiles";
 import { SynchronizedAudioEngine } from "../audio/SynchronizedAudioEngine";
 import { mobileComparisons } from "./comparison";
 import { useComparisonWorkspace } from "../comparison/useComparisonWorkspace";
-import { albumForTrack, isVocalAnalysisReference, comparisonCacheKey, comparisonsOf, createShuffleBag, EMPTY_SESSION, makeTrackFingerprint, matchLyricFile, migrateLibrarySnapshot, withComparisons, type LibraryAlbum, type LibrarySession, type LibraryTrack } from "../domain/library";
+import { trackDisplayName, albumForTrack, isVocalAnalysisReference, comparisonCacheKey, comparisonsOf, createShuffleBag, EMPTY_SESSION, makeTrackFingerprint, matchLyricFile, migrateLibrarySnapshot, withComparisons, type LibraryAlbum, type LibrarySession, type LibraryTrack } from "../domain/library";
 import { decodeLrc, parseLyricsFile } from "../lrc";
 import { useMediaSession } from "../platform/useMediaSession";
 import { mobilePlatform } from "./platform";
@@ -249,7 +249,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     return () => window.clearInterval(timer);
   }, [playing, engine, patchSession, next]);
   const playbackAlbum = albumForTrack(albums, current?.id ?? "", session.playbackAlbumId);
-  useMediaSession({ enabled: !!current, title: current?.name ?? "Vibloom", album: playbackAlbum?.name ?? "Mobile library", artwork: playbackAlbum?.cover || `${import.meta.env.BASE_URL}vibloom-icon.png`, isPlaying: playing, duration, position: time }, {
+  useMediaSession({ enabled: !!current, title: current ? trackDisplayName(current.name) : "Vibloom", album: playbackAlbum?.name ?? "Mobile library", artwork: playbackAlbum?.cover || `${import.meta.env.BASE_URL}vibloom-icon.png`, isPlaying: playing, duration, position: time, lyrics: current?.lyrics }, {
     play, pause, next, previous, seek, getTime: () => engine.getTimelineTime(), onError: () => setMessage("Playback needs another tap. Press Play to resume."),
   });
 

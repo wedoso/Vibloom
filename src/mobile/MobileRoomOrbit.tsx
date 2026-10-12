@@ -1,3 +1,4 @@
+import { trackDisplayName } from "../domain/library";
 import { Plus } from "lucide-react";
 import type { MobileLibrary } from "./useMobileLibrary";
 import { mobileTrackLabel } from "./comparison";
@@ -11,7 +12,7 @@ export default function MobileRoomOrbit({ library, pendingSource, onSelect, onAd
   const disabled = !library.current || !library.ready || !!library.busy;
   const button = (source: number, title: string) => <button
     className={`m-orbit-track ${source === 0 ? "m-orbit-original" : ""} ${pendingSource === source ? "is-loading" : ""}`}
-    disabled={disabled} aria-label={`Listen to track ${mobileTrackLabel(source)}`} title={title}
+    disabled={disabled} aria-label={`Listen to track ${mobileTrackLabel(source)}`} title={trackDisplayName(title)}
     aria-pressed={library.source === source} aria-busy={pendingSource === source}
     onClick={() => onSelect(source)}>{mobileTrackLabel(source)}</button>;
   return <div className="m-room-orbits" aria-label="A/B track circles">
