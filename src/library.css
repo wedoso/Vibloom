@@ -2845,3 +2845,6 @@ footer.library-transport .source-switch-grid button:disabled { opacity: .25; cur
   .library-transport.has-album-art .transport-buttons > button[aria-label="Back 5 seconds"],
   .library-transport.has-album-art .transport-buttons > button[aria-label="Forward 5 seconds"] { display: none; }
 }
+
+.library-app .brand-version.has-update { color:var(--library-accent); border-color:var(--library-line); background:color-mix(in srgb,var(--library-accent) 8%,transparent); }
+.brand-version.has-update svg { filter:drop-shadow(0 0 3px color-mix(in srgb,var(--library-accent) 30%,transparent)); }

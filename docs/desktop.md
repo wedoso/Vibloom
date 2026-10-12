@@ -71,9 +71,11 @@ The workflow creates macOS x64 and ARM64 DMG/ZIP files and a Windows x64 NSIS in
 
 The version beside the Vibloom logo is an update button in both runtimes. The web build checks the public GitHub Releases API and sends users to the latest download. Installed desktop builds use `electron-updater` through the narrow preload bridge in `desktop/preload.cjs`:
 
+Installed apps check silently 15 seconds after startup and every six hours, including after sleep or returning to the app when a check is due. The version button indicates an available update; it still supports manual checks. Checks never start downloads automatically or interrupt a pending download.
+
 The update window shows **What's new** for the offered version, including while downloading and before restarting. The installed version's changelog is bundled for offline reading. New-version notes come from that exact GitHub release tag; a notes request failure does not block downloading or installing. Notes render as text, headings and lists, with a **Full release notes** link that opens the matching release externally on desktop. The release workflow publishes the version's `CHANGELOG.md` entry as its release body.
 
-1. The user explicitly checks for a newer release.
+1. Vibloom checks automatically, or the user checks from the version button.
 2. Vibloom reads the update metadata from the public GitHub Release.
 3. If a newer version exists, the user chooses **Download update**.
 4. After checksum and signature validation, **Restart and install** applies it.
