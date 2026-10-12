@@ -541,3 +541,15 @@ body[data-vibloom-ui="mobile"] { margin: 0; -webkit-font-smoothing: antialiased;
 .mobile-app .camera-capsule > .m-stage-vocals.is-active .m-vocal-ring.is-error { --ring-accent:#e0b488; }
 @keyframes m-vocal-wait { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { .mobile-app .m-vocal-ring.is-waiting { animation:none; } }
+
+/* Album-only touch sorting; ordinary list swipes remain native scrolling. */
+.mobile-app .m-reorder-hint { display:block; font-size:11px; }
+.mobile-app .is-album-reorderable .m-song-main { -webkit-touch-callout:none; user-select:none; }
+.mobile-app .is-album-reorderable .m-song-row { position:relative; }
+.mobile-app .m-song-row.is-album-dragging { opacity:.35; }
+.mobile-app .m-song-row.album-drop-before::before,
+.mobile-app .m-song-row.album-drop-after::after { content:""; position:absolute; left:0; right:0; height:2px; border-radius:2px; background:var(--m-accent); pointer-events:none; }
+.mobile-app .m-song-row.album-drop-before::before { top:-1px; }
+.mobile-app .m-song-row.album-drop-after::after { bottom:-1px; }
+.mobile-app .m-song-drag-preview { position:fixed; z-index:100; margin:0; padding-inline:6px; border:1px solid var(--m-line); border-radius:14px; background:var(--m-surface); box-shadow:0 10px 28px rgb(36 51 76 / .18); pointer-events:none; opacity:.97; }
+.mobile-app.is-reordering-album { cursor:grabbing; }

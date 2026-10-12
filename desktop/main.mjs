@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, net, protocol, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, net, powerMonitor, protocol, session, shell } from "electron";
 import electronUpdater from "electron-updater";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { createUpdateChecks } from "./updateChecks.mjs";
 
 const APP_SCHEME = "vibloom";
 const APP_HOST = "app";
@@ -13,6 +14,12 @@ const RELEASES_URL = "https://github.com/wedoso/Vibloom/releases/latest";
 const { autoUpdater } = electronUpdater;
 let isQuitting = false;
 let updateState = { status: "idle", currentVersion: app.getVersion() };
+const updateChecks = createUpdateChecks({
+  enabled: app.isPackaged,
+  check: () => autoUpdater.checkForUpdates(),
+  status: () => updateState.status,
+  onError: error => publishUpdateState({ status: "error", message: error instanceof Error ? error.message : String(error) }),
+});
 
 protocol.registerSchemesAsPrivileged([{
   scheme: APP_SCHEME,
@@ -93,17 +100,14 @@ function installUpdateHandlers() {
   const guard = (event) => {
     if (!isAllowedNavigation(event.senderFrame.url)) throw new Error("Update request came from an untrusted renderer.");
   };
+  ipcMain.handle("updates:state", event => { guard(event); return updateState; });
   ipcMain.handle("updates:check", async (event) => {
     guard(event);
     if (!app.isPackaged) {
       publishUpdateState({ status: "error", message: "Automatic updates can be tested from an installed release build." });
       return;
     }
-    try {
-      await autoUpdater.checkForUpdates();
-    } catch (error) {
-      publishUpdateState({ status: "error", message: error instanceof Error ? error.message : String(error) });
-    }
+    await updateChecks.request();
   });
   ipcMain.handle("updates:download", async (event) => {
     guard(event);
@@ -279,6 +283,7 @@ app.on("second-instance", () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  updateChecks.stop();
 });
 
 app.whenReady().then(async () => {
@@ -290,6 +295,9 @@ app.whenReady().then(async () => {
     return mainWindow.isVisible() && !mainWindow.isMinimized();
   });
   mainWindow = createMainWindow();
+  updateChecks.start();
+  powerMonitor.on("resume", () => { void updateChecks.request(true); });
+  app.on("browser-window-focus", () => { void updateChecks.request(true); });
 
   app.on("activate", () => {
     if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createMainWindow();

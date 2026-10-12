@@ -2,6 +2,11 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.12.0](https://github.com/wedoso/Vibloom/compare/v1.11.2...v1.12.0) (2026-10-11)
+
+- Hold and drag songs to reorder mobile albums, with edge scrolling and saved order in portrait and landscape.
+- Check for desktop app updates automatically at startup and every six hours, while keeping manual checks and user-controlled downloads.
+
 ## [1.11.2](https://github.com/wedoso/Vibloom/compare/v1.11.1...v1.11.2) (2026-10-11)
 
 - Unify desktop and mobile lip sync on the lightweight local Spleeter/MotionSync pipeline, with GPU acceleration and CPU fallback.

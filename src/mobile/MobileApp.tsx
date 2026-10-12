@@ -4,7 +4,7 @@ import BrandMark from "../BrandMark";
 import RenderGroups from "../library/RenderGroups";
 import { LibraryIcon, LibraryIcons } from "../library/LibraryIcons";
 import { APP_VERSION } from "../appVersion";
-import { comparisonsOf, withoutExtension, type LibraryAlbum, type LibraryTrack } from "../domain/library";
+import { comparisonsOf, reorderAlbumTrack, withoutExtension, type LibraryAlbum, type LibraryTrack } from "../domain/library";
 import { COMPANIONS, type CompanionId } from "../live2d/models";
 import { filePickerPolicy } from "../platform/filePickerPolicy";
 import MobileSheet from "./MobileSheet";
@@ -18,6 +18,7 @@ import MobileRoomOrbit from "./MobileRoomOrbit";
 import { mobileTrackLabel } from "./comparison";
 import MobileLyricsEditor from "./MobileLyricsEditor";
 import { useMobileLibrary, type MobileLibrary } from "./useMobileLibrary";
+import { bindAlbumReorder } from "./albumReorder";
 import { bindMobileViewport } from "./viewport";
 import "./mobile.css";
 import "./editorial.css";
@@ -27,17 +28,21 @@ type Panel = { kind: "vocals"; id?: string } | { kind: "import" | "queue" | "cle
 const sizeLabel = (bytes: number) => bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const trackName = (track: { name: string }) => withoutExtension(track.name);
 
-const SongRow = memo(function SongRow({ track, index, current, playing, ready, importing, working, vocalsReady, load, onOptions }: { track: LibraryTrack; index: number; current: boolean; playing: boolean; ready: boolean; importing: boolean; working: boolean; vocalsReady: boolean; load: MobileLibrary["load"]; onOptions: (id: string) => void }) {
-  return <div className={`m-song-row ${current ? "is-current" : ""}`}>
-    <button className="m-song-main" disabled={!ready || importing} onClick={() => void load(track.id, true, 0)} aria-label={`Play ${trackName(track)}`}>
+const SongRow = memo(function SongRow({ track, index, current, playing, ready, importing, working, vocalsReady, load, onOptions, reorderable }: { reorderable: boolean; track: LibraryTrack; index: number; current: boolean; playing: boolean; ready: boolean; importing: boolean; working: boolean; vocalsReady: boolean; load: MobileLibrary["load"]; onOptions: (id: string) => void }) {
+  return <div data-song-id={track.id} className={`m-song-row ${current ? "is-current" : ""}`}>
+    <button className="m-song-main" title={reorderable ? "Hold to reorder · Alt + ↑ / ↓" : undefined} aria-describedby={reorderable ? "mobile-album-order-help" : undefined} disabled={!ready || importing} onClick={() => void load(track.id, true, 0)} aria-label={`Play ${trackName(track)}`}>
       <span className="m-song-number">{playing ? <LibraryIcon name="AudioLines" size={18} /> : String(index + 1).padStart(2, "0")}</span><span className="m-song-copy"><strong>{trackName(track)}</strong><small>{track.availability === "missing" || track.availability === "reconnect" ? "Reconnect source file" : track.sourceLabel}{track.lyricsFileName ? " · Lyrics" : ""}{working ? " · Preparing vocals" : vocalsReady ? " · Vocals ready" : ""}</small></span><span className="m-song-duration">{track.duration ? formatTime(track.duration) : "—"}</span>
     </button><button className="m-icon" aria-label={`Options for ${trackName(track)}`} onClick={() => onOptions(track.id)}><LibraryIcon name="MoreHorizontal" size={20} /></button>
   </div>;
 });
-const SongRows = memo(function SongRows({ tracks, currentId, playing, ready, importing, load, vocalState, onOptions }: { tracks: LibraryTrack[]; currentId: string; playing: boolean; ready: boolean; importing: boolean; load: MobileLibrary["load"]; vocalState: MobileLibrary["vocals"]["state"]; onOptions: (id: string) => void }) {
-  return <div className="m-song-list"><LibraryIcons shared={tracks.length >= 128}><RenderGroups rowHeight={75}>{tracks.map((track, index) => {
+const SongRows = memo(function SongRows({ tracks, currentId, playing, ready, importing, load, vocalState, onOptions, reorderKey, onReorder }: { reorderKey?: string; onReorder?: (id: string, target: string, edge: "before" | "after") => void; tracks: LibraryTrack[]; currentId: string; playing: boolean; ready: boolean; importing: boolean; load: MobileLibrary["load"]; vocalState: MobileLibrary["vocals"]["state"]; onOptions: (id: string) => void }) {
+  const list = useRef<HTMLDivElement>(null);
+  const move = useRef(onReorder);
+  useEffect(() => { move.current = onReorder; }, [onReorder]);
+  useEffect(() => reorderKey && list.current ? bindAlbumReorder(list.current, (...args) => move.current?.(...args)) : undefined, [reorderKey]);
+  return <div ref={list} className={`m-song-list ${reorderKey ? "is-album-reorderable" : ""}`}><LibraryIcons shared={tracks.length >= 128}><RenderGroups rowHeight={75}>{tracks.map((track, index) => {
     const status = vocalState(track);
-    return <SongRow key={track.id} track={track} index={index} current={currentId === track.id} playing={currentId === track.id && playing} ready={ready} importing={importing} working={status.working} vocalsReady={status.ready} load={load} onOptions={onOptions} />;
+    return <SongRow key={track.id} track={track} index={index} current={currentId === track.id} playing={currentId === track.id && playing} ready={ready} importing={importing} working={status.working} vocalsReady={status.ready} load={load} onOptions={onOptions} reorderable={!!reorderKey} />;
   })}</RenderGroups></LibraryIcons></div>;
 });
 
@@ -84,6 +89,11 @@ export default function MobileApp() {
   const tracksById = useMemo(() => new Map(library.tracks.map(track => [track.id, track])), [library.tracks]);
   const showTrackOptions = useCallback((id: string) => setPanel({ kind: "track", id }), []);
   const activeAlbum = library.albums.find(album => album.id === albumId);
+  const { setAlbums, setMessage } = library;
+  const reorder = useCallback((id: string, target: string, edge: "before" | "after") => {
+    setAlbums(items => items.map(album => album.id === albumId ? reorderAlbumTrack(album, id, target, edge) : album));
+    setMessage("Album order saved.");
+  }, [albumId, setAlbums, setMessage]);
   const visibleTracks = useMemo(() => {
     const rows = activeAlbum ? activeAlbum.trackIds.flatMap(id => tracksById.get(id) ?? []) : library.tracks;
     const query = search.trim().toLocaleLowerCase(); return rows.filter(track => `${track.name} ${track.relativePath}`.toLocaleLowerCase().includes(query));
@@ -156,7 +166,7 @@ export default function MobileApp() {
           <button className="m-button" onClick={() => setPanel({ kind: "album" })}><Plus size={18} />New album</button>
         </> : <>
           <label className="m-search"><Search size={19} /><input aria-label="Search your library" type="search" placeholder="Search your library" value={search} onChange={event => setSearch(event.target.value)} /></label>
-          <div className="m-library-toolbar"><button className="m-button m-primary" disabled={!visibleTracks.length || !!library.busy} onClick={() => void library.playAll(visibleTracks.map(track => track.id), albumId)}><Play size={17} fill="currentColor" />Play all</button><button className="m-icon m-bordered" aria-label="Shuffle and play these songs" disabled={!visibleTracks.length} onClick={() => { library.patchSession({ shuffle: true }); void library.playAll(visibleTracks.map(track => track.id), albumId); }}><Shuffle size={18} /></button><span>{visibleTracks.length} songs</span></div>
+          <div className="m-library-toolbar"><button className="m-button m-primary" disabled={!visibleTracks.length || !!library.busy} onClick={() => void library.playAll(visibleTracks.map(track => track.id), albumId)}><Play size={17} fill="currentColor" />Play all</button><button className="m-icon m-bordered" aria-label="Shuffle and play these songs" disabled={!visibleTracks.length} onClick={() => { library.patchSession({ shuffle: true }); void library.playAll(visibleTracks.map(track => track.id), albumId); }}><Shuffle size={18} /></button><span>{visibleTracks.length} songs{activeAlbum && <small id="mobile-album-order-help" className="m-reorder-hint">Hold a song to reorder</small>}</span></div>
         </>)}
         </div>
         <div className="m-library-results">
@@ -164,7 +174,7 @@ export default function MobileApp() {
           <div className="m-album-grid">{library.albums.map(album => <div className="m-album-card" key={album.id}><button className="m-album-open" onClick={() => { setAlbumId(album.id); setSearch(""); }}><span className="m-album-art">{album.cover ? <img src={album.cover} alt="" /> : <Music2 size={36} strokeWidth={1.3} />}</span><strong>{album.name}</strong><small>{album.trackIds.length} songs</small></button><button className="m-icon" aria-label={`Edit album ${album.name}`} onClick={() => setPanel({ kind: "album", album })}><MoreHorizontal size={20} /></button></div>)}</div>{!library.albums.length && <p className="m-muted">Create a collection from songs already in your library.</p>}
         </> : <>
           {library.tracks.some(track => track.availability === "missing" || track.availability === "reconnect") && <div className="m-reconnect"><FolderOpen size={20} /><span>Some songs need their source files.</span><button onClick={() => pickFiles()}>Reconnect</button></div>}
-          <SongRows tracks={visibleTracks} currentId={library.current?.id ?? ""} playing={library.playing} ready={library.ready} importing={library.importing} load={library.load} vocalState={library.vocals.state} onOptions={showTrackOptions} />
+          <SongRows tracks={visibleTracks} currentId={library.current?.id ?? ""} playing={library.playing} ready={library.ready} importing={library.importing} load={library.load} vocalState={library.vocals.state} onOptions={showTrackOptions} reorderKey={activeAlbum ? `${activeAlbum.id}:${search}` : undefined} onReorder={reorder} />
           {!visibleTracks.length && <p className="m-muted">{search ? "No songs match your search." : "This album is empty. Edit it to add songs."}</p>}
         </>}
         </div>

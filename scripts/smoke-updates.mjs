@@ -99,6 +99,10 @@ async function smoke() {
     window.setContentSize(1100, 850);
     await window.loadURL("vibloom://app/index.html?desktop=1");
     await waitFor(`typeof window.__desktopEmit === 'function'`, "desktop subscribed");
+    await run(`window.__desktopEmit({status:'available',currentVersion:${JSON.stringify(installedVersion)},availableVersion:'2.0.0'})`);
+    await waitFor(`document.querySelector('.brand-version.has-update')`, "automatic update indicator");
+    assert.equal(await run(`Boolean(document.querySelector('.update-dialog'))`), false, "automatic result does not interrupt playback with a dialog");
+    assert.ok(await run(`document.querySelector('.brand-version').title.includes('2.0.0')`), "indicator identifies the offered version");
     await stubFetch("available"); await click('.brand-version');
     await waitFor(`document.querySelector('.update-notes li')`, "desktop offered-version notes");
     await click('.update-notes-link');

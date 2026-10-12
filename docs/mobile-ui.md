@@ -54,3 +54,7 @@ Run `node scripts/check-mobile-pinch-editor.mjs --playwright-module /absolute/pa
 ## Consistent song title typography
 
 Song titles now use the same mobile system sans stack, weight 500 and `font-synthesis:none` in the Player, library, queue, footer, Focus header and source/vocal panels. Previously Player used the editorial serif fallback stack, list/queue names used 550 and the footer inherited strong/bold. Only a loaded song gets the `m-song-title` class; empty-room copy, page headings and the wordmark keep their editorial fonts. Existing size, wrapping and line-clamp rules remain in place. Chromium/WebKit verification covers both palettes, four portrait/landscape sizes, ready/playing/paused states plus Library/Queue/Focus (60 cases), including mixed Chinese/Latin song names and horizontal overflow. Evidence lives under ignored `outputs/mobile-ui/title-typography-results.json`. Desktop sources are unchanged.
+
+## Album ordering
+
+Hold a song for 450 ms in an album, drag to an insertion line, and release to save its position. Ordinary swipes scroll the list; dragging near the edge auto-scrolls the active portrait or landscape pane. Cancelled gestures leave the order intact. Filtering preserves hidden album members, and sorting does not change the current song or queue. Keyboard users can move a focused song with Alt + Up/Down.

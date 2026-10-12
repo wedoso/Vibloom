@@ -68,13 +68,14 @@ export default function UpdateControl() {
   }, [desktopUpdates]);
 
   const busy = state.status === "checking" || state.status === "downloading";
+  const hasUpdate = state.status === "available" || state.status === "downloaded";
   const notesVersion = state.availableVersion && isNewerVersion(state.availableVersion, state.currentVersion) ? state.availableVersion : state.currentVersion;
   const title = state.status === "available" ? `Vibloom ${state.availableVersion} is available` : state.status === "downloaded" ? "Update ready to install" : state.status === "current" ? "Vibloom is up to date" : state.status === "error" ? "Could not check for updates" : state.status === "downloading" ? "Downloading update" : state.status === "checking" ? "Checking for updates" : "Check for updates";
 
   return (
     <div className="update-control">
-      <button className="brand-version" type="button" aria-label={`Vibloom version ${APP_VERSION}. Check for updates`} onClick={() => void check()}>
-        v{APP_VERSION}<RefreshCw size={9} />
+      <button className={`brand-version ${hasUpdate ? "has-update" : ""}`} type="button" title={hasUpdate ? title : "Check for updates"} aria-label={`Vibloom version ${APP_VERSION}. ${hasUpdate ? `${title}. Open update options` : "Check for updates"}`} onClick={() => void check()}>
+        v{APP_VERSION}{hasUpdate ? <Download size={10} aria-label="Update available" /> : <RefreshCw size={9} />}
       </button>
       {open && <div className="update-backdrop" onClick={() => !busy && setOpen(false)}>
         <section className="update-dialog" role="dialog" aria-modal="true" aria-labelledby="update-title" onClick={(event) => event.stopPropagation()}>

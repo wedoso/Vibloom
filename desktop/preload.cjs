@@ -15,8 +15,12 @@ contextBridge.exposeInMainWorld("vibloomUpdates", Object.freeze({
   install: () => ipcRenderer.invoke("updates:install"),
   openReleases: (version) => ipcRenderer.invoke("updates:open-releases", version),
   subscribe: (listener) => {
-    const receive = (_event, state) => listener(state);
+    let received = false, active = true;
+    const receive = (_event, state) => { received = true; listener(state); };
     ipcRenderer.on("updates:status", receive);
-    return () => ipcRenderer.removeListener("updates:status", receive);
+    // Restore a result that arrived before this renderer mounted. Never let an
+    // older snapshot overwrite a newer status event or a disposed subscription.
+    ipcRenderer.invoke("updates:state").then(state => { if (active && !received) listener(state); }).catch(() => {});
+    return () => { active = false; ipcRenderer.removeListener("updates:status", receive); };
   },
 }));
