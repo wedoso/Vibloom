@@ -19,13 +19,13 @@ export function mediaLyricArtist(lines: readonly MediaLyric[], time: number, dur
 /** Publish one lyric at a time through the existing Now Playing artist field.
  * This is metadata, not a Bluetooth lyrics protocol. Poll the audio clock even
  * when visual rendering is suspended; only write when the lyric changes. */
-export function bindMediaSessionLyrics(metadata: Pick<MediaMetadata, "artist">, lines: readonly MediaLyric[], getTime: () => number, duration: number, playing: boolean, events: EventTarget = document) {
+export function bindMediaSessionLyrics(metadata: Pick<MediaMetadata, "artist">, lines: readonly MediaLyric[], getTime: () => number, duration: number, playing: boolean, events: EventTarget = document, onChange: () => void = () => {}) {
   let timer: ReturnType<typeof setTimeout> | undefined, disposed = false;
   const refresh = () => {
     if (disposed) return;
     const time = getTime();
     const artist = mediaLyricArtist(lines, time, duration);
-    if (metadata.artist !== artist) metadata.artist = artist;
+    if (metadata.artist !== artist) { metadata.artist = artist; onChange(); }
   };
   const tick = () => {
     if (disposed) return;

@@ -1,4 +1,5 @@
 import react from "@vitejs/plugin-react";
+import { offlinePlugin } from "./build-tools/offline.ts";
 import { defineConfig } from "vite";
 import packageMetadata from "./package.json" with { type: "json" };
 
@@ -9,7 +10,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageMetadata.version),
   },
-  plugins: [react()],
+  plugins: [react(), offlinePlugin()],
   // Worker-only dependencies otherwise trigger a page reload on the first
   // vocal request, interrupting playback and restarting its model download.
   optimizeDeps: { entries: ["index.html"], include: ["demucs-web", "onnxruntime-web/webgpu", "onnxruntime-web/wasm"] },

@@ -1588,10 +1588,18 @@ export default function Live2DStage({
         }
         if ("fonts" in document) await document.fonts.ready;
         if (disposed) return;
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        // Hidden windows can stop delivering animation frames during startup.
+        // Keep visible layout settling on rAF, with a bounded hidden fallback.
+        const layoutOpportunity = () => new Promise<void>(resolve => {
+          let frame = 0;
+          const settle = () => { clearTimeout(timer); cancelAnimationFrame(frame); resolve(); };
+          const timer = setTimeout(settle, 100);
+          frame = requestAnimationFrame(settle);
+        });
+        await layoutOpportunity();
         if (disposed) return;
         layout();
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await layoutOpportunity();
         if (disposed) return;
         layout();
         currentModelScale = targetModelScale;

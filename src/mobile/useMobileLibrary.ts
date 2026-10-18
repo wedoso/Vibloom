@@ -6,6 +6,8 @@ import { useComparisonWorkspace } from "../comparison/useComparisonWorkspace";
 import { trackDisplayName, albumForTrack, isVocalAnalysisReference, comparisonCacheKey, comparisonsOf, createShuffleBag, EMPTY_SESSION, makeTrackFingerprint, matchLyricFile, migrateLibrarySnapshot, withComparisons, type LibraryAlbum, type LibrarySession, type LibraryTrack } from "../domain/library";
 import { decodeLrc, parseLyricsFile } from "../lrc";
 import { useMediaSession } from "../platform/useMediaSession";
+import { bindPlaybackRecovery } from "../platform/playbackRecovery";
+import { PlaybackDiagnostics, playbackIssueFor, type PlaybackStage } from "../platform/playbackDiagnostics";
 import { mobilePlatform } from "./platform";
 import { librarySaveMessage } from "../platform/indexedLibraryRepository";
 import { VocalJobStore, vocalJobKey } from "../audio/vocals/jobStore";
@@ -49,6 +51,9 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   const [time, setTime] = useState(0);
   const [source, setSource] = useState(0);
   const [storage, setStorage] = useState(emptyStorage);
+  const [positionRevision, setPositionRevision] = useState(0);
+  const [playbackDiagnostics] = useState(() => new PlaybackDiagnostics());
+  const retryTarget = useRef<{ id: string; position: number } | null>(null);
   const tracksRef = useRef(tracks), sessionRef = useRef(session), files = useRef(new Map<string, File>());
   const playerRead = useRef<AbortController | null>(null);
   const loaded = useRef(""), epoch = useRef(0), importLock = useRef(false), shuffleBag = useRef<string[]>([]);
@@ -151,32 +156,38 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   useEffect(() => () => { mounted.current = false; epoch.current++; playerRead.current?.abort(); vocalJobs.dispose(); releaseIdleMobileVocalWorkers(); platform.vocalAnalyses?.release(); void engine.close(); }, [engine, vocalJobs, platform]);
 
   const pause = useCallback(() => {
-    epoch.current++; playerRead.current?.abort(); const position = engine.pause();
+    epoch.current++; playerRead.current?.abort(); playerRead.current = null; const position = engine.pause();
     setPlaying(false); setTime(position); patchSession({ currentTime: position }); setBusy("");
-  }, [engine, patchSession]);
+    setPositionRevision(value => value + 1);
+    playbackDiagnostics.record("paused");
+  }, [engine, patchSession, playbackDiagnostics]);
   const load = useCallback(async (trackId: string, autoplay = true, resumeAt = 0) => {
     const track = tracksRef.current.find(item => item.id === trackId); if (!track || !ready) return false;
     const request = ++epoch.current;
+    retryTarget.current = { id: trackId, position: resumeAt };
+    let stage: PlaybackStage = "resume";
+    playbackDiagnostics.record("preparing", null, stage);
     playerRead.current?.abort(); const controller = new AbortController(); playerRead.current = controller;
     // Unlock Web Audio in the original tap before cloud/disk reads or decoding.
-    const graph = engine.ensureGraph(autoplay, sessionRef.current.volume).then(async context => {
-      if (autoplay && context.state !== "running" && context.state !== "closed") await context.resume();
-      return { context };
-    }).catch(error => ({ error }));
+    const graph = engine.ensureGraph(autoplay, sessionRef.current.volume, controller.signal)
+      .then(context => ({ context })).catch(error => ({ error }));
     setBusy("Preparing audio…");
     try {
       const resolved = await graph; if (!("context" in resolved)) throw resolved.error;
       if (request !== epoch.current) return false;
       let buffer = loaded.current === trackId ? engine.getBuffer(0) : null;
       if (!buffer) {
+        stage = "read"; playbackDiagnostics.record("preparing", null, stage);
         const file = files.current.get(trackId) ?? await platform.audioFiles.get(trackId);
         if (request !== epoch.current) return false;
         if (!file) {
           patchTracks(items => items.map(item => item.id === trackId ? { ...item, availability: "missing" } : item));
+          playbackDiagnostics.record("error", "missing_file");
           throw new Error("Reconnect this song: import its original file again.");
         }
         const bytes = await readAudioFile(file, () => {}, controller.signal);
         if (request !== epoch.current) return false;
+        stage = "decode"; playbackDiagnostics.record("preparing", null, stage);
         buffer = await resolved.context.decodeAudioData(bytes);
         if (request !== epoch.current) return false;
         engine.pause(); setPlaying(false);
@@ -191,14 +202,50 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
       const offset = Math.min(Math.max(0, resumeAt), Math.max(0, engine.getMaxDuration() - .05));
       const previous = sessionRef.current.currentTrackId;
       patchSession({ currentTrackId: trackId, currentTime: offset, history: previous && previous !== trackId ? [...sessionRef.current.history, previous].slice(-100) : sessionRef.current.history });
-      engine.setOffset(offset); setTime(offset);
-      if (autoplay) { const started = await engine.play(offset, .025, sessionRef.current.volume); if (request === epoch.current) setPlaying(started); }
+      engine.pause(); engine.setOffset(offset); setTime(offset);
+      setPositionRevision(value => value + 1);
+      if (autoplay) {
+        stage = "start";
+        const started = await engine.play(offset, .025, sessionRef.current.volume, controller.signal);
+        if (request !== epoch.current) return false;
+        setPlaying(started); playbackDiagnostics.record(started ? "playing" : "paused"); return started;
+      }
+      setPlaying(false);
+      playbackDiagnostics.record("paused");
       return true;
     } catch (error) {
-      if (request === epoch.current) setMessage(error instanceof Error ? error.message : "This browser could not decode the song.");
+      if (request === epoch.current && mounted.current) {
+        setPlaying(engine.isPlaying);
+        const position = engine.getTimelineTime(); setTime(position); patchSession({ currentTime: position });
+        if (!(error instanceof Error && error.name === "AbortError")) {
+          if (playbackDiagnostics.read().issue !== "missing_file") playbackDiagnostics.record("error", playbackIssueFor(error, stage), stage);
+          setMessage(error instanceof Error ? error.message : "This browser could not decode the song.");
+        }
+      }
       return false;
-    } finally { if (request === epoch.current && mounted.current) setBusy(""); }
-  }, [ready, engine, platform, patchTracks, patchSession, resetComparisons]);
+    } finally {
+      if (playerRead.current === controller) playerRead.current = null;
+      if (request === epoch.current && mounted.current) setBusy("");
+    }
+  }, [ready, engine, platform, patchTracks, patchSession, resetComparisons, playbackDiagnostics]);
+  useEffect(() => bindPlaybackRecovery(engine, {
+    isBusy: () => !!playerRead.current,
+    recover: async rebuild => {
+      playbackDiagnostics.record("recovering");
+      const position = engine.pause();
+      if (rebuild) engine.resetGraph();
+      return load(sessionRef.current.currentTrackId, true, position);
+    },
+    onFailure: () => {
+      pause(); setMessage("Audio could not resume. Press Play to retry.");
+      playbackDiagnostics.record("error", "clock_stalled");
+    },
+  }), [engine, load, pause, playbackDiagnostics]);
+  const retryPlayback = useCallback(async () => {
+    const target = retryTarget.current ?? { id: sessionRef.current.currentTrackId, position: engine.getTimelineTime() };
+    engine.resetGraph();
+    return load(target.id, true, target.position);
+  }, [engine, load]);
   const play = useCallback(async () => {
     const state = sessionRef.current;
     const id = state.currentTrackId || state.queue[0] || tracksRef.current[0]?.id;
@@ -210,10 +257,8 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     if (!Number.isFinite(value) || !current) return;
     const position = Math.min(Math.max(0, value), duration);
     if (loaded.current !== current.id) { await load(current.id, false, position); return; }
-    const resume = engine.isPlaying;
-    engine.pause(); engine.setOffset(position); setTime(position); patchSession({ currentTime: position });
-    setPlaying(resume && await engine.play(position, .025, sessionRef.current.volume));
-  }, [current, duration, engine, load, patchSession]);
+    await load(current.id, engine.isPlaying, position);
+  }, [current, duration, engine, load]);
   const next = useCallback(async (natural = false) => {
     const state = sessionRef.current;
     if (natural && state.repeat === "one") { await load(state.currentTrackId, true, 0); return; }
@@ -244,13 +289,13 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     const timer = window.setInterval(() => {
       const position = Math.min(engine.getTimelineTime(), engine.getMaxDuration()); setTime(position);
       if (position - sessionRef.current.currentTime >= 5) patchSession({ currentTime: position });
-      if (engine.getMaxDuration() > 0 && position >= engine.getMaxDuration() - .025) { engine.markEnded(); setPlaying(false); patchSession({ currentTime: position }); void next(true); }
+      if (engine.getMaxDuration() > 0 && position >= engine.getMaxDuration() - .025) { engine.markEnded(); playbackDiagnostics.record("paused"); setPlaying(false); patchSession({ currentTime: position }); void next(true); }
     }, 100);
     return () => window.clearInterval(timer);
-  }, [playing, engine, patchSession, next]);
+  }, [playing, engine, patchSession, next, playbackDiagnostics]);
   const playbackAlbum = albumForTrack(albums, current?.id ?? "", session.playbackAlbumId);
-  useMediaSession({ enabled: !!current, title: current ? trackDisplayName(current.name) : "Vibloom", album: playbackAlbum?.name ?? "Mobile library", artwork: playbackAlbum?.cover || `${import.meta.env.BASE_URL}vibloom-icon.png`, isPlaying: playing, duration, position: time, lyrics: current?.lyrics }, {
-    play, pause, next, previous, seek, getTime: () => engine.getTimelineTime(), onError: () => setMessage("Playback needs another tap. Press Play to resume."),
+  useMediaSession({ enabled: !!current, trackId: current?.id, positionRevision, systemLyricsEnabled: session.systemLyricsEnabled, title: current ? trackDisplayName(current.name) : "Vibloom", album: playbackAlbum?.name ?? "Mobile library", artwork: playbackAlbum?.cover || `${import.meta.env.BASE_URL}vibloom-icon.png`, isPlaying: playing, duration, position: time, lyrics: current?.lyrics }, {
+    play, pause, next, previous, seek, getTime: () => engine.getTimelineTime(), onError: () => { retryTarget.current = { id: sessionRef.current.currentTrackId, position: engine.getTimelineTime() }; playbackDiagnostics.record("error", "media_control"); setMessage("Playback needs another tap. Press Play to resume."); },
   });
 
   const importFiles = useCallback(async (selected: File[], albumId = "") => {
@@ -343,6 +388,6 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     finally { setBusy(""); await refreshStorage(); }
   }, [preserveCachedFiles, updateCacheStatus, platform, patchTracks, patchSession, refreshStorage, readRoot, cancelVocalJobs]);
   const setVolume = useCallback((volume: number) => { engine.setVolume(volume); patchSession({ volume }); }, [engine, patchSession]);
-  return { vocals, platform, engine, tracks, albums, setAlbums, session, patchSession, patchTracks, ready, busy, importing, message, setMessage, summary, setSummary, playing, time, source, storage, refreshStorage, current, duration, comparisons, load, play, pause, seek, next, previous, importFiles, attachLyrics, playAll, removeTrack, clearLibrary, clearAudioCache, setVolume };
+  return { playbackDiagnostics, retryPlayback, vocals, platform, engine, tracks, albums, setAlbums, session, patchSession, patchTracks, ready, busy, importing, message, setMessage, summary, setSummary, playing, time, source, storage, refreshStorage, current, duration, comparisons, load, play, pause, seek, next, previous, importFiles, attachLyrics, playAll, removeTrack, clearLibrary, clearAudioCache, setVolume };
 }
 export type MobileLibrary = ReturnType<typeof useMobileLibrary>;

@@ -28,6 +28,10 @@ yarn-error.log*
 
 /dist/
 /release/
+# Local copies of CI release intermediates
+/artifacts/
+/release-assets/
+/release-notes.md
 /.vinext/
 /.wrangler/
 *.tsbuildinfo
