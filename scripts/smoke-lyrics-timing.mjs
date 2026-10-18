@@ -70,7 +70,10 @@ async function smoke() {
     })()`, label);
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
     const pointerClick = async selector => {
-      const point = await run(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()`);
+      await run(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'})`);
+      const hitTest = await run(`(()=>{const button=document.querySelector(${JSON.stringify(selector)}),r=button.getBoundingClientRect(),x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),hit=document.elementFromPoint(x,y);return {x,y,clickable:button.contains(hit),hit:hit?.className,viewport:[innerWidth,innerHeight]};})()`);
+      assert.ok(hitTest.clickable, `${selector}: ${JSON.stringify(hitTest)}`);
+      const point = {x:hitTest.x,y:hitTest.y};
       window.webContents.sendInputEvent({type:'mouseMove',...point});
       window.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});
       window.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});
@@ -253,6 +256,15 @@ async function smoke() {
     assert.equal(await exportPlayer('LRC'),await readFile(file,'utf8'),'menu exports current LRC directly');
     assert.equal(await exportPlayer('TXT'),'第一行\nSecond line\n最後の行\n','menu TXT export removes timestamps');
     await window.setSize(1280,900); await delay(650);
+    const toolbarHits = await run(`['.lyrics-edit','.lyrics-more'].map(selector=>{const button=document.querySelector('.lyrics-variant-console '+selector),r=button.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {selector,clickable:button===hit||button.contains(hit),hit:hit?.className};})`);
+    assert.ok(toolbarHits.every(item=>item.clickable),JSON.stringify(toolbarHits));
+    assert.ok(await run(`(()=>{const title=document.querySelector('.lyrics-variant-console .lyrics-toolbar-title').getBoundingClientRect(),edit=document.querySelector('.lyrics-variant-console .lyrics-edit').getBoundingClientRect();return edit.left-title.right<24;})()`),'Edit stays next to the lyric title at desktop width');
+    await pointerClick('.lyrics-variant-console .lyrics-edit');
+    await waitFor(`document.querySelector('.lyric-timing-editor')`,'wide desktop Edit receives a physical click');
+    await click('[aria-label="Close timestamp editor"]');
+    await pointerClick('.lyrics-variant-console .lyrics-more');
+    await waitFor(`document.querySelector('.lyrics-action-menu:popover-open')`,'wide desktop More receives a physical click');
+    await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
     await writeFile(path.join(output,'lyrics-toolbar.png'),(await window.webContents.capturePage()).toPNG());
     await click('[aria-label="Focus mode (F)"]');
     await waitFor(`document.querySelector('.is-library-focus .lyrics-variant-focus .lyrics-more') && !document.documentElement.classList.contains('is-scene-transitioning')`, 'focus lyric menu ready');

@@ -818,6 +818,7 @@
 
 .library-status {
   position: fixed;
+  pointer-events: none;
   z-index: 70;
   left: 50%;
   bottom: 108px;
@@ -1382,7 +1383,8 @@
 .quiet-compare-entry > small { display: none; }
 .quiet-compare-entry button { width: 100%; min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--library-line); border-radius: 999px; color: var(--library-ink); background: rgba(255,255,255,.56); font-size: 11px; white-space: nowrap; cursor: pointer; }
 
-.is-player-shell .console-footer { grid-column: 1 / 4; grid-row: 3; min-width: 0; display: grid; gap: 8px; }
+/* Reading controls sit above the overlapping companion canvas (layer 3). */
+.is-player-shell .console-footer { grid-column: 1 / 4; grid-row: 3; min-width: 0; position: relative; z-index: 4; display: grid; gap: 8px; }
 .is-player-shell .console-lower { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .is-player-shell .console-lower .library-lyrics { flex: 1; height: 42px; padding: 0; text-align: left; mask-image: none; }
 .is-player-shell .console-lower .library-lyrics p { display: none; }
