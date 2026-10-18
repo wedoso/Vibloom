@@ -17,6 +17,7 @@ const server=createServer(async(request,response)=>{
     const pathname=decodeURIComponent(new URL(request.url,'http://local').pathname);
     if(!pathname.startsWith('/Vibloom/'))throw new Error('outside scope');
     const relative=pathname.slice('/Vibloom/'.length)||'index.html',file=path.resolve(root,relative);
+    if(relative==='__fixture__'){response.setHeader('Content-Type','text/html');response.end('<!doctype html><title>Fixture setup</title>');return;}
     if(!file.startsWith(root))throw new Error('outside root');
     let bytes=await readFile(file);if(relative==='sw.js'&&updated)bytes=Buffer.from(bytes.toString().replace(/const BUILD = "[^"]+";/,'const BUILD = "smoke-update";'));
     response.setHeader('Content-Type',mime[path.extname(file)]??'application/octet-stream');response.setHeader('Cache-Control','no-store');response.end(bytes);
@@ -44,6 +45,8 @@ async function smoke(){
     const library=snapshot();library.tracks=[library.tracks[0]];library.tracks[0].comparisons=[];library.tracks[0].comparison=null;library.albums=[];library.session.queue=[library.tracks[0].id];library.session.repeat='all';
     library.tracks[0].lyrics=[{time:0,text:'First lyric'},{time:2,text:'Second lyric'}];
     const bytes=[...waveBytes(30)];
+    // Unmount before seeding so pending app saves cannot replace the fixture.
+    await window.loadURL(new URL('__fixture__',url).href);
     await run(`(async()=>{const request=indexedDB.open('vibloom-mobile-library',2);const db=await new Promise(resolve=>request.onsuccess=()=>resolve(request.result));await new Promise((resolve,reject)=>{const tx=db.transaction(['state','audio'],'readwrite');tx.objectStore('state').put(${JSON.stringify(library)},'library');tx.objectStore('state').delete('session');tx.objectStore('audio').put({bytes:new Uint8Array(${JSON.stringify(bytes)}).buffer,type:'audio/wav'},${JSON.stringify(library.tracks[0].id)});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();})()`);
     await window.loadURL(url);await wait(`document.querySelector('.m-play-main')`,'restored song');await storage();
     await wait(`document.querySelector('[aria-label="Offline access"]')?.textContent.includes('Ready to open offline')`,'offline ready status');

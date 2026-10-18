@@ -13,6 +13,7 @@ app.setPath('userData', profile); app.on('window-all-closed', () => {});
 const mime = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.json':'application/json', '.wasm':'application/wasm' };
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url, 'http://local').pathname;
+  if (pathname === '/__fixture__') { response.setHeader('Content-Type', 'text/html'); response.end('<!doctype html><title>Fixture setup</title>'); return; }
   const file = path.resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
   try {
     if (!file.startsWith(root)) throw new Error('Invalid path');
@@ -23,7 +24,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}/?ui=mobile`;
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let window, exitCode = 0;
-const deadline = setTimeout(() => { console.error('Lyrics export smoke timed out'); app.exit(1); }, 45000);
+const deadline = setTimeout(() => { console.error('Lyrics export smoke timed out'); app.exit(1); }, 90000);
 async function smoke() {
   try {
     await app.whenReady();
@@ -33,8 +34,8 @@ async function smoke() {
     window.webContents.setAudioMuted(true);
     const run = code => window.webContents.executeJavaScript(code, true);
     const wait = async (code, label) => {
-      for (let i=0;i<100;i++) { if (await run(code)) return; await pause(100); }
-      throw new Error(`Timed out: ${label}`);
+      for (let i=0;i<250;i++) { if (await run(code)) return; await pause(100); }
+      throw new Error(`Timed out: ${label}; UI: ${await run('document.body.innerText.slice(0, 1200)')}`);
     };
     const click = selector => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
     const clickText = text => run(`(() => { const button=[...document.querySelectorAll('dialog[open] button')].find(button=>button.textContent.trim()===${JSON.stringify(text)}); if(!button)throw new Error('Missing button'); button.click(); })()`);
@@ -52,6 +53,9 @@ async function smoke() {
     library.session.queue = [library.tracks[0].id]; library.session.playbackAlbumId = '';
     const bytes = [...waveBytes(10)];
     const seed = async state => {
+      // Stop the app's debounced library/session writes before replacing its
+      // database. A slow software renderer can otherwise overwrite the fixture.
+      await window.loadURL(new URL('/__fixture__', url).href);
       await run(`(async () => { const request=indexedDB.open('vibloom-mobile-library',2); const db=await new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
         await new Promise((resolve,reject)=>{const tx=db.transaction(['state','audio'],'readwrite'); tx.objectStore('state').put(${JSON.stringify(state)},'library');tx.objectStore('state').delete('session');tx.objectStore('audio').put({bytes:new Uint8Array(${JSON.stringify(bytes)}).buffer,type:'audio/wav'},${JSON.stringify(state.tracks[0].id)});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close(); })()`);
       await window.loadURL(url);
