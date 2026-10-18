@@ -122,7 +122,9 @@ export class SynchronizedAudioEngine {
     this.playing = false; this.playbackOffset = offset;
     if (offset >= this.getMaxDuration() || !this.buffers[this.active]) return false;
     const when = context.currentTime + leadSeconds;
-    if (!this.startSource(this.active, when, offset)) return false;
+    // A shorter comparison may already have ended while another track still
+    // has audio. Keep the shared timeline running so switching back can resume.
+    if (offset < this.buffers[this.active]!.duration - .005) this.startSource(this.active, when, offset);
     this.playbackOffset = offset; this.playbackStartedAt = when; this.playing = true; return true;
   }
   pause() { this.playRequest++; this.pendingPlay?.abort(); const time = this.getTimelineTime(); this.playing = false; this.playbackOffset = time; this.stopAllSources(); return time; }

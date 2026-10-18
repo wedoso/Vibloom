@@ -8,7 +8,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 
 class FakeContext extends EventTarget {
   state = 'running'; currentTime = 10; destination = {}; starts = []; resumes = 0;
-  node() { return { connect() {}, disconnect() {}, gain: { value: 0, cancelScheduledValues() {} } }; }
+  node() { return { connect() {}, disconnect() {}, gain: { value: 0, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {} } }; }
   createGain() { return this.node(); }
   createAnalyser() { return this.node(); }
   createBufferSource() {
@@ -82,6 +82,22 @@ test('an externally closed context is replaced on the first play request', async
   assert.equal(await engine.play(7, .025, .9), true);
   assert.equal(engine.getContext(), fresh); assert.equal(engine.selectedSource, 0);
   assert.equal(fresh.starts.at(-1).offset, 7); await engine.close();
+});
+
+test('seeking past a shorter comparison keeps the shared clock running and can switch back to original audio', async () => {
+  const { engine, context } = player();
+  engine.setBuffer(1, { ...buffer, duration: 3 }); engine.selectSourceImmediately(1);
+  assert.equal(await engine.play(20, 0, .9), true);
+  assert.equal(context.starts.length, 0, 'ended comparison stays silent');
+  context.currentTime += 2;
+  assert.equal(engine.getTimelineTime(), 22);
+  assert.equal(engine.selectSource(0, .018), true);
+  assert.equal(engine.isPlaying, true);
+  assert.equal(context.starts.length, 1);
+  assert.equal(context.starts[0].offset, 22.025, 'original starts aligned to the advancing clock');
+  engine.pause();
+  assert.equal(await engine.play(120, 0, .9), false, 'the full timeline still ends normally');
+  await engine.close();
 });
 
 function observer(t, engine, overrides = {}) {
