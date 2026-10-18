@@ -55,6 +55,8 @@ Web updates appear in Storage and apply only when you choose **Update & reload**
 
 If playback fails, open the visible error or **Storage → Playback status & help**. Retry restores the audio connection; missing or unreadable files can be reconnected by importing their originals. **Copy diagnostics** includes app version, audio state, and recent playback stages, excluding song names, paths, lyrics, and audio. Nothing is uploaded automatically.
 
+Wireless output progress uses the browser's reported output timing when available. Safari's mobile playback session avoids a separate silent audio element competing for system controls. AirPlay/HomePod buffering and audibility still depend on iOS, the receiver, and the network; the browser cannot confirm that a remote speaker is emitting sound. Diagnostics include reported output latency to help investigate mismatches.
+
 Desktop shortcuts: `Space` plays/pauses, `←` / `→` seeks five seconds, `1`–`9` switches tracks, and `F` / `Esc` enters/leaves Focus mode.
 
 ## Development

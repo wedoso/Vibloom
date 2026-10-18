@@ -96,25 +96,59 @@ const { useMediaSession } = await loadTs('../src/platform/useMediaSession.ts', s
   .replace(/^import .* from "react";$/m, 'const { useRef, useEffect } = globalThis.__mediaPublishingHooks;')
   .replace(/^import .* from "\.\/mediaArtwork";$/m, 'const prepareMediaArtwork = (src, signal) => globalThis.__mediaPublishingFixture.prepare(src, signal);')
 );
-function hookFixture(t) {
+function hookFixture(t, userAgent = 'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0 Safari/537.36', rejectCarrier = false) {
   const originals = new Map(['navigator', 'MediaMetadata', 'document', 'window', 'Audio'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   const page = new EventTarget(), events = new EventTarget(); page.visibilityState = 'visible';
   events.setInterval = (...args) => setInterval(...args); events.clearInterval = value => clearInterval(value);
   const positionWrites = [], metadataWrites = [], requests = [];
   const session = { metadata: null, playbackState: 'none', setActionHandler() {}, setPositionState: value => positionWrites.push(value) };
-  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaSession: session } });
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaSession: session, userAgent, audioSession: { type: 'playback' } } });
   globalThis.document = page; globalThis.window = events;
   globalThis.MediaMetadata = class { constructor(details) { Object.assign(this, details); this.artwork ??= []; metadataWrites.push(this); } };
-  globalThis.Audio = class extends EventTarget { paused = true; async play() { this.paused = false; } pause() { this.paused = true; } removeAttribute() {} load() {} };
+  const audios = [];
+  globalThis.Audio = class extends EventTarget { constructor() { super(); audios.push(this); } paused = true; async play() { if (rejectCarrier) throw new DOMException('Media output denied', 'NotAllowedError'); this.paused = false; } pause() { this.paused = true; } removeAttribute() {} load() {} };
   const f = globalThis.__mediaPublishingFixture = {
     refs: [], effects: [], pending: [], cursor: 0,
     prepare: (src, signal) => new Promise((resolve, reject) => requests.push({ src, signal, resolve, reject })),
   };
-  let time = 0;
-  const controls = { getTime: () => time, play() {}, pause() {}, next() {}, previous() {}, seek() {}, onError() {} };
+  let time = 0, advancing = true, errors = 0;
+  const controls = { getTime: () => time, isAdvancing: () => advancing, play() {}, pause() {}, next() {}, previous() {}, seek() {}, onError() { errors++; } };
   t.after(() => { for (const effect of f.effects) effect?.cleanup?.(); for (const [name, descriptor] of originals) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name]; } });
-  return { session, requests, metadataWrites, positionWrites, events, setTime(value) { time = value; }, render(state, position = 0) { time = position; f.cursor = 0; useMediaSession({ enabled: true, position, ...snapshot, ...state }, controls); for (const effect of f.pending.splice(0)) effect(); } };
+  return { session, requests, metadataWrites, positionWrites, events, audios, get errors() { return errors; }, setAdvancing(value) { advancing = value; }, setTime(value) { time = value; }, render(state, position = 0) { time = position; f.cursor = 0; useMediaSession({ enabled: true, position, ...snapshot, ...state }, controls); for (const effect of f.pending.splice(0)) effect(); } };
 }
+
+test('WebKit standalone playback has no silent media element to own its output route or ten-second timeline', async t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const f = hookFixture(t, 'Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', true);
+  f.render({ duration: 180 }, 35);
+  await flush(); assert.equal(f.errors, 0, 'a rejected auxiliary HTML play cannot falsely report a system control failure');
+  assert.equal(f.audios.length, 0);
+  assert.equal(f.positionWrites.at(-1).duration, 180); assert.equal(f.positionWrites.at(-1).position, 35);
+  f.setTime(45); t.mock.timers.tick(10000);
+  assert.equal(f.positionWrites.at(-1).position, 45, 'system progress follows music beyond the former carrier loop');
+  f.render({ isPlaying: false, duration: 180 }, 45);
+  assert.equal(f.session.playbackState, 'paused'); assert.equal(f.audios.length, 0);
+});
+
+test('a rejected silent carrier reproduces the system-control failure while the music position is already advancing', async t => {
+  const f = hookFixture(t, 'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0 Safari/537.36', true);
+  f.render({}, 35); await flush();
+  assert.equal(f.audios.length, 1); assert.equal(f.errors, 1);
+  assert.equal(f.session.playbackState, 'playing'); assert.equal(f.positionWrites.at(-1).position, 35);
+});
+
+test('system playback holds during wireless output startup and resumes from the heard clock without a React render', t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const f = hookFixture(t);
+  f.setAdvancing(false); f.render({}, 20);
+  assert.equal(f.session.playbackState, 'paused'); assert.equal(f.positionWrites.at(-1).position, 20);
+  const count = f.positionWrites.length;
+  t.mock.timers.tick(2000); assert.equal(f.positionWrites.length, count, 'do not publish a fictional advancing position');
+  f.setAdvancing(true); f.setTime(20.5); t.mock.timers.tick(1000);
+  assert.equal(f.session.playbackState, 'playing'); assert.equal(f.positionWrites.at(-1).position, 20.5);
+  f.setAdvancing(false); t.mock.timers.tick(1000);
+  assert.equal(f.session.playbackState, 'paused', 'an interrupted output does not keep declaring playback');
+});
 
 test('late old cover cannot replace a new song; successful artwork preserves the current lyric and is reused within an album', async t => {
   const f = hookFixture(t), lyrics = [{ time: 0, text: 'First' }, { time: 2, text: 'Second' }];

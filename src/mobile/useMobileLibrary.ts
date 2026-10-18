@@ -216,7 +216,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     } catch (error) {
       if (request === epoch.current && mounted.current) {
         setPlaying(engine.isPlaying);
-        const position = engine.getTimelineTime(); setTime(position); patchSession({ currentTime: position });
+        const position = engine.getPlaybackTime(); setTime(position); patchSession({ currentTime: position });
         if (!(error instanceof Error && error.name === "AbortError")) {
           if (playbackDiagnostics.read().issue !== "missing_file") playbackDiagnostics.record("error", playbackIssueFor(error, stage), stage);
           setMessage(error instanceof Error ? error.message : "This browser could not decode the song.");
@@ -242,7 +242,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     },
   }), [engine, load, pause, playbackDiagnostics]);
   const retryPlayback = useCallback(async () => {
-    const target = retryTarget.current ?? { id: sessionRef.current.currentTrackId, position: engine.getTimelineTime() };
+    const target = retryTarget.current ?? { id: sessionRef.current.currentTrackId, position: engine.getPlaybackTime() };
     engine.resetGraph();
     return load(target.id, true, target.position);
   }, [engine, load]);
@@ -250,7 +250,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
     const state = sessionRef.current;
     const id = state.currentTrackId || state.queue[0] || tracksRef.current[0]?.id;
     if (!id) return;
-    const offset = engine.getMaxDuration() > 0 && engine.getTimelineTime() >= engine.getMaxDuration() - .03 ? 0 : state.currentTime;
+    const offset = engine.getMaxDuration() > 0 && engine.getPlaybackTime() >= engine.getMaxDuration() - .03 ? 0 : state.currentTime;
     await load(id, true, offset);
   }, [engine, load]);
   const seek = useCallback(async (value: number) => {
@@ -281,13 +281,13 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   }, [load]);
   const previous = useCallback(async () => {
     const state = sessionRef.current;
-    const id = engine.getTimelineTime() > 3 ? state.currentTrackId : state.history.at(-1) ?? state.queue[0];
+    const id = engine.getPlaybackTime() > 3 ? state.currentTrackId : state.history.at(-1) ?? state.queue[0];
     if (id) await load(id, true, 0);
   }, [engine, load]);
   useEffect(() => {
     if (!playing) return;
     const timer = window.setInterval(() => {
-      const position = Math.min(engine.getTimelineTime(), engine.getMaxDuration()); setTime(position);
+      const position = Math.min(engine.getPlaybackTime(), engine.getMaxDuration()); setTime(position);
       if (position - sessionRef.current.currentTime >= 5) patchSession({ currentTime: position });
       if (engine.getMaxDuration() > 0 && position >= engine.getMaxDuration() - .025) { engine.markEnded(); playbackDiagnostics.record("paused"); setPlaying(false); patchSession({ currentTime: position }); void next(true); }
     }, 100);
@@ -295,7 +295,7 @@ export function useMobileLibrary(platform: LibraryPlatform = mobilePlatform) {
   }, [playing, engine, patchSession, next, playbackDiagnostics]);
   const playbackAlbum = albumForTrack(albums, current?.id ?? "", session.playbackAlbumId);
   useMediaSession({ enabled: !!current, trackId: current?.id, positionRevision, systemLyricsEnabled: session.systemLyricsEnabled, title: current ? trackDisplayName(current.name) : "Vibloom", album: playbackAlbum?.name ?? "Mobile library", artwork: playbackAlbum?.cover || `${import.meta.env.BASE_URL}vibloom-icon.png`, isPlaying: playing, duration, position: time, lyrics: current?.lyrics }, {
-    play, pause, next, previous, seek, getTime: () => engine.getTimelineTime(), onError: () => { retryTarget.current = { id: sessionRef.current.currentTrackId, position: engine.getTimelineTime() }; playbackDiagnostics.record("error", "media_control"); setMessage("Playback needs another tap. Press Play to resume."); },
+    play, pause, next, previous, seek, isAdvancing: () => engine.isOutputAdvancing(), getTime: () => engine.getPlaybackTime(), onError: () => { retryTarget.current = { id: sessionRef.current.currentTrackId, position: engine.getPlaybackTime() }; playbackDiagnostics.record("error", "media_control"); setMessage("Playback needs another tap. Press Play to resume."); },
   });
 
   const importFiles = useCallback(async (selected: File[], albumId = "") => {

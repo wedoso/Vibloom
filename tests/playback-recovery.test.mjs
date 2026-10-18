@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getEventListeners } from 'node:events';
 import { loadTs } from './load-ts.mjs';
 const { SynchronizedAudioEngine } = await loadTs('../src/audio/SynchronizedAudioEngine.ts');
 const { AUDIO_RESUME_TIMEOUT_MS } = await loadTs('../src/audio/contextOperation.ts');
@@ -24,7 +25,8 @@ function player(context = new FakeContext()) {
   return { engine, context };
 }
 
-test('interrupted playback and seeks resume before scheduling; an interruption that persists cannot report success', async () => {
+test('interrupted playback and seeks resume before scheduling; an interruption that persists cannot report success', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const { engine, context } = player();
   context.state = 'interrupted';
   assert.equal(await engine.play(0, .025, .9), true);
@@ -33,9 +35,48 @@ test('interrupted playback and seeks resume before scheduling; an interruption t
   assert.equal(await engine.play(30, .025, .9), true);
   assert.equal(context.resumes, 2); assert.equal(context.starts.at(-1).offset, 30);
   engine.pause(); context.state = 'interrupted'; context.resume = async () => {};
-  await assert.rejects(engine.play(45, .025, .9), /interrupted/);
+  const failed = assert.rejects(engine.play(45, .025, .9), { name: 'TimeoutError' });
+  t.mock.timers.tick(AUDIO_RESUME_TIMEOUT_MS); await failed;
   assert.equal(engine.isPlaying, false); assert.equal(context.starts.length, 2);
   assert.equal(engine.getContext(), null); assert.equal(engine.getBuffer(0), buffer);
+  await engine.close();
+});
+
+test('a resolved resume during a route handoff waits for running, and pause cancels that wait', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { engine, context } = player(); context.state = 'interrupted'; context.resume = async () => {};
+  const pending = engine.play(12, .025, .9); await flush();
+  t.mock.timers.tick(5000); await flush();
+  assert.equal(engine.isPlaying, false); assert.equal(context.starts.length, 0);
+  context.change('running'); assert.equal(await pending, true);
+  assert.equal(getEventListeners(context, 'statechange').length, 0, 'route listener is removed after success');
+  assert.equal(context.starts[0].offset, 12);
+  engine.pause(); context.change('interrupted');
+  const cancelled = engine.play(20, .025, .9); await flush(); engine.pause();
+  assert.equal(await cancelled, false);
+  assert.equal(getEventListeners(context, 'statechange').length, 0, 'route listener is removed after cancellation');
+  context.change('running'); await flush();
+  assert.equal(context.starts.length, 1, 'late route readiness cannot restart paused audio');
+  await engine.close();
+});
+
+test('wireless output progress waits for the speaker clock, while scheduling retains the render clock', async () => {
+  const { engine, context } = player(); context.outputLatency = 2;
+  engine.setBuffer(1, buffer);
+  assert.equal(await engine.play(30, 0, .9), true);
+  context.currentTime += 1;
+  assert.equal(engine.getTimelineTime(), 31); assert.equal(engine.getPlaybackTime(), 30);
+  assert.equal(engine.isOutputAdvancing(), false);
+  context.currentTime += 2.5;
+  assert.equal(engine.getTimelineTime(), 33.5); assert.equal(engine.getPlaybackTime(), 31.5);
+  assert.equal(engine.isOutputAdvancing(), true);
+  engine.selectSource(1, .018);
+  assert.equal(context.starts.at(-1).offset, 33.525, 'crossfade is aligned to rendered samples');
+  assert.equal(engine.pause(), 31.5, 'pause retains the heard position rather than skipping unheard audio');
+  assert.equal(await engine.play(60, .025, .9), true);
+  assert.equal(engine.getPlaybackTime(), 60, 'seek does not subtract latency from the requested position');
+  context.currentTime += 3;
+  assert.ok(Math.abs(engine.getPlaybackTime() - 60.975) < .00001);
   await engine.close();
 });
 
@@ -174,6 +215,15 @@ test('healthy clocks, paused users, busy loads and natural completion are not re
   await engine.play(0, 0, .9); watch.dispose(); context.change('interrupted');
   watch.events.dispatchEvent(new Event('pageshow')); watch.tick(PLAYBACK_STALL_MS * 2);
   assert.deepEqual(watch.calls, []); await engine.close();
+});
+
+test('a brief frozen clock during route connection does not rebuild a healthy output', async t => {
+  const { engine, context } = player(); await engine.play(0, 0, .9);
+  const watch = observer(t, engine);
+  watch.tick(2000); await flush(); assert.deepEqual(watch.calls, []);
+  context.currentTime += 2; watch.tick(250);
+  assert.deepEqual(watch.calls, []); assert.equal(watch.failures, 0);
+  await engine.close();
 });
 
 // Exercise the mobile hook's real async transport. Stub unrelated UI/storage

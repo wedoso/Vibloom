@@ -665,7 +665,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const vocalPlayback = useVocalPlaybackState(activeAnalysis, activeDuration, singingKeys.has(activeKey), platform.vocalAnalyses, missingVocalReference);
   const sampleVocals = vocalPlayback.sample;
   const readVocalPose = useCallback(() => playingRef.current && audioEngine.getContext()?.state === "running"
-    ? sampleVocals(audioEngine.getTimelineTime(), sessionRef.current.volume) : SILENT_VOCAL_POSE,
+    ? sampleVocals(audioEngine.getPlaybackTime(), sessionRef.current.volume) : SILENT_VOCAL_POSE,
   [audioEngine, sampleVocals]);
   const { cancelAll: cancelTransforms, reset: resetComparisons } = comparisons;
 
@@ -793,7 +793,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [audioEngine]);
 
   const getTimelineTime = useCallback(() => {
-    return audioEngine.getTimelineTime();
+    return audioEngine.getPlaybackTime();
   }, [audioEngine]);
 
   const startPlayback = useCallback(async (time: number) => {
@@ -1356,7 +1356,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     catch (error) { setMessage(error instanceof Error ? error.message : "Lyrics could not be exported."); }
   };
   const retryPlayback = async () => {
-    const target = retryTargetRef.current ?? { id: sessionRef.current.currentTrackId, position: audioEngine.getTimelineTime() };
+    const target = retryTargetRef.current ?? { id: sessionRef.current.currentTrackId, position: audioEngine.getPlaybackTime() };
     audioEngine.resetGraph();
     return startTrack(target.id, true, target.position);
   };
@@ -1473,7 +1473,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     previous: async () => { if (!timingTrackId) await previousTrack(); },
     seek: seekTo,
     getTime: getTimelineTime,
-    onError: () => { retryTargetRef.current = { id: sessionRef.current.currentTrackId, position: audioEngine.getTimelineTime() }; playbackDiagnostics.record("error", "media_control"); setMessage("System playback control failed. Try playing again from Vibloom."); },
+    isAdvancing: () => audioEngine.isOutputAdvancing(),
+    onError: () => { retryTargetRef.current = { id: sessionRef.current.currentTrackId, position: audioEngine.getPlaybackTime() }; playbackDiagnostics.record("error", "media_control"); setMessage("System playback control failed. Try playing again from Vibloom."); },
   });
 
   function cycleRepeat() {

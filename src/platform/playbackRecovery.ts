@@ -1,6 +1,8 @@
 import type { SynchronizedAudioEngine } from "../audio/SynchronizedAudioEngine";
 
-export const PLAYBACK_STALL_MS = 1500;
+// A short frozen clock can be an output-route handoff. Rebuilding after only
+// 1.5 seconds can tear down a wireless route while it is still connecting.
+export const PLAYBACK_STALL_MS = 5000;
 type Options = {
   isBusy: () => boolean;
   recover: (rebuild: boolean) => Promise<boolean>;

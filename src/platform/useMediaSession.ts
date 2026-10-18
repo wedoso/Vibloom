@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createMediaSessionAnchor } from "./mediaSessionAnchor";
+import { createMediaSessionAnchor, needsMediaSessionAnchor } from "./mediaSessionAnchor";
 import { bindMediaSession, type MediaControls, mediaMetadataDetails } from "./mediaSession";
 import { bindMediaSessionLyrics, mediaLyricArtist, type MediaLyric } from "./mediaSessionLyrics";
 import { createMediaPositionPublisher } from "./mediaPositionPublisher";
@@ -30,7 +30,7 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
 
   useEffect(() => {
     if (!state.enabled || !navigator.mediaSession) return;
-    const positions = createMediaPositionPublisher(navigator.mediaSession, () => controlsRef.current.getTime());
+    const positions = createMediaPositionPublisher(navigator.mediaSession, () => controlsRef.current.getTime(), undefined, () => controlsRef.current.isAdvancing?.() ?? stateRef.current.isPlaying);
     positionUpdates.current = positions;
     const wake = () => positions.update(stateRef.current, true);
     const timer = window.setInterval(() => positions.update(stateRef.current), 1000);
@@ -45,15 +45,16 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
       getTime: () => controlsRef.current.getTime(),
       onError: () => controlsRef.current.onError(),
     });
-    const anchor = createMediaSessionAnchor(
+    const audioSession = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    const anchor = needsMediaSessionAnchor(navigator.userAgent ?? "", audioSession?.type === "playback") ? createMediaSessionAnchor(
       () => { void Promise.resolve(controlsRef.current.play()).catch(() => controlsRef.current.onError()); },
       () => controlsRef.current.pause(),
       () => controlsRef.current.onError(),
-    );
+    ) : null;
     anchorRef.current = anchor;
     return () => {
       window.clearInterval(timer); document.removeEventListener("visibilitychange", wake); window.removeEventListener("pageshow", wake);
-      positionUpdates.current = null; anchor.dispose(); anchorRef.current = null; unbind();
+      positionUpdates.current = null; anchor?.dispose(); anchorRef.current = null; unbind();
     };
   }, [state.enabled]);
 

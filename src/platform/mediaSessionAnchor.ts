@@ -1,6 +1,17 @@
 // Chromium releases Web Audio's ambient media session when sound stops. A paused
 // HTML media element retains a resumable session for headset / OS play commands.
 // This silent carrier never carries the music: A/B still uses one AudioContext.
+export function needsMediaSessionAnchor(userAgent: string, hasPlaybackAudioSession = false) {
+  // WebKit supports a Web Audio Now Playing session and prefers eligible HTML
+  // media over it. A looping silent element can steal its timeline/output route.
+  // iOS Chrome/Firefox also use WebKit; Electron/desktop Chrome keep the carrier.
+  // Older Safari and desktop layouts that have no declared playback audio
+  // session keep the existing fallback rather than losing remote controls.
+  if (!hasPlaybackAudioSession || !/AppleWebKit/u.test(userAgent)) return true;
+  if (/iPhone|iPad|iPod/u.test(userAgent)) return false;
+  return /Chrome\/|Chromium\/|Electron\/|Edg\/|OPR\//u.test(userAgent);
+}
+
 export function createMediaSessionAnchor(onPlay: () => void, onPause: () => void, onError: () => void) {
   const sampleRate = 8000;
   const samples = sampleRate * 10;

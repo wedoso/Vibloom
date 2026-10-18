@@ -25,7 +25,7 @@ test('file reads abort promptly and remove handlers after cancellation, success 
 test('closing during audio context resume rejects late work and prevents graph resurrection or PCM retention', async () => {
   let resume, creations=0;
   const node=()=>({connect(){},disconnect(){},gain:{value:0}});
-  const context={state:'suspended',destination:{},createGain:node,createAnalyser:node,resume:()=>new Promise(resolve=>{resume=resolve;}),close:async()=>{context.state='closed';}};
+  const context=Object.assign(new EventTarget(),{state:'suspended',destination:{},createGain:node,createAnalyser:node,resume:()=>new Promise(resolve=>{resume=resolve;}),close:async()=>{context.state='closed';}});
   const engine=new SynchronizedAudioEngine(()=>{creations++;return context;}), pending=engine.ensureGraph();
   await engine.close();resume();await assert.rejects(pending,{name:'AbortError'});
   await assert.rejects(engine.ensureGraph(false),{name:'AbortError'});assert.equal(creations,1);assert.equal(engine.getContext(),null);

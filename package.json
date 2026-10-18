@@ -33,6 +33,7 @@
     "desktop:smoke:library": "npm run build && electron scripts/smoke-library-collections.mjs",
     "desktop:smoke:media": "npm run build && electron scripts/smoke-media-session.mjs",
     "desktop:smoke:media-publishing": "npm run build && electron scripts/smoke-media-publishing.mjs",
+    "desktop:smoke:wireless": "npm run build && electron scripts/smoke-wireless-output.mjs",
     "desktop:smoke:lyrics-export": "npm run build && electron scripts/smoke-lyrics-export.mjs",
     "desktop:smoke:offline": "npm run build && electron scripts/smoke-offline-help.mjs",
     "desktop:smoke:playback": "npm run build && electron scripts/smoke-playback-ui.mjs",

@@ -5,6 +5,7 @@ export type MediaControls = {
   previous: () => void | Promise<void>;
   seek: (time: number) => void | Promise<void>;
   getTime: () => number;
+  isAdvancing?: () => boolean;
   onError: () => void;
 };
 
