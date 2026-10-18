@@ -110,6 +110,7 @@ import {
 } from "./domain/library";
 import { decodeLrc, LyricLine, parseLrc, parseLyricsFile, serializeLrc, serializeTxt, validateLyricTiming, type LyricTimingLine } from "./lrc";
 import LyricsTimingEditor from "./LyricsTimingEditor";
+import LyricsToolbar from "./LyricsToolbar";
 import AlbumCollections from "./AlbumCollections";
 import FileDropRegion from "./FileDropRegion";
 import { browserLibraryPlatform } from "./platform/browserLibraryPlatform";
@@ -438,12 +439,10 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
     });
   }, [activeIndex]);
 
+  const toolbar = <LyricsToolbar fileName={fileName} untimed={!lines.length} focus={variant === "focus"} lrcError={validateLyricTiming(timing ?? lines)} onEdit={onTiming} onReplace={onAttachLyrics} onRemove={onRemoveLyrics} onExport={onExport} />;
   if (!lines.length && timing !== undefined) {
     return <div className={`library-lyrics-empty lyrics-plain lyrics-variant-${variant}`}>
-      <FileText size={18} /><span>TXT lyrics · {timing.length} lines</span>
-      <button type="button" onClick={onTiming}>Timestamp lyrics</button><button type="button" onClick={() => onExport("txt")}>Export TXT</button>
-      <button type="button" onClick={onAttachLyrics}>Replace</button>
-      <button type="button" onClick={onRemoveLyrics}>Remove</button>
+      {toolbar}<span className="lyrics-plain-summary">{timing.length} lines · Add timing to sync lyrics</span>
     </div>;
   }
 
@@ -451,15 +450,15 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
     return (
       <div className={`library-lyrics-empty lyrics-variant-${variant}`}>
         <FileText size={18} />
-        <span>No matched lyrics for this track</span>
-        <button type="button" onClick={onAttachLyrics}>Attach .lrc / .txt</button>
+        <span>No lyrics attached</span>
+        <button type="button" title="Choose an LRC or TXT file" onClick={onAttachLyrics}>Import lyrics</button>
       </div>
     );
   }
 
   return (
     <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} key={`${variant}:${fileName}`} aria-label={`Lyrics from ${fileName}`}>
-      <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace</button><button type="button" onClick={onRemoveLyrics}>Remove</button><button type="button" onClick={onTiming}>Edit timing</button><button type="button" onClick={() => onExport("txt")}>Export TXT</button><button type="button" disabled={!!validateLyricTiming(timing ?? lines)} onClick={() => onExport("lrc")}>Export LRC</button></span>
+      {toolbar}
       <div className="library-lyrics-viewport" ref={viewportRef}>
         <div className="library-lyrics-list">
           {lines.map((line, index) => (
@@ -1924,7 +1923,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 {activeSourceEnded && <div className="comparison-status-lane" aria-live="polite">
                   <div className="comparison-ended-alert">Track {activeSource + 1} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>
                 </div>}
-                <div className="console-lower"><LyricsPanel onExport={exportCurrentLyrics} playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack?.lyricTiming} onTiming={() => { if (currentTrack) void openTimingEditor(currentTrack.id); }} lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+                <div className="console-lower"><LyricsPanel key={currentTrack?.id} onExport={exportCurrentLyrics} playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack?.lyricTiming} onTiming={() => { if (currentTrack) void openTimingEditor(currentTrack.id); }} lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
               </div>
             </div>
           ) : (
@@ -1964,7 +1963,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           </section>
 
           <aside className="persistent-stage-panel">
-            {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel onExport={exportCurrentLyrics} playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
+            {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel key={currentTrack?.id} onExport={exportCurrentLyrics} playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
             <div className="persistent-stage-canvas"><Live2DStage renderActive={visualActive} companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} playerZoomOffset={desktopPlayerZoomOffset} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} readVocalPose={readVocalPose} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><span className={`is-active source-${activeSource === 0 ? "a" : "b"}`}>{activeSource + 1}</span><small>{comparisonReady ? `Listening to track ${activeSource + 1}` : "Solo playback"}</small></div>
           </aside>

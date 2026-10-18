@@ -43,7 +43,7 @@ On iPhone/iPad, choose **Import your music → Choose files**, then browse **iCl
 
 ### Lyrics and car display
 
-On mobile, tap **Edit lyrics** in Player, or open **Listening options → Lyrics** to edit timing and use **Export TXT / Export LRC**. The editor's **More lyric actions** menu also exports either format. On desktop, use Player's lyric controls or the Library song's **Lyrics…** menu. TXT works without timing; LRC requires timed lyrics.
+On mobile, tap **Edit lyrics** in Player, or open **Listening options → Lyrics** to edit timing and use **Export TXT / Export LRC**. The editor's **More lyric actions** menu also exports either format. On desktop, Player keeps **Edit** beside a **⋯** menu for exports, replacement and removal; Focus mode keeps only **⋯**, with editing as its first item. Songs without lyrics show **Import lyrics**. The Library song's **Lyrics…** menu also opens the editor. TXT works without timing; LRC requires timed lyrics.
 
 **Listening options → Lock-screen & car lyrics** enables or disables system lyric publishing on mobile and remembers your choice. In-app lyrics continue to work with this switch off. Car lyrics use the system artist field because browsers cannot directly control a Bluetooth receiver's lyric display.
 

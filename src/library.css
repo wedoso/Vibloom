@@ -2342,7 +2342,6 @@ button.track-index,
   mask-image: none;
 }
 
-.library-app.is-library-focus .lyrics-variant-focus .library-lyrics-label button { display: none; }
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list { padding: 130px 0; }
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list p { padding: 11px 0; font-size: clamp(15px, 1.55vw, 21px); }
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list p.is-current { font-size: clamp(21px, 2.35vw, 31px); }
@@ -2541,8 +2540,7 @@ button.track-index,
   gap: 8px;
 }
 
-.library-lyrics-empty button,
-.library-lyrics-label button {
+.library-lyrics-empty > button {
   padding: 4px 8px;
   border: 1px solid rgba(182, 92, 63, .28);
   border-radius: 999px;
@@ -2551,15 +2549,6 @@ button.track-index,
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;
-}
-
-.library-lyrics-label button {
-  width: 72px;
-  height: 24px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .library-lyrics-label {

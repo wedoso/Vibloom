@@ -171,7 +171,6 @@ test("covers camera-layout changes and animates persistent side sheets", async (
   assert.match(libraryStyles, /\.track-availability[\s\S]*min-width: 68px[\s\S]*height: 24px/u);
   assert.match(libraryStyles, /\.track-feature-icons > span[\s\S]*width: 24px[\s\S]*height: 24px/u);
   assert.match(libraryStyles, /\.library-list-toolbar > div button[\s\S]*width: 88px[\s\S]*height: 32px/u);
-  assert.match(libraryStyles, /\.library-lyrics-label button[\s\S]*width: 72px[\s\S]*height: 24px/u);
   assert.match(libraryStyles, /lyrics-panel-enter/u);
   assert.match(libraryStyles, /lyric-line-enter/u);
   assert.match(libraryStyles, /--lyrics-accent: rgb\(84 127 121\)/u);
