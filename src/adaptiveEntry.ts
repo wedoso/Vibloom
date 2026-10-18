@@ -1,3 +1,4 @@
+import { startOfflineApp } from "./platform/offlineApp";
 import { deviceMode } from "./mobile/deviceMode";
 
 const mode = deviceMode({
@@ -22,3 +23,5 @@ void entry.catch((error: unknown) => {
   }
   console.error(error);
 });
+
+void entry.then(() => startOfflineApp()).catch(() => {});

@@ -52,6 +52,12 @@ export function serializeLrc(lines: LyricTimingLine[], metadata: string[] = []) 
   return [...metadata, ...lines.flatMap((line) => line.text.split("\n").map((text) => `[${formatLrcTime(line.time as number)}]${text}`))].join("\n") + "\n";
 }
 
+/** Export lyric text only, preserving translations, repeated verses and blank
+ * cues. Untimed drafts can be exported without completing their timestamps. */
+export function serializeTxt(lines: Pick<LyricTimingLine, "text">[]) {
+  return lines.length ? lines.map(line => line.text).join("\n") + "\n" : "";
+}
+
 export type ParsedLrc = {
   lines: LyricLine[];
   title: string;

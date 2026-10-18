@@ -1,0 +1,12 @@
+{
+  "id": "./",
+  "name": "Vibloom",
+  "short_name": "Vibloom",
+  "description": "Your private local music library, lyrics and companion.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f3eb",
+  "theme_color": "#f8f3eb",
+  "icons": [{ "src": "./vibloom-icon.png", "sizes": "1168x1159", "type": "image/png", "purpose": "any" }]
+}

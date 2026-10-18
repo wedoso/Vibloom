@@ -1,3 +1,7 @@
+import OfflineStatus from "./platform/OfflineStatus";
+import PlaybackHelp from "./platform/PlaybackHelp";
+import { PlaybackDiagnostics, playbackIssueFor, type PlaybackStage } from "./platform/playbackDiagnostics";
+import { downloadTrackLyrics } from "./platform/lyricExport";
 import StyledSelect from "./StyledSelect";
 import { librarySaveMessage } from "./platform/indexedLibraryRepository";
 import {
@@ -104,7 +108,7 @@ import {
   type VocalAnalysis,
   type VocalAnalysisReference,
 } from "./domain/library";
-import { decodeLrc, LyricLine, parseLrc, parseLyricsFile, serializeLrc, type LyricTimingLine } from "./lrc";
+import { decodeLrc, LyricLine, parseLrc, parseLyricsFile, serializeLrc, serializeTxt, validateLyricTiming, type LyricTimingLine } from "./lrc";
 import LyricsTimingEditor from "./LyricsTimingEditor";
 import AlbumCollections from "./AlbumCollections";
 import FileDropRegion from "./FileDropRegion";
@@ -398,7 +402,7 @@ function repeatLabel(mode: RepeatMode) {
   return "Repeat off";
 }
 
-function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyrics, onRemoveLyrics, timing, onTiming, variant = "console", playing, readTime }: { lines: LyricLine[]; currentTime: number; fileName: string; activeSource: number; onAttachLyrics: () => void; onRemoveLyrics: () => void; timing?: LyricTimingLine[]; onTiming: () => void; variant?: "console" | "focus"; playing: boolean; readTime: () => number }) {
+function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyrics, onRemoveLyrics, timing, onTiming, onExport, variant = "console", playing, readTime }: { lines: LyricLine[]; currentTime: number; fileName: string; activeSource: number; onAttachLyrics: () => void; onRemoveLyrics: () => void; timing?: LyricTimingLine[]; onTiming: () => void; onExport: (format: "lrc" | "txt") => void; variant?: "console" | "focus"; playing: boolean; readTime: () => number }) {
   const lineRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const activeIndex = useMemo(() => {
@@ -437,7 +441,7 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
   if (!lines.length && timing !== undefined) {
     return <div className={`library-lyrics-empty lyrics-plain lyrics-variant-${variant}`}>
       <FileText size={18} /><span>TXT lyrics · {timing.length} lines</span>
-      <button type="button" onClick={onTiming}>Timestamp lyrics</button>
+      <button type="button" onClick={onTiming}>Timestamp lyrics</button><button type="button" onClick={() => onExport("txt")}>Export TXT</button>
       <button type="button" onClick={onAttachLyrics}>Replace</button>
       <button type="button" onClick={onRemoveLyrics}>Remove</button>
     </div>;
@@ -455,7 +459,7 @@ function LyricsPanel({ lines, currentTime, fileName, activeSource, onAttachLyric
 
   return (
     <div className={`library-lyrics lyrics-variant-${variant} lyrics-source-${activeSource === 0 ? "a" : "b"}`} key={`${variant}:${fileName}`} aria-label={`Lyrics from ${fileName}`}>
-      <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace</button><button type="button" onClick={onRemoveLyrics}>Remove</button><button type="button" onClick={onTiming}>Edit timing</button></span>
+      <span className="library-lyrics-label"><FileText size={12} /> Synced lyrics <button type="button" onClick={onAttachLyrics}>Replace</button><button type="button" onClick={onRemoveLyrics}>Remove</button><button type="button" onClick={onTiming}>Edit timing</button><button type="button" onClick={() => onExport("txt")}>Export TXT</button><button type="button" disabled={!!validateLyricTiming(timing ?? lines)} onClick={() => onExport("lrc")}>Export LRC</button></span>
       <div className="library-lyrics-viewport" ref={viewportRef}>
         <div className="library-lyrics-list">
           {lines.map((line, index) => (
@@ -498,6 +502,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const [restored, setRestored] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [mediaPositionRevision, setMediaPositionRevision] = useState(0);
   const [duration, setDuration] = useState(0);
   const [message, setMessage] = useState("Your library stays in this browser.");
   const [search, setSearch] = useState("");
@@ -542,6 +547,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const runtimeFilesRef = useRef(new Map<string, File>());
   const reconnectModeRef = useRef(false);
   const [audioEngine] = useState(() => new SynchronizedAudioEngine());
+  const [playbackDiagnostics] = useState(() => new PlaybackDiagnostics());
+  const retryTargetRef = useRef<{ id: string; position: number } | null>(null);
   const frequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const timeDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const loadedTrackIdRef = useRef("");
@@ -790,13 +797,21 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }, [audioEngine]);
 
   const startPlayback = useCallback(async (time: number) => {
-    const started = await audioEngine.play(time, SOURCE_LEAD_SECONDS, sessionRef.current.volume);
+    retryTargetRef.current = { id: sessionRef.current.currentTrackId, position: time };
+    let started: boolean;
+    try { started = await audioEngine.play(time, SOURCE_LEAD_SECONDS, sessionRef.current.volume); }
+    catch (error) {
+      playbackDiagnostics.record("error", playbackIssueFor(error, "start"));
+      playingRef.current = false; setIsPlaying(false);
+      setMessage("Audio could not start. Open Playback status & help to retry."); return false;
+    }
     if (!started) return false;
-    playingRef.current = true;
+    playingRef.current = true; playbackDiagnostics.record("playing");
     setCurrentTime(time);
+    setMediaPositionRevision(value => value + 1);
     setIsPlaying(true);
     return true;
-  }, [audioEngine]);
+  }, [audioEngine, playbackDiagnostics]);
 
   const pausePlayback = useCallback(() => {
     playbackIntentVersionRef.current += 1;
@@ -805,15 +820,16 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setCurrentTime(pausedAt);
     setIsPlaying(false);
     audioVisualRef.current = { ...audioVisualRef.current, isPlaying: false, transient: 0 };
-    lastCheckpointRef.current = pausedAt;
+    lastCheckpointRef.current = pausedAt; playbackDiagnostics.record("paused");
     patchSession({ currentTime: pausedAt });
-  }, [audioEngine, patchSession]);
+  }, [audioEngine, patchSession, playbackDiagnostics]);
 
   const seekTo = useCallback(async (rawTime: number) => {
     const maxDuration = audioEngine.getMaxDuration();
     const nextTime = Math.max(0, Math.min(rawTime, maxDuration));
     audioEngine.setOffset(nextTime);
     setCurrentTime(nextTime);
+    setMediaPositionRevision(value => value + 1);
     patchSession({ currentTime: nextTime });
     if (playingRef.current) await startPlayback(nextTime);
   }, [audioEngine, patchSession, startPlayback]);
@@ -861,6 +877,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
   const startTrack = useCallback(async (trackId: string, play = true, resumeAt = 0) => {
     cancelTransforms();
+    retryTargetRef.current = { id: trackId, position: resumeAt };
+    playbackDiagnostics.record("preparing", null, "read");
     const playbackIntentVersion = playbackIntentVersionRef.current;
     const loadVersion = ++primaryLoadVersionRef.current;
     primaryReadRef.current?.abort();
@@ -870,10 +888,16 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     if (!track) return false;
     let buffer = readLoadedOriginal(track);
     const reused = !!buffer;
-    const file = buffer ? null : await resolveTrackFile(track);
+    let file: File | null;
+    try { file = buffer ? null : await resolveTrackFile(track); }
+    catch {
+      if (valid()) { playbackDiagnostics.record("error", "read_failed", "read"); setMessage("The source file could not be read. Reconnect it from Playback status & help."); }
+      return false;
+    }
     if (!valid()) return false;
     if (!buffer && !file) {
       patchTracks((current) => current.map((candidate) => candidate.id === trackId ? { ...candidate, availability: "missing" } : candidate));
+      playbackDiagnostics.record("error", "missing_file");
       setMessage(`Reconnect ${track.sourceLabel} to play ${trackDisplayName(track.name)}.`);
       return false;
     }
@@ -888,6 +912,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     setIsPlaying(false);
     setMessage(`Preparing · ${trackDisplayName(track.name)}`);
     setPrimaryLoad({ stage: "reading", progress: 0 });
+    let playbackStage: PlaybackStage = "read";
     try {
       if (!buffer) {
         const context = await ensureAudioGraph(false);
@@ -896,10 +921,12 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         }, readController.signal);
         if (!valid()) return false;
         setPrimaryLoad({ stage: "decoding", progress: 58 });
+        playbackStage = "decode"; playbackDiagnostics.record("preparing", null, playbackStage);
         buffer = await context.decodeAudioData(arrayBuffer);
       }
-    } catch {
+    } catch (error) {
       if (!valid()) return false;
+      playbackDiagnostics.record("error", playbackIssueFor(error, playbackStage), playbackStage);
       setPrimaryLoad({ stage: "idle", progress: 0 });
       setMessage("This track could not be decoded in the current browser.");
       return false;
@@ -928,9 +955,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     if (!reused) setPrimaryPeaks(makeWaveformPeaks(buffer));
     setPrimaryLoad({ stage: "idle", progress: 100 });
     setMessage(`${play ? "Playing" : "Ready"} · ${trackDisplayName(track.name)}`);
-    if (play && playbackIntentVersion === playbackIntentVersionRef.current) await startPlayback(safeTime);
+    if (play && playbackIntentVersion === playbackIntentVersionRef.current) return startPlayback(safeTime);
+    playbackDiagnostics.record("paused");
     return true;
-  }, [audioEngine, cancelTransforms, resetComparisons, ensureAudioGraph, patchSession, patchTracks, resolveTrackFile, startPlayback, readLoadedOriginal]);
+  }, [audioEngine, cancelTransforms, resetComparisons, ensureAudioGraph, patchSession, patchTracks, resolveTrackFile, startPlayback, readLoadedOriginal, playbackDiagnostics]);
 
   useEffect(() => {
     startTrackRef.current = startTrack;
@@ -1037,6 +1065,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       if (maxDuration > 0 && reference >= maxDuration - 0.025) {
         playingRef.current = false;
         audioEngine.markEnded(maxDuration);
+        playbackDiagnostics.record("paused");
         setCurrentTime(maxDuration);
         setIsPlaying(false);
         if (!timingTrackId) endedRef.current();
@@ -1052,7 +1081,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
       if (backgroundTimer !== null) clearTimeout(backgroundTimer);
     };
-  }, [activeSource, audioEngine, getTimelineTime, isPlaying, timingTrackId, visualActive]);
+  }, [activeSource, audioEngine, getTimelineTime, isPlaying, timingTrackId, visualActive, playbackDiagnostics]);
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -1298,7 +1327,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const saveTimedLyrics = useCallback((download: boolean, format: "lrc" | "txt" = "lrc") => {
     if (!timingTrack?.lyricTiming) return;
     try {
-      const source = format === "txt" ? timingTrack.lyricTiming.map((line) => line.text).join("\n") + "\n" : serializeLrc(timingTrack.lyricTiming, timingTrack.lyricMetadata);
+      const source = format === "txt" ? serializeTxt(timingTrack.lyricTiming) : serializeLrc(timingTrack.lyricTiming, timingTrack.lyricMetadata);
       const fileName = `${withoutExtension(timingTrack.lyricsFileName || timingTrack.name)}.${format}`;
       if (format === "lrc") {
         const lyrics = parseLrc(source).lines;
@@ -1320,6 +1349,17 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       setMessage(error instanceof Error ? error.message : "Could not export lyrics.");
     }
   }, [timingTrack, patchTracks, setMessage]);
+
+  const exportCurrentLyrics = (format: "lrc" | "txt") => {
+    if (!currentTrack) return;
+    try { downloadTrackLyrics(currentTrack, format); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Lyrics could not be exported."); }
+  };
+  const retryPlayback = async () => {
+    const target = retryTargetRef.current ?? { id: sessionRef.current.currentTrackId, position: audioEngine.getTimelineTime() };
+    audioEngine.resetGraph();
+    return startTrack(target.id, true, target.position);
+  };
 
   function removeTrackLyrics(trackId: string) {
     const target = tracksRef.current.find((track) => track.id === trackId);
@@ -1419,6 +1459,8 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
 
   useMediaSession({
     enabled: !!currentTrack,
+    trackId: currentTrack ? `${currentTrack.id}:${activeSource}` : undefined,
+    positionRevision: mediaPositionRevision,
     title: currentTrack ? trackDisplayName(activeSource > 0 ? comparisons.slots[activeSource]?.name ?? currentTrack.name : currentTrack.name) : "",
     album: currentTrack?.sourceLabel ?? "",
     isPlaying,
@@ -1431,7 +1473,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
     previous: async () => { if (!timingTrackId) await previousTrack(); },
     seek: seekTo,
     getTime: getTimelineTime,
-    onError: () => setMessage("System playback control failed. Try playing again from Vibloom."),
+    onError: () => { retryTargetRef.current = { id: sessionRef.current.currentTrackId, position: audioEngine.getTimelineTime() }; playbackDiagnostics.record("error", "media_control"); setMessage("System playback control failed. Try playing again from Vibloom."); },
   });
 
   function cycleRepeat() {
@@ -1881,7 +1923,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
                 {activeSourceEnded && <div className="comparison-status-lane" aria-live="polite">
                   <div className="comparison-ended-alert">Track {activeSource + 1} ended at {formatTime(activeDuration, true)}. Switch source to hear the remaining audio.</div>
                 </div>}
-                <div className="console-lower"><LyricsPanel playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack?.lyricTiming} onTiming={() => { if (currentTrack) void openTimingEditor(currentTrack.id); }} lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
+                <div className="console-lower"><LyricsPanel onExport={exportCurrentLyrics} playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack?.lyricTiming} onTiming={() => { if (currentTrack) void openTimingEditor(currentTrack.id); }} lines={currentTrack?.lyrics ?? []} currentTime={currentTime} fileName={currentTrack?.lyricsFileName ?? ""} activeSource={activeSource} onAttachLyrics={() => { if (currentTrack) openLyricsPicker(currentTrack.id); }} onRemoveLyrics={() => { if (currentTrack) removeTrackLyrics(currentTrack.id); }} /><button className="open-library-button" type="button" onClick={() => changeWorkspace("library")}><Library size={16} /> Browse {tracks.length} tracks</button></div>
               </div>
             </div>
           ) : (
@@ -1921,7 +1963,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           </section>
 
           <aside className="persistent-stage-panel">
-            {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
+            {focusMode && currentTrack && (currentTrack.lyrics.length || currentTrack.lyricTiming?.length) ? <LyricsPanel onExport={exportCurrentLyrics} playing={isPlaying && visualActive} readTime={getTimelineTime} timing={currentTrack.lyricTiming} onTiming={() => void openTimingEditor(currentTrack.id)} lines={currentTrack.lyrics} currentTime={currentTime} fileName={currentTrack.lyricsFileName} activeSource={activeSource} variant="focus" onAttachLyrics={() => openLyricsPicker(currentTrack.id)} onRemoveLyrics={() => removeTrackLyrics(currentTrack.id)} /> : null}
             <div className="persistent-stage-canvas"><Live2DStage renderActive={visualActive} companionId={session.companionId} containModel layoutKey={`${workspace}:${focusMode ? "focus" : "room"}`} playerZoomOffset={desktopPlayerZoomOffset} featuresRef={audioVisualRef} vocalLevelRef={vocalLevelRef} readVocalPose={readVocalPose} variant="player" trackLabel={currentTrack?.name ?? "Library ready"} activeSource={activeSource} isComparing={comparisonReady} isPlaying={isPlaying} focusMode={focusMode} /></div>
             <div className="stage-source-indicator"><span className={`is-active source-${activeSource === 0 ? "a" : "b"}`}>{activeSource + 1}</span><small>{comparisonReady ? `Listening to track ${activeSource + 1}` : "Solo playback"}</small></div>
           </aside>
@@ -1938,6 +1980,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
         <div className="transport-secondary">{comparisonVisible && <TrackSelector key={currentTrack?.id} sources={[0, ...comparisonSlots.map(slot => slot.slot)]} active={activeSource} comparison={expandedComparison} names={Object.fromEntries([[0, "Original"], ...comparisonSlots.map(slot => [slot.slot, trackDisplayName(slot.name)])])} onSelect={switchSource} unavailable={[...comparisonSlots.filter(slot => comparisons.clearing || slot.status !== "ready").map(slot => slot.slot), ...Object.values(comparisons.jobs).map(job => job.target)]} />}<label><Volume2 size={17} /><input aria-label="Volume" type="range" min="0" max="1" step="0.01" value={session.volume} onChange={(event) => patchSession({ volume: Number(event.target.value) })} /></label><button type="button" className={queueOpen ? "is-active" : ""} onClick={() => setQueueOpen(true)}><ListMusic size={18} /><span>Queue</span></button></div>
       </footer>}
 
+      <PlaybackHelp compact diagnostics={playbackDiagnostics} engine={audioEngine} retry={retryPlayback} reconnect={() => openFiles(true)} />
       {message && <div className="library-status" role="status">{message}</div>}
 
       {processingDialog && <ProcessingDialog kind={processingDialog.kind} source={processingDialog.source} trackName={trackDisplayName(processingDialog.source === 0 ? currentTrack?.name ?? "" : comparisons.slots[processingDialog.source]?.name ?? "")} duration={formatTime(processingDialog.source === 0 ? primaryDuration : comparisons.slots[processingDialog.source]?.duration ?? 0)} presetId={comparisons.jobs[processingDialog.source]?.presetId ?? (processingDialog.kind === "eq" ? soundSettings.presetId : remasterPreset)} progress={comparisons.jobs[processingDialog.source] ?? null} error={processingError} target={processingTarget} selectedSource={activeSource} slots={comparisonSlots} jobs={Object.values(comparisons.jobs)}
@@ -1957,6 +2000,7 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
           <section className="storage-usage" aria-label="Storage usage"><div><strong>{formatBytes(storageState.usage)}</strong><span>used of {storageState.quota ? formatBytes(storageState.quota) : "browser-managed space"}</span></div><div className="storage-bar"><i style={{ width: `${storageState.quota ? Math.min(100, storageState.usage / storageState.quota * 100) : 0}%` }} /></div></section>
           <label className="cache-toggle"><span><strong>Automatically keep new music</strong><small>On by default. New library tracks and comparison files remain playable after reopening Vibloom.</small></span><input type="checkbox" checked={session.cacheEnabled} onChange={(event) => { if (event.target.checked) void cacheAvailableTracks(); else { patchSession({ cacheEnabled: false }); setMessage("Automatic caching paused. Existing cached audio was kept."); } }} /></label>
           {cacheProgress > 0 && <div className="cache-progress"><i><b style={{ width: `${cacheProgress}%` }} /></i><span>Caching · {cacheProgress}%</span></div>}
+          <OfflineStatus playing={isPlaying} /><PlaybackHelp diagnostics={playbackDiagnostics} engine={audioEngine} retry={retryPlayback} reconnect={() => { setStorageOpen(false); openFiles(true); }} />
           <div className="storage-actions"><button type="button" onClick={() => setConfirmAction("queue")}><span><strong>Clear queue only</strong><small>Keep library and audio</small></span><X size={16} /></button><button type="button" onClick={() => setConfirmAction("cache")}><span><strong>Clear cached audio</strong><small>Keep playlists and lyrics</small></span><Trash2 size={16} /></button><button className="is-destructive" type="button" onClick={() => setConfirmAction("reset")}><span><strong>Reset Vibloom</strong><small>Remove everything from this browser</small></span><Trash2 size={16} /></button></div>
           <div className="storage-app-version"><span>Vibloom version</span><strong>{APP_VERSION}</strong><small>Click the version beside the Vibloom logo to check for updates.</small></div>
         </aside>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Download, MoreHorizontal, Pause, Pencil, Play, Plus, Timer, Trash2, Undo2 } from "lucide-react";
-import { formatLrcTime, serializeLrc, type LyricTimingLine } from "../lrc";
+import { formatLrcTime, serializeLrc, serializeTxt, type LyricTimingLine } from "../lrc";
 import type { MobileLibrary } from "./useMobileLibrary";
 import { MobileDirectSeek } from "./MobileTransport";
 import MobileSheet from "./MobileSheet";
@@ -42,13 +42,15 @@ export default function MobileLyricsEditor({ library, onClose }: { library: Mobi
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   }, [selected, editing, lines.length]);
   useEffect(() => { if (editing) textarea.current?.focus({ preventScroll: true }); }, [editing, selected]);
-  const save = (download: boolean) => {
+  const save = (download: boolean, format: "lrc" | "txt" = "lrc") => {
     setMore(false);
     try {
-      const text = serializeLrc(lines, track.lyricMetadata);
+      const text = format === "txt" ? serializeTxt(lines) : serializeLrc(lines, track.lyricMetadata);
       if (download) {
         const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-        const anchor = document.createElement("a"); anchor.href = url; anchor.download = track.name.replace(/\.[^.]+$/u, "") + ".lrc"; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        const anchor = document.createElement("a"); anchor.href = url; anchor.download = (track.lyricsFileName || track.name).replace(/\.[^.]+$/u, "") + `.${format}`;
+        document.body.appendChild(anchor); anchor.click(); anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
       } else {
         library.patchTracks(items => items.map(item => item.id === track.id ? { ...item, lyrics: lines.map(line => ({ time: line.time!, text: line.text })), lyricTiming: undefined } : item)); onClose();
       }
@@ -82,7 +84,7 @@ export default function MobileLyricsEditor({ library, onClose }: { library: Mobi
     <div className="m-lyrics-editor-bottom">
       {error && <p className="m-error" role="alert">{error}</p>}
       {discard ? <div className="m-lyrics-discard"><span>Discard unsaved edits?</span><button className="m-button" onClick={() => setDiscard(false)}>Keep editing</button><button className="m-button m-danger" onClick={onClose}>Discard</button></div> : <>
-        {more && <div className="m-lyrics-actions" aria-label="Lyric actions"><button className="m-menu-action" onClick={() => { const index = lines.length ? selected + 1 : 0; change([...lines.slice(0, index), { time: null, text: "" }, ...lines.slice(index)], index); setMore(false); setEditing(true); }}><Plus size={18} />Add line</button><button className="m-menu-action" disabled={!history.length} onClick={undo}><Undo2 size={18} />Undo last edit</button><button className="m-menu-action" onClick={() => save(true)}><Download size={18} />Export LRC</button></div>}
+        {more && <div className="m-lyrics-actions" aria-label="Lyric actions"><button className="m-menu-action" onClick={() => { const index = lines.length ? selected + 1 : 0; change([...lines.slice(0, index), { time: null, text: "" }, ...lines.slice(index)], index); setMore(false); setEditing(true); }}><Plus size={18} />Add line</button><button className="m-menu-action" disabled={!history.length} onClick={undo}><Undo2 size={18} />Undo last edit</button><button className="m-menu-action" disabled={!lines.length} onClick={() => save(true, "txt")}><Download size={18} />Export TXT</button><button className="m-menu-action" disabled={!lines.length} onClick={() => save(true)}><Download size={18} />Export LRC</button></div>}
         <div className="m-lyrics-editor-controls"><button className="m-icon m-bordered" aria-label="More lyric actions" aria-expanded={more} onClick={() => setMore(value => !value)}><MoreHorizontal size={21} /></button><button className="m-button" aria-label={`Stamp line ${selected + 1} and select next`} disabled={!lines.length || !!library.busy} onClick={stamp}><Timer size={17} /><span>{selected === lines.length - 1 ? "Stamp last line" : "Stamp & next"}</span></button><button className="m-button m-primary" aria-label="Save lyrics" onClick={() => save(false)}>Save</button></div>
       </>}
     </div>

@@ -5,6 +5,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   { ignores: ["tests/fixtures/eq-upstream/**", "tests/fixtures/suno-upstream/**", "dist/**", "coverage/**", "outputs/**", "work/**", ".cache/**", "public/live2d/**/live2dcubism*.js"] },
+  { files: ["build-tools/offline-worker.js"], languageOptions: { globals: globals.serviceworker } },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

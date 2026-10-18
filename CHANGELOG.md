@@ -2,6 +2,14 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.14.0](https://github.com/wedoso/Vibloom/compare/v1.13.0...v1.14.0) (2026-10-17)
+
+- Reopen the web player offline after Storage confirms readiness, including companions and cached music. Apply web updates explicitly while playback is paused.
+- Reach lyric editing and TXT/LRC exports directly from Player on desktop and mobile. Plain TXT exports retain lyric lines and translations without timestamps or metadata.
+- Remember the mobile lock-screen/car lyrics switch, reduce system progress updates, and normalize cover artwork for receiver compatibility.
+- Recover interrupted audio with bounded, cancellable device operations and preserve playback position when retrying. Fix companion startup in hidden desktop windows.
+- Explain playback failures with persistent details, retry/reconnect actions, and copyable diagnostics that exclude music, lyrics, filenames, and paths.
+
 ## [1.13.0](https://github.com/wedoso/Vibloom/compare/v1.12.0...v1.13.0) (2026-10-12)
 
 - Add Beta lock-screen and Bluetooth car lyrics on mobile through the system artist field; device support varies.

@@ -102,6 +102,7 @@ export type LibrarySession = {
   repeat: RepeatMode;
   volume: number;
   cacheEnabled: boolean;
+  systemLyricsEnabled?: boolean;
   companionId: CompanionId;
 };
 
@@ -159,6 +160,7 @@ export const EMPTY_SESSION: LibrarySession = {
   repeat: "off",
   volume: 0.9,
   cacheEnabled: true,
+  systemLyricsEnabled: true,
   companionId: "hong-xi",
 };
 
@@ -178,6 +180,7 @@ export function migrateLibrarySnapshot(snapshot: StoredLibrarySnapshot): Library
       companionId: snapshot.session.companionId === "hiyori" || snapshot.session.companionId === "hong-xi"
         ? snapshot.session.companionId
         : EMPTY_SESSION.companionId,
+      systemLyricsEnabled: snapshot.session.systemLyricsEnabled !== false,
       cacheEnabled: snapshot.version >= 2 ? (snapshot.session.cacheEnabled ?? true) : true,
     },
   };

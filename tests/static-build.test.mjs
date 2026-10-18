@@ -233,7 +233,9 @@ test("drives Hiyori from meaningful per-track audio features", async () => {
   assert.doesNotMatch(stage, /activeMotion\.duration \* 1\.8/u);
   assert.match(stage, /let canvasRevealed = false/u);
   assert.match(stage, /if \("fonts" in document\) await document\.fonts\.ready/u);
-  assert.match(stage, /await new Promise<void>\(\(resolve\) => requestAnimationFrame\(\(\) => resolve\(\)\)\)/u);
+  assert.match(stage, /await layoutOpportunity\(\)/u);
+  assert.match(stage, /frame = requestAnimationFrame\(settle\)/u);
+  assert.match(stage, /setTimeout\(settle, 100\)/u);
   assert.match(stage, /canvasRevealed = true;[\s\S]*?canvas\.style\.visibility = ""/u);
   assert.match(stage, /const baseCameraZoom = variantRef\.current === "welcome"[\s\S]*?\? 1[\s\S]*?: cameraModeRef\.current/u);
   assert.doesNotMatch(stage, /variantRef\.current === "welcome"[\s\S]{0,120}?Math\.max\(1\.42/u);
@@ -442,4 +444,16 @@ test("edits imported LRC without losing translations, blank cues, metadata or mi
   assert.throws(() => shiftLyricTiming(parsed.lyrics, -2), /before 00:00/u);
   assert.throws(() => shiftLyricTiming(parsed.lyrics, NaN), /valid offset/u);
   assert.deepEqual(shiftLyricTiming([{ text: "untimed", time: null }, { text: "timed", time: 2 }], 0.1), [{ text: "untimed", time: null }, { text: "timed", time: 2.1 }]);
+});
+
+test('ships a subpath-portable offline shell and manifest with required app and companion assets', async () => {
+  const html=await readFile(new URL('index.html',dist),'utf8');
+  const manifest=JSON.parse(await readFile(new URL('manifest.webmanifest',dist),'utf8'));
+  const worker=await readFile(new URL('sw.js',dist),'utf8');
+  assert.match(html,/href="\.\/manifest.webmanifest"/);assert.equal(manifest.start_url,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  const shell=JSON.parse(worker.match(/^const SHELL = (\[.*\]);$/m)[1]);
+  for(const required of ['index.html','manifest.webmanifest','live2d/live2dcubismcore.min.js','live2d/hong-xi/yuql216.model3.json','live2d/hiyori-pro/hiyori_pro_t11.model3.json'])assert.ok(shell.includes(required),required);
+  assert.ok(shell.some(file=>file.startsWith('assets/')&&file.endsWith('.css')));
+  assert.ok(shell.every(file=>!file.includes('.map')&&!file.includes('https:')));
+  await Promise.all(shell.map(file=>access(new URL(file,dist))));
 });

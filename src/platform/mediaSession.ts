@@ -8,8 +8,8 @@ export type MediaControls = {
   onError: () => void;
 };
 
-export function mediaMetadataDetails(title: string, album: string, artwork?: string): MediaMetadataInit {
-  return { title, artist: "Vibloom", album, ...(artwork ? { artwork: [{ src: artwork, sizes: "any" }] } : {}) };
+export function mediaMetadataDetails(title: string, album: string, artwork?: string | MediaImage): MediaMetadataInit {
+  return { title, artist: "Vibloom", album, ...(artwork ? { artwork: [typeof artwork === "string" ? { src: artwork, sizes: "any" } : artwork] } : {}) };
 }
 
 // Route headset and OS commands to the same transport used by the player UI.
