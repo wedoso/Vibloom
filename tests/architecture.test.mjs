@@ -124,7 +124,7 @@ test("schedules audible tracks against one clock and preserves the pause positio
     start(when, offset) { starts.push({ when, offset, duration: this.buffer.duration }); }
     stop() { stopped.push(this.buffer.duration); }
   }
-  class FakeContext {
+  class FakeContext extends EventTarget {
     currentTime = 10;
     state = "running";
     destination = new FakeNode();

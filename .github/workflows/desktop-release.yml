@@ -48,6 +48,7 @@ jobs:
           xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-library-collections.mjs
           xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-media-session.mjs
           xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-media-publishing.mjs
+          xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-wireless-output.mjs
           xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-lyrics-export.mjs
           xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-offline-help.mjs
           xvfb-run --auto-servernum npx electron --no-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader scripts/smoke-companions.mjs

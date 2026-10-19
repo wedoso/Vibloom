@@ -78,8 +78,7 @@
   .library-lyrics { --lyrics-accent: rgb(var(--hx-a-rgb)); text-shadow: 0 1px 16px rgb(237 243 250 / .84); }
   .library-lyrics.lyrics-source-b { --lyrics-accent: rgb(var(--hx-b-rgb)); }
   .library-lyrics-empty { color: var(--library-muted); }
-  .library-lyrics-empty button,
-  .library-lyrics-label button { border-color: rgb(72 107 153 / .26); background: var(--library-paper); }
+  .library-lyrics-empty > button { border-color: rgb(72 107 153 / .26); background: var(--library-paper); }
   .library-lyrics-list p,
   .is-player-shell .console-lower .library-lyrics .library-lyrics-list p { color: rgb(36 51 76 / .48); }
   .library-lyrics-list p.is-past,

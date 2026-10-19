@@ -7,11 +7,12 @@ export type MediaPositionSnapshot = {
 
 /** System UIs extrapolate from the last position. UI painting need not produce
  * a native update on every frame; transport changes still publish immediately. */
-export function createMediaPositionPublisher(session: MediaSession, getTime: () => number, now = () => performance.now()) {
+export function createMediaPositionPublisher(session: MediaSession, getTime: () => number, now = () => performance.now(), isAdvancing?: () => boolean) {
   let last: (MediaPositionSnapshot & { time: number; at: number }) | null = null;
   return {
     update(state: MediaPositionSnapshot, force = false) {
       const at = now(), time = getTime();
+      state = { ...state, isPlaying: state.isPlaying && (isAdvancing?.() ?? true) };
       const playbackState = state.isPlaying ? "playing" : "paused";
       if (session.playbackState !== playbackState) session.playbackState = playbackState;
       const changed = !last || state.trackId !== last.trackId || state.title !== last.title || state.album !== last.album

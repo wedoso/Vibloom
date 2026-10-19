@@ -26,9 +26,10 @@ export class PlaybackDiagnostics {
     this.snapshot = { phase, issue, stage, events: [...this.snapshot.events, event].slice(-24) };
     for (const notify of this.listeners) notify();
   }
-  report(version: string, context: { state: string; currentTime: number } | null, online: boolean) {
+  report(version: string, context: { state: string; currentTime: number; baseLatency?: number; outputLatency?: number } | null, online: boolean) {
     // Deliberate allowlist: no raw exception text, track IDs, filenames, paths,
     // lyrics, artwork, audio or browser identifiers enter the shared report.
-    return JSON.stringify({ version, online, audio: context ? { state: context.state, time: Math.round(context.currentTime * 100) / 100 } : null, ...this.snapshot }, null, 2);
+    const seconds = (value: number | undefined) => value !== undefined && Number.isFinite(value) && value >= 0 ? Math.round(value * 1000) / 1000 : undefined;
+    return JSON.stringify({ version, online, audio: context ? { state: context.state, time: Math.round(context.currentTime * 100) / 100, baseLatency: seconds(context.baseLatency), outputLatency: seconds(context.outputLatency) } : null, ...this.snapshot }, null, 2);
   }
 }

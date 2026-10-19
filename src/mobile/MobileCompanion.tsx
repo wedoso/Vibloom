@@ -55,7 +55,7 @@ export default function MobileCompanion({ library, focus, onVocals, visible = tr
   }, [cameraOpen, capsule]);
   const { sampleVocals } = library.vocals;
   const readVocalPose = useCallback(() => library.playing && library.engine.getContext()?.state === "running"
-    ? sampleVocals(library.engine.getTimelineTime(), library.session.volume) : SILENT_VOCAL_POSE,
+    ? sampleVocals(library.engine.getPlaybackTime(), library.session.volume) : SILENT_VOCAL_POSE,
   [library.engine, library.playing, library.session.volume, sampleVocals]);
   const visual = useRef({ ...EMPTY_AUDIO_VISUAL }), vocals = useRef(SILENT_VOCAL_POSE);
   useEffect(() => {
@@ -65,7 +65,7 @@ export default function MobileCompanion({ library, focus, onVocals, visible = tr
     const tick = () => {
       const analyser = library.engine.getAnalyser(library.engine.audibleSource);
       visual.current = library.playing && analyser
-        ? sampleAnalyser(analyser, frequency, samples, visual.current, library.engine.getTimelineTime(), library.source)
+        ? sampleAnalyser(analyser, frequency, samples, visual.current, library.engine.getPlaybackTime(), library.source)
         : { ...visual.current, isPlaying: false, transient: 0 };
       visual.current.isComparing = Object.keys(library.comparisons.slots).length > 0;
       frame = requestAnimationFrame(tick);

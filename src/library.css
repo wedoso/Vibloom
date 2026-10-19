@@ -818,6 +818,7 @@
 
 .library-status {
   position: fixed;
+  pointer-events: none;
   z-index: 70;
   left: 50%;
   bottom: 108px;
@@ -1382,7 +1383,8 @@
 .quiet-compare-entry > small { display: none; }
 .quiet-compare-entry button { width: 100%; min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--library-line); border-radius: 999px; color: var(--library-ink); background: rgba(255,255,255,.56); font-size: 11px; white-space: nowrap; cursor: pointer; }
 
-.is-player-shell .console-footer { grid-column: 1 / 4; grid-row: 3; min-width: 0; display: grid; gap: 8px; }
+/* Reading controls sit above the overlapping companion canvas (layer 3). */
+.is-player-shell .console-footer { grid-column: 1 / 4; grid-row: 3; min-width: 0; position: relative; z-index: 4; display: grid; gap: 8px; }
 .is-player-shell .console-lower { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .is-player-shell .console-lower .library-lyrics { flex: 1; height: 42px; padding: 0; text-align: left; mask-image: none; }
 .is-player-shell .console-lower .library-lyrics p { display: none; }
@@ -2342,7 +2344,6 @@ button.track-index,
   mask-image: none;
 }
 
-.library-app.is-library-focus .lyrics-variant-focus .library-lyrics-label button { display: none; }
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list { padding: 130px 0; }
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list p { padding: 11px 0; font-size: clamp(15px, 1.55vw, 21px); }
 .library-app.is-library-focus .lyrics-variant-focus .library-lyrics-list p.is-current { font-size: clamp(21px, 2.35vw, 31px); }
@@ -2541,8 +2542,7 @@ button.track-index,
   gap: 8px;
 }
 
-.library-lyrics-empty button,
-.library-lyrics-label button {
+.library-lyrics-empty > button {
   padding: 4px 8px;
   border: 1px solid rgba(182, 92, 63, .28);
   border-radius: 999px;
@@ -2551,15 +2551,6 @@ button.track-index,
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;
-}
-
-.library-lyrics-label button {
-  width: 72px;
-  height: 24px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .library-lyrics-label {

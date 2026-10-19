@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
+import { loadTs } from './load-ts.mjs';
+const { needsMediaSessionAnchor } = await loadTs('../src/platform/mediaSessionAnchor.ts');
 
 const source = await readFile(new URL("../src/platform/mediaSession.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -96,4 +98,22 @@ test("silent media carrier remains resumable when paused and releases resources 
   assert.deepEqual(commands, ["play", "pause"], "listeners removed on teardown");
   assert.equal(audio.src, undefined);
   await assert.rejects(fetch(blobUrl));
+});
+
+test('only non-WebKit engines retain the silent session carrier, including desktop Electron', () => {
+  for (const agent of [
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+    'Mozilla/5.0 (iPad; CPU OS 18_7 like Mac OS X) AppleWebKit/605.1.15 CriOS/140.0 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 FxiOS/140.0 Mobile/15E148 Safari/605.1.15',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_6) AppleWebKit/605.1.15 Version/18.7 Safari/605.1.15',
+  ]) {
+    assert.equal(needsMediaSessionAnchor(agent, true), false, agent);
+    assert.equal(needsMediaSessionAnchor(agent, false), true, 'legacy Safari keeps controls without AudioSession support');
+  }
+  for (const agent of [
+    'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0 Safari/537.36',
+    'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0 Safari/537.36 Electron/43.3.0',
+    'Mozilla/5.0 (Android) AppleWebKit/537.36 Chrome/140.0 Safari/537.36',
+    'Mozilla/5.0 Gecko/20100101 Firefox/140.0',
+  ]) assert.equal(needsMediaSessionAnchor(agent, true), true, agent);
 });

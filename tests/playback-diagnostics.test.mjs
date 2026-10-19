@@ -15,6 +15,10 @@ test('playback diagnostics distinguish source/read/decode/device errors and reta
   assert.equal(diagnostics.read().events.length,24);
   const report=diagnostics.report('1.0',{state:'interrupted',currentTime:12.345},false);
   assert.equal(JSON.parse(report).audio.time,12.35);assert.doesNotMatch(report,/secret|private|mp3/);
+  const wireless = JSON.parse(diagnostics.report('1.0',{state:'running',currentTime:20,baseLatency:.012345,outputLatency:2.5},true));
+  assert.equal(wireless.audio.baseLatency,.012);assert.equal(wireless.audio.outputLatency,2.5);
+  const invalid = JSON.parse(diagnostics.report('1.0',{state:'running',currentTime:20,baseLatency:-1,outputLatency:Infinity},true));
+  assert.equal(invalid.audio.baseLatency,undefined);assert.equal(invalid.audio.outputLatency,undefined);
   diagnostics.record('error','resume_failed');diagnostics.record('playing');assert.equal(diagnostics.read().issue,null);
   unsubscribe();const previous=updates;diagnostics.record('paused');assert.equal(updates,previous);
 });

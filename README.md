@@ -43,7 +43,7 @@ On iPhone/iPad, choose **Import your music → Choose files**, then browse **iCl
 
 ### Lyrics and car display
 
-On mobile, tap **Edit lyrics** in Player, or open **Listening options → Lyrics** to edit timing and use **Export TXT / Export LRC**. The editor's **More lyric actions** menu also exports either format. On desktop, use Player's lyric controls or the Library song's **Lyrics…** menu. TXT works without timing; LRC requires timed lyrics.
+On mobile, tap **Edit lyrics** in Player, or open **Listening options → Lyrics** to edit timing and use **Export TXT / Export LRC**. The editor's **More lyric actions** menu also exports either format. On desktop, Player keeps **Edit** beside a **⋯** menu for exports, replacement and removal; Focus mode keeps only **⋯**, with editing as its first item. Songs without lyrics show **Import lyrics**. The Library song's **Lyrics…** menu also opens the editor. TXT works without timing; LRC requires timed lyrics.
 
 **Listening options → Lock-screen & car lyrics** enables or disables system lyric publishing on mobile and remembers your choice. In-app lyrics continue to work with this switch off. Car lyrics use the system artist field because browsers cannot directly control a Bluetooth receiver's lyric display.
 
@@ -54,6 +54,8 @@ Open the production web player online and wait for **Storage → Offline access 
 Web updates appear in Storage and apply only when you choose **Update & reload** with playback paused. Offline setup requires HTTPS or localhost; it is disabled in the development server and Electron, whose app resources are already bundled.
 
 If playback fails, open the visible error or **Storage → Playback status & help**. Retry restores the audio connection; missing or unreadable files can be reconnected by importing their originals. **Copy diagnostics** includes app version, audio state, and recent playback stages, excluding song names, paths, lyrics, and audio. Nothing is uploaded automatically.
+
+Wireless output progress uses the browser's reported output timing when available. Safari's mobile playback session avoids a separate silent audio element competing for system controls. AirPlay/HomePod buffering and audibility still depend on iOS, the receiver, and the network; the browser cannot confirm that a remote speaker is emitting sound. Diagnostics include reported output latency to help investigate mismatches.
 
 Desktop shortcuts: `Space` plays/pauses, `←` / `→` seeks five seconds, `1`–`9` switches tracks, and `F` / `Esc` enters/leaves Focus mode.
 

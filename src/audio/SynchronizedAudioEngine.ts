@@ -1,6 +1,7 @@
 import { createMasteringChain } from "./mastering/chain";
 import type { MasteringSettings } from "./mastering/settings";
-import { waitForAudioOperation } from "./contextOperation";
+import { resumeAudioContext } from "./contextOperation";
+import { audioOutputTime } from "./outputClock";
 export type AudioSourceIndex = number;
 export const MAX_AUDIO_SOURCES = 9;
 export const DECODED_BUFFER_BUDGET = 256 * 1024 * 1024;
@@ -45,7 +46,7 @@ export class SynchronizedAudioEngine {
     const isRunning = () => graph.context.state === "running";
     try {
       if (resume && !isRunning()) {
-        await waitForAudioOperation(() => graph.context.resume(), [graph.lifetime.signal, ...(signal ? [signal] : [])]);
+        await resumeAudioContext(graph.context, [graph.lifetime.signal, ...(signal ? [signal] : [])]);
         if (!isRunning()) throw new Error("Playback was interrupted. Press Play to retry.");
       }
     } catch (error) {
@@ -83,6 +84,8 @@ export class SynchronizedAudioEngine {
   getContext() { return this.graph?.context ?? null; }
   getMaxDuration() { return Math.max(...this.durations); }
   getTimelineTime() { return this.playing && this.graph ? this.playbackOffset + Math.max(0, this.graph.context.currentTime - this.playbackStartedAt) : this.playbackOffset; }
+  getPlaybackTime() { return this.playing && this.graph ? this.playbackOffset + Math.max(0, audioOutputTime(this.graph.context) - this.playbackStartedAt) : this.playbackOffset; }
+  isOutputAdvancing() { return this.playing && this.graph?.context.state === "running" && audioOutputTime(this.graph.context) >= this.playbackStartedAt; }
   setOffset(offset: number) { this.playbackOffset = offset; }
   startSource(index: AudioSourceIndex, when: number, offset: number) {
     valid(index); const graph = this.graph, buffer = this.buffers[index];
@@ -127,7 +130,7 @@ export class SynchronizedAudioEngine {
     if (offset < this.buffers[this.active]!.duration - .005) this.startSource(this.active, when, offset);
     this.playbackOffset = offset; this.playbackStartedAt = when; this.playing = true; return true;
   }
-  pause() { this.playRequest++; this.pendingPlay?.abort(); const time = this.getTimelineTime(); this.playing = false; this.playbackOffset = time; this.stopAllSources(); return time; }
+  pause() { this.playRequest++; this.pendingPlay?.abort(); const time = this.getPlaybackTime(); this.playing = false; this.playbackOffset = time; this.stopAllSources(); return time; }
   stop() { return this.pause(); }
   stopSource(index: AudioSourceIndex) {
     valid(index); const source = this.sources[index]; if (!source) return;

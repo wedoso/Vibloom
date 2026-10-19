@@ -1,0 +1,28 @@
+.library-lyrics .lyrics-toolbar,
+.library-lyrics-empty .lyrics-toolbar { display:flex; width:max-content; max-width:100%; height:30px; justify-content:flex-start; gap:12px; text-transform:none; letter-spacing:0; }
+.lyrics-toolbar-title { display:inline-flex; align-items:center; gap:6px; min-width:0; font-size:11px; font-weight:650; }
+.lyrics-toolbar-title small { color:var(--library-muted); font-size:10px; font-weight:450; }
+.lyrics-toolbar-actions { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.lyrics-toolbar .lyrics-toolbar-actions button { width:auto; min-width:28px; height:26px; padding:0 8px; border:0; border-radius:6px; color:var(--library-muted); background:transparent; font-size:11px; font-weight:550; cursor:pointer; }
+.lyrics-toolbar .lyrics-toolbar-actions .lyrics-more { width:28px; padding:0; }
+.lyrics-toolbar .lyrics-toolbar-actions button:hover,
+.lyrics-toolbar .lyrics-toolbar-actions button[aria-expanded="true"] { color:var(--library-ink); background:color-mix(in srgb,var(--library-accent) 9%,transparent); }
+.lyrics-toolbar button:focus-visible,
+.lyrics-action-menu button:focus-visible { outline:2px solid var(--library-accent); outline-offset:2px; }
+.library-lyrics:has(.lyrics-toolbar) .library-lyrics-viewport { height:calc(100% - 30px); }
+.is-player-shell .console-lower .library-lyrics-empty.lyrics-plain { flex:1; min-width:0; height:auto; min-height:60px; display:flex; flex-direction:column; align-items:stretch; justify-content:flex-start; gap:4px; }
+.lyrics-plain-summary { padding:8px 0; color:var(--library-muted); font-size:12px; }
+.lyrics-action-menu { position:fixed; inset:auto; margin:0; padding:6px; box-sizing:border-box; overflow:auto; border:1px solid var(--library-line); border-radius:12px; color:var(--library-ink); background:var(--library-paper,#faf7f0); box-shadow:0 10px 36px #30241924; font:12px var(--font-ui,sans-serif); text-transform:none; letter-spacing:0; }
+.lyrics-action-menu:popover-open { display:flex; flex-direction:column; }
+.lyrics-action-menu button { display:flex; align-items:center; gap:9px; width:100%; min-height:34px; padding:8px 10px; border:0; border-radius:7px; color:inherit; background:transparent; font:inherit; text-align:left; cursor:pointer; }
+.lyrics-action-menu button:hover:not(:disabled),
+.lyrics-action-menu button:focus-visible { background:color-mix(in srgb,var(--library-accent) 9%,transparent); }
+.lyrics-action-menu button:disabled { opacity:.4; cursor:default; }
+.lyrics-action-menu small { display:block; padding:0 10px 7px 34px; color:var(--library-muted); font-size:10px; line-height:1.4; }
+.lyrics-action-menu hr { width:calc(100% - 12px); margin:5px 6px; border:0; border-top:1px solid var(--library-line); }
+.lyrics-action-menu .is-destructive { color:#a94b3e; }
+.library-app.is-library-focus .lyrics-variant-focus .lyrics-toolbar { pointer-events:auto; }
+.library-app.is-library-focus .lyrics-variant-focus .lyrics-toolbar-actions .lyrics-more { display:inline-flex; opacity:.55; }
+.library-app.is-library-focus .lyrics-variant-focus .lyrics-more:hover,
+.library-app.is-library-focus .lyrics-variant-focus .lyrics-more:focus-visible,
+.library-app.is-library-focus .lyrics-variant-focus .lyrics-more[aria-expanded="true"] { opacity:1; }
