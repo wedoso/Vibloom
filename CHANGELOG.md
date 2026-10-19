@@ -2,6 +2,12 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.14.1](https://github.com/wedoso/Vibloom/compare/v1.14.0...v1.14.1) (2026-10-18)
+
+- Avoid competing system audio sessions on supported iOS browsers, allow more time for wireless output handoff, and align playback and lock-screen progress with the estimated audio output clock. HomePod behavior still requires device verification.
+- Simplify desktop lyric actions to Edit and a single more menu for replacement, removal, and LRC/TXT export. Keep actions beside the Lyrics heading and accessible in focus mode.
+- Keep lyric controls clickable when the companion or status overlays overlap the footer, with pointer-based regression checks at wide and narrow window sizes.
+
 ## [1.14.0](https://github.com/wedoso/Vibloom/compare/v1.13.0...v1.14.0) (2026-10-17)
 
 - Reopen the web player offline after Storage confirms readiness, including companions and cached music. Apply web updates explicitly while playback is paused.
