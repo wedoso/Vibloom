@@ -48,3 +48,26 @@ test('paused lyrics stay stable, paused seeks refresh, and removing/switching ly
   const next = bindMediaSessionLyrics(metadata, [{ time: 0, text: 'Next song lyric' }], () => 0, 20, false, events);
   assert.equal(metadata.artist, 'Next song lyric'); paused.refresh(); assert.equal(metadata.artist, 'Next song lyric'); next.dispose();
 });
+
+test('closely spaced lyric lines are all published without React or animation frames', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const writes = [], fast = Array.from({ length: 8 }, (_, index) => ({ time: 1 + index * .06, text: `Fast ${index}` }));
+  let artist = 'Vibloom';
+  const metadata = { get artist() { return artist; }, set artist(value) { artist = value; writes.push(value); } };
+  const binding = bindMediaSessionLyrics(metadata, fast, () => Date.now() / 1000, 10, true, new EventTarget());
+  t.after(() => binding.dispose());
+  for (let ms = 0; ms < 1600; ms += 5) t.mock.timers.tick(5);
+  assert.deepEqual(writes, fast.map(line => line.text), 'short lines must not be skipped by the minimum timer delay');
+});
+
+test('a seek into rapid lyrics re-arms the next boundary instead of waiting for an old intro timer', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const writes = [], fast = Array.from({ length: 5 }, (_, index) => ({ time: 30 + index * .12, text: `After seek ${index}` }));
+  let offset = 0, artist = 'Vibloom';
+  const metadata = { get artist() { return artist; }, set artist(value) { artist = value; writes.push(value); } };
+  const binding = bindMediaSessionLyrics(metadata, fast, () => offset + Date.now() / 1000, 40, true, new EventTarget());
+  t.after(() => binding.dispose());
+  t.mock.timers.tick(100); offset = 29.9; binding.refresh();
+  for (let ms = 0; ms < 600; ms += 5) t.mock.timers.tick(5);
+  assert.deepEqual(writes, fast.map(line => line.text), 'a paused visual renderer must not leave lyrics on the pre-seek schedule');
+});

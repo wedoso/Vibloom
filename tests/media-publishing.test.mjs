@@ -104,9 +104,19 @@ function hookFixture(t, userAgent = 'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0
   const session = { metadata: null, playbackState: 'none', setActionHandler() {}, setPositionState: value => positionWrites.push(value) };
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaSession: session, userAgent, audioSession: { type: 'playback' } } });
   globalThis.document = page; globalThis.window = events;
-  globalThis.MediaMetadata = class { constructor(details) { Object.assign(this, details); this.artwork ??= []; metadataWrites.push(this); } };
+  // Model WebKit's observer notification separately from the JS metadata value.
+  // With only AudioContext, native Now Playing may wait for its periodic poll.
+  const nativeArtists = [];
+  globalThis.MediaMetadata = class {
+    constructor(details) { Object.assign(this, details); this.artwork ??= []; metadataWrites.push(this); }
+    get artist() { return this.artistValue; }
+    set artist(value) {
+      this.artistValue = value;
+      if (session.metadata === this && audios.some(audio => !audio.removed)) nativeArtists.push(value);
+    }
+  };
   const audios = [];
-  globalThis.Audio = class extends EventTarget { constructor() { super(); audios.push(this); } paused = true; async play() { if (rejectCarrier) throw new DOMException('Media output denied', 'NotAllowedError'); this.paused = false; } pause() { this.paused = true; } removeAttribute() {} load() {} };
+  globalThis.Audio = class extends EventTarget { constructor(...args) { super(); this.args = args; audios.push(this); } paused = true; playCalls = 0; loadCalls = 0; removed = false; async play() { this.playCalls++; if (rejectCarrier) throw new DOMException('Media output denied', 'NotAllowedError'); this.paused = false; } pause() { this.paused = true; } removeAttribute() {} load() { this.loadCalls++; } remove() { this.removed = true; } };
   const f = globalThis.__mediaPublishingFixture = {
     refs: [], effects: [], pending: [], cursor: 0,
     prepare: (src, signal) => new Promise((resolve, reject) => requests.push({ src, signal, resolve, reject })),
@@ -114,20 +124,26 @@ function hookFixture(t, userAgent = 'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0
   let time = 0, advancing = true, errors = 0;
   const controls = { getTime: () => time, isAdvancing: () => advancing, play() {}, pause() {}, next() {}, previous() {}, seek() {}, onError() { errors++; } };
   t.after(() => { for (const effect of f.effects) effect?.cleanup?.(); for (const [name, descriptor] of originals) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name]; } });
-  return { session, requests, metadataWrites, positionWrites, events, audios, get errors() { return errors; }, setAdvancing(value) { advancing = value; }, setTime(value) { time = value; }, render(state, position = 0) { time = position; f.cursor = 0; useMediaSession({ enabled: true, position, ...snapshot, ...state }, controls); for (const effect of f.pending.splice(0)) effect(); } };
+  return { session, requests, metadataWrites, positionWrites, events, audios, nativeArtists, get errors() { return errors; }, setAdvancing(value) { advancing = value; }, setTime(value) { time = value; }, render(state, position = 0) { time = position; f.cursor = 0; useMediaSession({ enabled: true, position, ...snapshot, ...state }, controls); for (const effect of f.pending.splice(0)) effect(); } };
 }
 
-test('WebKit standalone playback has no silent media element to own its output route or ten-second timeline', async t => {
+test('WebKit uses an empty metadata observer that never starts a competing audio route or ten-second timeline', async t => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const f = hookFixture(t, 'Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', true);
   f.render({ duration: 180 }, 35);
   await flush(); assert.equal(f.errors, 0, 'a rejected auxiliary HTML play cannot falsely report a system control failure');
-  assert.equal(f.audios.length, 0);
+  assert.equal(f.audios.length, 1);
+  const observer = f.audios[0];
+  assert.deepEqual(observer.args, []); assert.equal(observer.preload, 'none');
+  assert.equal(observer.playCalls, 0); assert.equal(observer.loadCalls, 0); assert.equal(observer.paused, true);
   assert.equal(f.positionWrites.at(-1).duration, 180); assert.equal(f.positionWrites.at(-1).position, 35);
   f.setTime(45); t.mock.timers.tick(10000);
   assert.equal(f.positionWrites.at(-1).position, 45, 'system progress follows music beyond the former carrier loop');
   f.render({ isPlaying: false, duration: 180 }, 45);
-  assert.equal(f.session.playbackState, 'paused'); assert.equal(f.audios.length, 0);
+  assert.equal(f.session.playbackState, 'paused'); assert.equal(f.audios.length, 1);
+  assert.equal(observer.playCalls, 0);
+  f.render({ enabled: false, isPlaying: false }, 45);
+  assert.equal(observer.removed, true);
 });
 
 test('a rejected silent carrier reproduces the system-control failure while the music position is already advancing', async t => {
@@ -135,6 +151,20 @@ test('a rejected silent carrier reproduces the system-control failure while the 
   f.render({}, 35); await flush();
   assert.equal(f.audios.length, 1); assert.equal(f.errors, 1);
   assert.equal(f.session.playbackState, 'playing'); assert.equal(f.positionWrites.at(-1).position, 35);
+});
+
+test('WebKit native metadata notifications continue without playing a silent carrier or replacing metadata', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const f = hookFixture(t, 'Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', true);
+  const lyrics = [{ time: 0, text: 'Beginning' }, { time: 1, text: 'Line one' }, { time: 1.2, text: 'Line two' }];
+  f.render({ lyrics });
+  const metadata = f.session.metadata;
+  f.setTime(1); t.mock.timers.tick(100);
+  f.setTime(1.2); t.mock.timers.tick(100);
+  assert.deepEqual(f.nativeArtists, ['Line one', 'Line two'], 'the modeled native observer is notified before a five-second polling fallback');
+  assert.equal(f.session.metadata, metadata);
+  assert.equal(f.audios[0].playCalls, 0); assert.equal(f.audios[0].loadCalls, 0);
+  assert.deepEqual(f.audios[0].args, []);
 });
 
 test('system playback holds during wireless output startup and resumes from the heard clock without a React render', t => {
@@ -208,4 +238,23 @@ test('turning system lyrics off immediately clears only artist, stops lyric time
   f.setTime(3);t.mock.timers.tick(3000);assert.equal(metadata.artist,'Vibloom');
   f.render({artwork:'cover',lyrics,systemLyricsEnabled:true},3);
   assert.equal(f.session.metadata,metadata);assert.equal(metadata.artist,'Second');assert.equal(metadata.artwork,artwork);
+});
+
+test('rapid background lyrics are independent of 1 Hz progress writes and preserve metadata and cover', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 0 });
+  t.mock.method(performance, 'now', () => Date.now());
+  const f = hookFixture(t), lyrics = Array.from({ length: 8 }, (_, index) => ({ time: 1 + index * .06, text: `Rapid ${index}` }));
+  f.render({ artwork: 'cover', lyrics });
+  f.requests[0].resolve(jpeg); await flush();
+  const metadata = f.session.metadata, cover = metadata.artwork, writes = [];
+  let artist = metadata.artist;
+  Object.defineProperty(metadata, 'artist', { get: () => artist, set(value) { artist = value; writes.push(value); } });
+  const before = f.positionWrites.length;
+  // No renders after setup: the same path is used while the page is hidden.
+  for (let ms = 0; ms < 1600; ms += 5) { f.setTime((ms + 5) / 1000); t.mock.timers.tick(5); }
+  assert.deepEqual(writes, lyrics.map(line => line.text));
+  assert.equal(f.positionWrites.length - before, 1, 'fast lyric lines must not force a progress write per line');
+  assert.equal(f.session.metadata, metadata);
+  assert.equal(metadata.artwork, cover);
+  assert.equal(f.session.playbackState, 'playing');
 });

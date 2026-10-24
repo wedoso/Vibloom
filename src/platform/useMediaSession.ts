@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createMediaSessionAnchor, needsMediaSessionAnchor } from "./mediaSessionAnchor";
+import { createMediaSessionAnchor, createMediaMetadataObserver, needsMediaSessionAnchor } from "./mediaSessionAnchor";
 import { bindMediaSession, type MediaControls, mediaMetadataDetails } from "./mediaSession";
 import { bindMediaSessionLyrics, mediaLyricArtist, type MediaLyric } from "./mediaSessionLyrics";
 import { createMediaPositionPublisher } from "./mediaPositionPublisher";
@@ -51,10 +51,11 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
       () => controlsRef.current.pause(),
       () => controlsRef.current.onError(),
     ) : null;
+    const metadataObserver = anchor ? null : createMediaMetadataObserver();
     anchorRef.current = anchor;
     return () => {
       window.clearInterval(timer); document.removeEventListener("visibilitychange", wake); window.removeEventListener("pageshow", wake);
-      positionUpdates.current = null; anchor?.dispose(); anchorRef.current = null; unbind();
+      positionUpdates.current = null; anchor?.dispose(); metadataObserver?.dispose(); anchorRef.current = null; unbind();
     };
   }, [state.enabled]);
 
@@ -93,7 +94,7 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
     const metadata = navigator.mediaSession?.metadata;
     if (!state.enabled || !metadata) return;
     const updates = bindMediaSessionLyrics(metadata, state.systemLyricsEnabled === false ? [] : state.lyrics ?? [], () => controlsRef.current.getTime(), state.duration, state.systemLyricsEnabled !== false && state.isPlaying, document,
-      () => positionUpdates.current?.update(stateRef.current, true));
+      () => positionUpdates.current?.update(stateRef.current));
     lyricUpdates.current = updates;
     const wake = () => updates.refresh();
     window.addEventListener("pageshow", wake);

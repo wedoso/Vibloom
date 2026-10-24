@@ -1,5 +1,7 @@
 export type MediaLyric = { time: number; text: string };
 const DEFAULT_ARTIST = "Vibloom";
+const MAX_LYRIC_CHECK_MS = 100;
+const MIN_LYRIC_CHECK_MS = 10;
 
 function lyricIndex(lines: readonly MediaLyric[], time: number) {
   let low = 0, high = lines.length;
@@ -23,24 +25,25 @@ export function bindMediaSessionLyrics(metadata: Pick<MediaMetadata, "artist">, 
   let timer: ReturnType<typeof setTimeout> | undefined, disposed = false;
   const refresh = () => {
     if (disposed) return;
+    clearTimeout(timer);
     const time = getTime();
     const artist = mediaLyricArtist(lines, time, duration);
     if (metadata.artist !== artist) { metadata.artist = artist; onChange(); }
-  };
-  const tick = () => {
-    if (disposed) return;
-    refresh();
     if (!playing || !lines.length) return;
-    const time = getTime(), next = lines[lyricIndex(lines, time) + 1]?.time ?? duration;
+    const next = lines[lyricIndex(lines, time) + 1]?.time ?? duration;
     // Timers can be delayed in the background. Re-read the real audio clock
-    // instead of advancing a lyric counter; bound foreground checks to 1 Hz
-    // except near a known boundary.
-    const delay = Number.isFinite(time) && next > time ? Math.min(1000, Math.max(100, (next - time - .03) * 1000)) : 1000;
-    timer = setTimeout(tick, delay);
+    // instead of replaying stale lines. Schedule short lines at their boundary,
+    // and re-arm after every seek/refresh rather than keeping the old deadline.
+    // Clock checks are independent of the 1 Hz native progress publisher;
+    // unchanged lyric text still causes no metadata writes.
+    const delay = Number.isFinite(time) && next > time
+      ? Math.min(MAX_LYRIC_CHECK_MS, Math.max(MIN_LYRIC_CHECK_MS, (next - time - .03) * 1000))
+      : MAX_LYRIC_CHECK_MS;
+    timer = setTimeout(refresh, delay);
   };
-  const wake = () => { clearTimeout(timer); tick(); };
+  const wake = () => refresh();
   events.addEventListener("visibilitychange", wake);
-  tick();
+  refresh();
   return {
     refresh,
     dispose() { disposed = true; clearTimeout(timer); events.removeEventListener("visibilitychange", wake); },

@@ -12,6 +12,16 @@ export function needsMediaSessionAnchor(userAgent: string, hasPlaybackAudioSessi
   return /Chrome\/|Chromium\/|Electron\/|Edg\/|OPR\//u.test(userAgent);
 }
 
+/** WebKit's MediaElementSession observes metadata/position changes and wakes
+ * Now Playing; AudioContext alone can wait for the native polling interval.
+ * Keep only that observer: no src, load(), play(), loop or audio output.
+ * See WebKit Source/WebCore/html/MediaElementSession.cpp, metadataChanged(). */
+export function createMediaMetadataObserver() {
+  let audio: HTMLAudioElement | null = new Audio();
+  audio.preload = "none";
+  return { dispose() { audio?.remove(); audio = null; } };
+}
+
 export function createMediaSessionAnchor(onPlay: () => void, onPause: () => void, onError: () => void) {
   const sampleRate = 8000;
   const samples = sampleRate * 10;

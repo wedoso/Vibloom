@@ -162,6 +162,7 @@ An import summary reports accepted audio, matched lyrics, duplicates, ignored fi
 - Play next inserts after the active queue entry; Add to queue appends.
 - Reordering a queue does not mutate its source playlist.
 - Shuffle uses a permutation bag so a track is not repeated within one cycle.
+- Queue additions join the current shuffle cycle, removed songs leave it, and Play next takes priority. With repeat off, playback stops once every song in the cycle has been visited; the queue still lists the collection. Repeat all starts another cycle, including a one-song queue.
 - Previous follows actual playback history, including shuffled playback.
 - Repeat cycles through off, all, and one.
 - Natural track end advances the queue; a failed/missing item is skipped with a visible notice.
