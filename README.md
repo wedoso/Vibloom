@@ -47,6 +47,10 @@ On mobile, tap **Edit lyrics** in Player, or open **Listening options → Lyrics
 
 **Listening options → Lock-screen & car lyrics** enables or disables system lyric publishing on mobile and remembers your choice. In-app lyrics continue to work with this switch off. Car lyrics use the system artist field because browsers cannot directly control a Bluetooth receiver's lyric display.
 
+System lyric changes publish independently of the 1 Hz progress updates, including short lines and after seeking. On supported Safari versions, an empty, paused media element supplies metadata notifications without playing a second audio stream. Lock-screen and receiver delivery still need physical-device verification.
+
+On desktop, Shuffle plays each queued song once per cycle. Added songs join the current cycle and **Play next** takes priority. Queue keeps listing already-played songs after a cycle ends; enable **Repeat all** for continuous shuffled playback, including a one-song queue.
+
 ### Offline access and playback help
 
 Open the production web player online and wait for **Storage → Offline access → Ready to open offline**. You can then reopen the same URL offline, use the companions, and play songs kept on that device. First-time vocal preparation still needs a connection to download its model. Browser storage may be evicted, so retain your original music and lyrics.
@@ -74,7 +78,7 @@ npm run check           # Lint, tests, and production build
 
 `npm run build` creates the static site and its offline worker in `dist/`. Use `npm run preview` to test the production build locally. `npm run desktop:package` builds desktop installers in `release/`.
 
-Focused integration checks include `npm run desktop:smoke:playback`, `npm run desktop:smoke:lyrics-export`, `npm run desktop:smoke:media-publishing`, and `npm run desktop:smoke:offline`. The offline check disables the network and HTTP cache, tests both layouts under a deployment subpath, and exercises updates, diagnostics, and retry. These browser checks cannot replace physical iPhone/Bluetooth receiver testing.
+Focused integration checks include `npm run desktop:smoke:playback`, `npm run desktop:smoke:shuffle`, `npm run desktop:smoke:wireless`, `npm run desktop:smoke:lyrics-export`, `npm run desktop:smoke:media-publishing`, and `npm run desktop:smoke:offline`. Shuffle checks cover queue edits, restored sessions and repeat modes. Wireless checks exercise rapid system-lyric updates and delayed output timing without a competing audio stream. The offline check disables the network and HTTP cache, tests both layouts under a deployment subpath, and exercises updates, diagnostics, and retry. These browser checks cannot replace physical iPhone/Bluetooth receiver testing.
 
 Source lives in `src/`, `desktop/`, and `build-tools/`; `build/` contains required signing entitlements. Keep reusable checks and fixtures in `scripts/` and `tests/`. Generated builds, installers, screenshots/reports (`outputs/`), downloaded model caches (`.cache/`), and local design context are excluded from Git. Do not commit dependencies or generated release assets.
 

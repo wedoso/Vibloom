@@ -93,6 +93,7 @@ import {
   isVocalAnalysisReference,
   clearVocalReference,
   createShuffleBag,
+  reconcileShuffleBag,
   EMPTY_SESSION,
   LibrarySession,
   LibraryTrack,
@@ -669,11 +670,14 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const { cancelAll: cancelTransforms, reset: resetComparisons } = comparisons;
 
   const patchSession = useCallback((patch: Partial<LibrarySession> | ((current: LibrarySession) => LibrarySession)) => {
-    setSession((current) => {
-      const next = typeof patch === "function" ? patch(current) : { ...current, ...patch };
-      sessionRef.current = next;
-      return next;
-    });
+    const current = sessionRef.current;
+    const next = typeof patch === "function" ? patch(current) : { ...current, ...patch };
+    if (next.shuffle && shuffleCycleStartedRef.current && (next.queue !== current.queue || next.currentTrackId !== current.currentTrackId)) {
+      shuffleBagRef.current = reconcileShuffleBag(shuffleBagRef.current, current.queue, next.queue, next.currentTrackId);
+    }
+    // Queue actions and automatic advance can run before React renders again.
+    sessionRef.current = next;
+    setSession(next);
   }, []);
 
   const changeWorkspace = useCallback((nextWorkspace: Workspace) => {
@@ -755,10 +759,6 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   useEffect(() => {
     tracksRef.current = tracks;
   }, [tracks]);
-
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
 
   const fallbackSession = platform.repository.saveSession ? null : session;
   useEffect(() => {
@@ -992,10 +992,13 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
       if (!shuffleBagRef.current.length) {
         if (shuffleCycleStartedRef.current && current.repeat !== "all") {
           if (playingRef.current) pausePlayback();
-          setMessage("Queue complete.");
+          setMessage("Shuffle cycle complete. Enable Repeat all to keep playing.");
           return;
         }
         shuffleBagRef.current = createShuffleBag(current.queue, current.currentTrackId);
+        if (!shuffleBagRef.current.length && current.repeat === "all" && current.queue.includes(current.currentTrackId)) {
+          shuffleBagRef.current = [current.currentTrackId];
+        }
         shuffleCycleStartedRef.current = true;
       }
       candidates = [...shuffleBagRef.current];
@@ -1429,10 +1432,10 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   const playAll = useCallback(async (shuffle = false) => {
     const ids = filteredTracks.filter((track) => track.availability === "available" || track.availability === "session").map((track) => track.id);
     if (!ids.length) return;
+    patchSession((current) => ({ ...current, queue: ids, shuffle, history: [], playbackAlbumId: activeAlbumId }));
     shuffleBagRef.current = shuffle ? createShuffleBag(ids, "") : [];
     shuffleCycleStartedRef.current = shuffle;
     const first = shuffle ? shuffleBagRef.current.shift() ?? ids[0] : ids[0];
-    patchSession((current) => ({ ...current, queue: ids, shuffle, history: [], playbackAlbumId: activeAlbumId }));
     await startTrack(first, true, 0);
   }, [filteredTracks, patchSession, startTrack, activeAlbumId]);
 
@@ -1491,12 +1494,20 @@ export default function LibraryApp({ platform = browserLibraryPlatform }: { plat
   }
 
   function addPlayNext(trackId: string) {
+    if (sessionRef.current.shuffle && !shuffleCycleStartedRef.current) {
+      shuffleBagRef.current = createShuffleBag(sessionRef.current.queue, sessionRef.current.currentTrackId);
+      shuffleCycleStartedRef.current = true;
+    }
     patchSession((current) => {
       const queue = current.queue.filter((id) => id !== trackId);
       const index = Math.max(0, queue.indexOf(current.currentTrackId));
       queue.splice(index + 1, 0, trackId);
       return { ...current, queue };
     });
+    if (sessionRef.current.shuffle && trackId !== sessionRef.current.currentTrackId) {
+      shuffleBagRef.current = [trackId, ...shuffleBagRef.current.filter(id => id !== trackId)];
+      shuffleCycleStartedRef.current = true;
+    }
     setMessage("Added as next track.");
     setMenuTrackId("");
   }

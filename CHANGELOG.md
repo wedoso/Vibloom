@@ -2,6 +2,13 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.14.2](https://github.com/wedoso/Vibloom/compare/v1.14.1...v1.14.2) (2026-10-24)
+
+- Keep the desktop shuffle cycle synchronized with queue additions, removals and manual selections. Honor Play next, preserve remaining songs after restoring a session, and continue a one-song queue with Repeat all.
+- Clarify that a completed shuffle cycle retains its visible queue and requires Repeat all for continuous playback.
+- Restore WebKit system metadata notifications with an empty, paused media element that never loads or plays audio. Keep lyric changes independent of regular progress updates; iPhone lock-screen, HomePod and car behavior still require device verification.
+- Schedule short lyric lines more precisely and immediately re-arm timing after seeks, while preserving song metadata, artwork and throttled progress updates.
+
 ## [1.14.1](https://github.com/wedoso/Vibloom/compare/v1.14.0...v1.14.1) (2026-10-18)
 
 - Avoid competing system audio sessions on supported iOS browsers, allow more time for wireless output handoff, and align playback and lock-screen progress with the estimated audio output clock. HomePod behavior still requires device verification.

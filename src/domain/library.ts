@@ -252,3 +252,12 @@ export function createShuffleBag(queue: string[], currentTrackId: string, random
   }
   return bag;
 }
+
+/** Keep this cycle's unplayed order while accepting queue edits. Already heard
+ * songs stay consumed; new songs join this cycle and removed songs cannot play. */
+export function reconcileShuffleBag(bag: string[], previousQueue: string[], queue: string[], currentTrackId: string, random = Math.random) {
+  const valid = new Set(queue), previous = new Set(previousQueue);
+  const remaining = bag.filter(id => valid.has(id) && id !== currentTrackId);
+  const added = queue.filter(id => !previous.has(id) && id !== currentTrackId);
+  return [...remaining, ...createShuffleBag(added, "", random)];
+}
