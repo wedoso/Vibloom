@@ -70,13 +70,19 @@ try {
   assert.equal(await run(`navigator.mediaSession.metadata.artist`),'Beginning');
   await run(`window.__holdOutput=false`);
   await wait(`Number(document.querySelector('[aria-label="Playback position"]').value)>1 && navigator.mediaSession.playbackState==='playing'`,'output advancing');
-  const drift = await run(`Math.abs(window.__positions.at(-1).position-Number(document.querySelector('[aria-label="Playback position"]').value))`);
-  assert.ok(drift<1.2,'system progress and UI use the same output clock');
+  // Reproduce the renderer stall that exposed the sampling race on CI.
+  await run(`(() => { const until=performance.now()+1500; while(performance.now()<until) { /* Simulated busy renderer. */ } })()`);
   assert.equal(await run(`window.__positions.at(-1).duration`),30);
   // GPU-less CI can block JS for longer than a short lyric lasts. Step the
   // simulated output clock, leaving native publication to the app's own timers.
   // Millisecond scheduling itself is covered by the fake-clock unit tests.
   await run(`window.__manualOutputTime=window.__sourceStart[0]+4`);
+  // Native progress and UI painting run on different schedules. Hold the same
+  // output timestamp until both have sampled it, rather than comparing a stale
+  // native snapshot with a later UI sample during software-renderer stalls.
+  await wait(`Math.abs(window.__positions.at(-1).position-4)<.01 && Math.abs(Number(document.querySelector('[aria-label="Playback position"]').value)-4)<.01`,'system and UI progress sample the same output time');
+  const drift = await run(`Math.abs(window.__positions.at(-1).position-Number(document.querySelector('[aria-label="Playback position"]').value))`);
+  assert.ok(drift<.01,'system progress and UI agree on the held output clock');
   await wait(`window.__musicContext.currentTime>window.__sourceStart[0]+5.8`,'audio rendered beyond rapid lyrics');
   await run(`window.__lyricWrites=[]`);
   for (const line of fastLyrics) {
