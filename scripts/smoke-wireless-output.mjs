@@ -38,11 +38,17 @@ try {
   await window.webContents.debugger.sendCommand('Page.enable');
   await window.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: `
     Object.defineProperty(navigator,'audioSession',{value:{type:'auto'},configurable:true});
-    window.__holdOutput=true; window.__manualOutputTime=null; window.__mediaActions={}; window.__positions=[]; window.__audioElements=0; window.__audioInstances=[]; window.__lyricWrites=[];
+    window.__holdOutput=true; window.__manualOutputTime=null; window.__futureTimestamp=false; window.__mediaActions={}; window.__positions=[]; window.__audioElements=0; window.__audioInstances=[]; window.__lyricWrites=[];
     const artist=Object.getOwnPropertyDescriptor(MediaMetadata.prototype,'artist');
     Object.defineProperty(MediaMetadata.prototype,'artist',{...artist,set(value){window.__lyricWrites.push(value);artist.set.call(this,value);}});
     window.Audio=new Proxy(window.Audio,{construct(target,args){window.__audioElements++;const audio=Reflect.construct(target,args);window.__audioInstances.push(audio);return audio;}});
-    AudioContext.prototype.getOutputTimestamp=function(){return {contextTime:window.__holdOutput?0:window.__manualOutputTime??Math.max(0,this.currentTime-2),performanceTime:performance.now()};};
+    const outputTime=context=>window.__holdOutput?0:window.__manualOutputTime??Math.max(0,context.currentTime-2);
+    AudioContext.prototype.getOutputTimestamp=function(){return {contextTime:outputTime(this),performanceTime:performance.now()+(window.__futureTimestamp?1000:0)};};
+    // The injected timestamp can be just newer than the caller's sampled now.
+    // Make the reported-latency fallback describe the same simulated route,
+    // rather than the CI machine's unrelated local output latency.
+    Object.defineProperty(AudioContext.prototype,'baseLatency',{configurable:true,get(){return 0;}});
+    Object.defineProperty(AudioContext.prototype,'outputLatency',{configurable:true,get(){return Math.max(0,this.currentTime-outputTime(this));}});
     const start=AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start=function(...args){window.__sourceStart=args;window.__musicContext=this.context;return start.apply(this,args);};
     const handler=MediaSession.prototype.setActionHandler,position=MediaSession.prototype.setPositionState;
@@ -85,14 +91,15 @@ try {
   assert.ok(drift<.01,'system progress and UI agree on the held output clock');
   await wait(`window.__musicContext.currentTime>window.__sourceStart[0]+5.8`,'audio rendered beyond rapid lyrics');
   await run(`window.__lyricWrites=[]`);
-  for (const line of fastLyrics) {
-    await run(`window.__manualOutputTime=window.__sourceStart[0]+${line.time}`);
+  for (const [index,line] of fastLyrics.entries()) {
+    // Explicitly exercise timestamp rejection on alternating boundaries.
+    await run(`window.__futureTimestamp=${index%2===1};window.__manualOutputTime=window.__sourceStart[0]+${line.time}`);
     await wait(`navigator.mediaSession.metadata.artist===${JSON.stringify(line.text)}`,`native lyric ${line.text}`);
   }
   const published = await run(`window.__lyricWrites.filter(value=>value.startsWith('Rapid '))`);
   assert.deepEqual(published.filter((value,index)=>index===0||value!==published[index-1]),fastLyrics.map(line=>line.text),'every output-clock lyric boundary reaches native metadata in order');
   console.log('PASS real mobile UI publishes every 80 ms output-clock lyric boundary to native MediaMetadata');
-  await run(`window.__manualOutputTime=null;window.__mediaActions.seekto({seekTime:20})`);
+  await run(`window.__futureTimestamp=false;window.__manualOutputTime=null;window.__mediaActions.seekto({seekTime:20})`);
   await wait(`Math.abs(Number(document.querySelector('[aria-label="Playback position"]').value)-20)<.1 && navigator.mediaSession.playbackState==='paused'`,'seek holds requested position during output delay');
   await wait(`Number(document.querySelector('[aria-label="Playback position"]').value)>20.2 && navigator.mediaSession.playbackState==='playing'`,'seek output resumed');
   await run(`window.__mediaActions.pause({})`);
