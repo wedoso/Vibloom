@@ -47,7 +47,7 @@ On mobile, tap **Edit lyrics** in Player, or open **Listening options → Lyrics
 
 **Listening options → Lock-screen & car lyrics** enables or disables system lyric publishing on mobile and remembers your choice. In-app lyrics continue to work with this switch off. Car lyrics use the system artist field because browsers cannot directly control a Bluetooth receiver's lyric display.
 
-System lyric changes publish independently of the 1 Hz progress updates, including short lines and after seeking. On supported Safari versions, an empty, paused media element supplies metadata notifications without playing a second audio stream. Lock-screen and receiver delivery still need physical-device verification.
+Timed system lyrics use a 100 ms publishing heartbeat and push the current playback position immediately when a line changes, matching the original mobile publishing cadence. Turning system lyrics off returns normal progress updates to 1 Hz. Title and cover stay on the same metadata object while lyrics change. Lock-screen and receiver delivery, including progress-bar redraws, still need physical-device verification; see the [publishing history](docs/mobile-ui.md#system-lyric-publishing-history).
 
 On desktop, Shuffle plays each queued song once per cycle. Added songs join the current cycle and **Play next** takes priority. Queue keeps listing already-played songs after a cycle ends; enable **Repeat all** for continuous shuffled playback, including a one-song queue.
 

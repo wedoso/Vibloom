@@ -40,17 +40,22 @@ try {
     publisher.update(state);
     await new Promise(resolve => { const timer = setInterval(() => { publisher.update(state); if(getTime()>1.15) {clearInterval(timer);resolve();} },100); });
     const regularWrites = positions.length;
-    const lyrics = bindMediaSessionLyrics(metadata,[{time:0,text:'Current lyric'}],getTime,120,false,document,()=>publisher.update(state,true));
+    const lyricState = {...state,systemLyricsActive:true}, heartbeatStart = performance.now(), beforeHeartbeat = positions.length;
+    publisher.update(lyricState);
+    await new Promise(resolve => { const timer = setInterval(() => { publisher.update(lyricState); if(performance.now()-heartbeatStart>1150) {clearInterval(timer);resolve();} },100); });
+    const heartbeatWrites = positions.length-beforeHeartbeat, beforeLyric = positions.length;
+    const lyrics = bindMediaSessionLyrics(metadata,[{time:0,text:'Current lyric'}],getTime,120,false,document,()=>publisher.update(lyricState,true));
     const changedWrites = positions.length; lyrics.refresh(); lyrics.refresh(); lyrics.dispose();
-    return {width:image.naturalWidth,height:image.naturalHeight,mime:artwork.type,sizes:artwork.sizes,jpeg:artwork.src.startsWith('data:image/jpeg;'),bytes:artwork.src.length,regularWrites,changedWrites,totalWrites:positions.length,stable:navigator.mediaSession.metadata===metadata,artist:metadata.artist,cover:navigator.mediaSession.metadata.artwork[0].src===artwork.src};
+    return {width:image.naturalWidth,height:image.naturalHeight,mime:artwork.type,sizes:artwork.sizes,jpeg:artwork.src.startsWith('data:image/jpeg;'),bytes:artwork.src.length,regularWrites,heartbeatWrites,beforeLyric,changedWrites,totalWrites:positions.length,stable:navigator.mediaSession.metadata===metadata,artist:metadata.artist,cover:navigator.mediaSession.metadata.artwork[0].src===artwork.src};
   })()`, true);
   assert.equal(result.width, 512); assert.equal(result.height, 512);
   assert.equal(result.mime, 'image/jpeg'); assert.equal(result.sizes, '512x512'); assert.equal(result.jpeg, true);
   assert.ok(result.bytes < 150000, 'system cover stays small');
   assert.equal(result.regularWrites, 2, 'native position receives 1 Hz updates');
-  assert.equal(result.changedWrites, 3); assert.equal(result.totalWrites, 3, 'unchanged lyrics do not republish');
+  assert.ok(result.heartbeatWrites>=6 && result.heartbeatWrites<=14,'system lyrics restore frequent native position publication');
+  assert.equal(result.changedWrites, result.beforeLyric+1); assert.equal(result.totalWrites, result.changedWrites, 'unchanged lyrics do not republish');
   assert.equal(result.stable, true); assert.equal(result.artist, 'Current lyric'); assert.equal(result.cover, true);
-  console.log('PASS real canvas JPEG decode, native MediaMetadata artwork, 1 Hz native position updates and stable lyric/cover metadata');
+  console.log('PASS real canvas JPEG decode, stable native metadata/artwork, 1 Hz normal progress, 100 ms system-lyric heartbeat and immediate lyric position publication');
   console.log(JSON.stringify(result));
 } catch (error) { console.error(error); exitCode = 1; }
 finally { clearTimeout(deadline); window?.destroy(); try { await rm(profile, {recursive:true,force:true,maxRetries:3}); } finally { app.exit(exitCode); } }

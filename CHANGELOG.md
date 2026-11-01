@@ -2,6 +2,10 @@
 
 Notable changes to Vibloom are recorded here. Release entries summarize the changes shipped from `main`.
 
+## [1.14.3](https://github.com/wedoso/Vibloom/compare/v1.14.2...v1.14.3) (2026-11-01)
+
+- Restore frequent system lyric publication and immediately synchronize playback position on each lyric change, including background recovery and system seeks. iPhone lock-screen and car behavior still require device verification.
+
 ## [1.14.2](https://github.com/wedoso/Vibloom/compare/v1.14.1...v1.14.2) (2026-10-24)
 
 - Keep the desktop shuffle cycle synchronized with queue additions, removals and manual selections. Honor Play next, preserve remaining songs after restoring a session, and continue a one-song queue with Repeat all.

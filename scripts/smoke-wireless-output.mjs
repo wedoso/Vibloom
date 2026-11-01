@@ -95,6 +95,8 @@ try {
     // Explicitly exercise timestamp rejection on alternating boundaries.
     await run(`window.__futureTimestamp=${index%2===1};window.__manualOutputTime=window.__sourceStart[0]+${line.time}`);
     await wait(`navigator.mediaSession.metadata.artist===${JSON.stringify(line.text)}`,`native lyric ${line.text}`);
+    const position = await run(`window.__positions.at(-1).position`);
+    assert.ok(Math.abs(position-line.time)<.01,'each lyric immediately publishes the matching heard position');
   }
   const published = await run(`window.__lyricWrites.filter(value=>value.startsWith('Rapid '))`);
   assert.deepEqual(published.filter((value,index)=>index===0||value!==published[index-1]),fastLyrics.map(line=>line.text),'every output-clock lyric boundary reaches native metadata in order');
