@@ -85,7 +85,7 @@ jobs:
         include:
           - label: macOS Apple Silicon
             platform: mac
-            os: macos-14
+            os: macos-15
             arch: arm64
             command: npm run desktop:package -- --mac --arm64 --publish never -c.forceCodeSigning=true
             artifact: |
@@ -94,7 +94,7 @@ jobs:
               release/*.blockmap
           - label: macOS Intel
             platform: mac
-            os: macos-14
+            os: macos-15-intel
             arch: x64
             command: npm run desktop:package -- --mac --x64 --publish never -c.forceCodeSigning=true
             artifact: |
