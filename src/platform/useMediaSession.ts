@@ -20,20 +20,24 @@ type MediaState = {
 };
 
 export function useMediaSession(state: MediaState, controls: MediaControls) {
+  const systemLyricsActive = state.systemLyricsEnabled !== false && !!state.lyrics?.length;
   const controlsRef = useRef(controls);
   const anchorRef = useRef<ReturnType<typeof createMediaSessionAnchor> | null>(null);
   const lyricUpdates = useRef<ReturnType<typeof bindMediaSessionLyrics> | null>(null);
   const positionUpdates = useRef<ReturnType<typeof createMediaPositionPublisher> | null>(null);
-  const stateRef = useRef(state);
+  const stateRef = useRef({ ...state, systemLyricsActive });
   const artworkRef = useRef<{ source: string; image: MediaImage } | null>(null);
-  useEffect(() => { controlsRef.current = controls; stateRef.current = state; });
+  useEffect(() => { controlsRef.current = controls; stateRef.current = { ...state, systemLyricsActive }; });
 
   useEffect(() => {
     if (!state.enabled || !navigator.mediaSession) return;
     const positions = createMediaPositionPublisher(navigator.mediaSession, () => controlsRef.current.getTime(), undefined, () => controlsRef.current.isAdvancing?.() ?? stateRef.current.isPlaying);
     positionUpdates.current = positions;
-    const wake = () => positions.update(stateRef.current, true);
-    const timer = window.setInterval(() => positions.update(stateRef.current), 1000);
+    const wake = () => {
+      // A changed lyric already forces its matching position. Otherwise publish
+      // explicitly so small paused seeks and lifecycle wakes bypass throttling.
+      if (!lyricUpdates.current?.refresh()) positions.update(stateRef.current, true);
+    };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("pageshow", wake);
     const unbind = bindMediaSession(navigator.mediaSession, {
@@ -41,7 +45,12 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
       pause: () => controlsRef.current.pause(),
       next: () => controlsRef.current.next(),
       previous: () => controlsRef.current.previous(),
-      seek: (time) => controlsRef.current.seek(time),
+      seek: async (time) => {
+        await controlsRef.current.seek(time);
+        // System controls can seek while visual rendering is suspended. Read
+        // the completed audio seek, without waiting for a React state update.
+        if (positionUpdates.current === positions) wake();
+      },
       getTime: () => controlsRef.current.getTime(),
       onError: () => controlsRef.current.onError(),
     });
@@ -54,10 +63,25 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
     const metadataObserver = anchor ? null : createMediaMetadataObserver();
     anchorRef.current = anchor;
     return () => {
-      window.clearInterval(timer); document.removeEventListener("visibilitychange", wake); window.removeEventListener("pageshow", wake);
+      document.removeEventListener("visibilitychange", wake); window.removeEventListener("pageshow", wake);
       positionUpdates.current = null; anchor?.dispose(); metadataObserver?.dispose(); anchorRef.current = null; unbind();
     };
   }, [state.enabled]);
+
+  // Restore the original mobile system-publishing cadence while lyrics are on.
+  // Keep this timer separate so toggling lyrics never rebinds/reset metadata,
+  // artwork, or the audio-session carrier.
+  useEffect(() => {
+    if (!state.enabled || !navigator.mediaSession) return;
+    const interval = state.isPlaying && systemLyricsActive ? 100 : 1000;
+    const timer = window.setInterval(() => {
+      // Catch up to the heard line if its boundary callback was delayed. When
+      // it changes, the callback below forces one position publication first.
+      lyricUpdates.current?.refresh();
+      positionUpdates.current?.update(stateRef.current);
+    }, interval);
+    return () => window.clearInterval(timer);
+  }, [state.enabled, state.isPlaying, systemLyricsActive]);
 
   useEffect(() => {
     anchorRef.current?.setPlaying(state.isPlaying);
@@ -94,7 +118,9 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
     const metadata = navigator.mediaSession?.metadata;
     if (!state.enabled || !metadata) return;
     const updates = bindMediaSessionLyrics(metadata, state.systemLyricsEnabled === false ? [] : state.lyrics ?? [], () => controlsRef.current.getTime(), state.duration, state.systemLyricsEnabled !== false && state.isPlaying, document,
-      () => positionUpdates.current?.update(stateRef.current));
+      // Push the heard position with each changed lyric, even inside the normal
+      // heartbeat interval. Do not throttle this wakeup behind progress updates.
+      () => positionUpdates.current?.update(stateRef.current, true));
     lyricUpdates.current = updates;
     const wake = () => updates.refresh();
     window.addEventListener("pageshow", wake);
@@ -103,10 +129,10 @@ export function useMediaSession(state: MediaState, controls: MediaControls) {
 
   // Seeks update immediately, including while paused. Playback polling above
   // also runs without React rendering or requestAnimationFrame in the background.
-  useEffect(() => { lyricUpdates.current?.refresh(); }, [state.position]);
+  useEffect(() => { lyricUpdates.current?.refresh(); }, [state.position, state.positionRevision]);
 
   useEffect(() => {
     if (!state.enabled || !navigator.mediaSession) return;
     positionUpdates.current?.update(stateRef.current);
-  }, [state.enabled, state.trackId, state.title, state.album, state.isPlaying, state.duration, state.position, state.positionRevision]);
+  }, [state.enabled, state.trackId, state.title, state.album, state.isPlaying, state.duration, state.position, state.positionRevision, systemLyricsActive]);
 }

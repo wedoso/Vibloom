@@ -24,22 +24,24 @@ export function mediaLyricArtist(lines: readonly MediaLyric[], time: number, dur
 export function bindMediaSessionLyrics(metadata: Pick<MediaMetadata, "artist">, lines: readonly MediaLyric[], getTime: () => number, duration: number, playing: boolean, events: EventTarget = document, onChange: () => void = () => {}) {
   let timer: ReturnType<typeof setTimeout> | undefined, disposed = false;
   const refresh = () => {
-    if (disposed) return;
+    if (disposed) return false;
     clearTimeout(timer);
     const time = getTime();
     const artist = mediaLyricArtist(lines, time, duration);
-    if (metadata.artist !== artist) { metadata.artist = artist; onChange(); }
-    if (!playing || !lines.length) return;
+    const changed = metadata.artist !== artist;
+    if (changed) { metadata.artist = artist; onChange(); }
+    if (!playing || !lines.length) return changed;
     const next = lines[lyricIndex(lines, time) + 1]?.time ?? duration;
     // Timers can be delayed in the background. Re-read the real audio clock
     // instead of replaying stale lines. Schedule short lines at their boundary,
     // and re-arm after every seek/refresh rather than keeping the old deadline.
-    // Clock checks are independent of the 1 Hz native progress publisher;
-    // unchanged lyric text still causes no metadata writes.
+    // Clock checks are independent of native progress publication; unchanged
+    // lyric text still causes no metadata writes.
     const delay = Number.isFinite(time) && next > time
       ? Math.min(MAX_LYRIC_CHECK_MS, Math.max(MIN_LYRIC_CHECK_MS, (next - time - .03) * 1000))
       : MAX_LYRIC_CHECK_MS;
     timer = setTimeout(refresh, delay);
+    return changed;
   };
   const wake = () => refresh();
   events.addEventListener("visibilitychange", wake);

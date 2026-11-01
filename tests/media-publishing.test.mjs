@@ -22,6 +22,14 @@ test('10 Hz UI updates publish position at 1 Hz and do not repeatedly set playba
   assert.deepEqual(f.writes.map(item => item.position), [0, 1, 2, 3]); assert.equal(f.stateWrites, 1);
 });
 
+test('system lyrics retain the original 10 Hz system-publishing cadence', () => {
+  const f = positionFixture(), state = { ...snapshot, systemLyricsActive: true };
+  f.publisher.update(state);
+  for (let i = 1; i <= 10; i++) { f.set(i * 100, i / 10); f.publisher.update(state); }
+  assert.deepEqual(f.writes.map(item => item.position), Array.from({ length: 11 }, (_, index) => index / 10));
+  assert.equal(f.stateWrites, 1, 'frequent position writes do not toggle playback state');
+});
+
 test('small seeks, pause/resume, identical-title track changes, duration changes and backwards jumps publish immediately', () => {
   const f = positionFixture(); f.publisher.update(snapshot); f.set(100, .12);
   f.publisher.update({ ...snapshot, positionRevision: 1 }); assert.equal(f.writes.at(-1).position, .12);
@@ -100,21 +108,12 @@ function hookFixture(t, userAgent = 'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0
   const originals = new Map(['navigator', 'MediaMetadata', 'document', 'window', 'Audio'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   const page = new EventTarget(), events = new EventTarget(); page.visibilityState = 'visible';
   events.setInterval = (...args) => setInterval(...args); events.clearInterval = value => clearInterval(value);
-  const positionWrites = [], metadataWrites = [], requests = [];
-  const session = { metadata: null, playbackState: 'none', setActionHandler() {}, setPositionState: value => positionWrites.push(value) };
+  const positionWrites = [], metadataWrites = [], requests = [], handlers = new Map();
+  const session = { metadata: null, playbackState: 'none', setActionHandler: (action, handler) => handlers.set(action, handler), setPositionState: value => positionWrites.push(value) };
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaSession: session, userAgent, audioSession: { type: 'playback' } } });
   globalThis.document = page; globalThis.window = events;
-  // Model WebKit's observer notification separately from the JS metadata value.
-  // With only AudioContext, native Now Playing may wait for its periodic poll.
-  const nativeArtists = [];
-  globalThis.MediaMetadata = class {
-    constructor(details) { Object.assign(this, details); this.artwork ??= []; metadataWrites.push(this); }
-    get artist() { return this.artistValue; }
-    set artist(value) {
-      this.artistValue = value;
-      if (session.metadata === this && audios.some(audio => !audio.removed)) nativeArtists.push(value);
-    }
-  };
+  // These hooks verify calls into the browser API, not iOS Now Playing delivery.
+  globalThis.MediaMetadata = class { constructor(details) { Object.assign(this, details); this.artwork ??= []; metadataWrites.push(this); } };
   const audios = [];
   globalThis.Audio = class extends EventTarget { constructor(...args) { super(); this.args = args; audios.push(this); } paused = true; playCalls = 0; loadCalls = 0; removed = false; async play() { this.playCalls++; if (rejectCarrier) throw new DOMException('Media output denied', 'NotAllowedError'); this.paused = false; } pause() { this.paused = true; } removeAttribute() {} load() { this.loadCalls++; } remove() { this.removed = true; } };
   const f = globalThis.__mediaPublishingFixture = {
@@ -124,7 +123,7 @@ function hookFixture(t, userAgent = 'Mozilla/5.0 AppleWebKit/537.36 Chrome/140.0
   let time = 0, advancing = true, errors = 0;
   const controls = { getTime: () => time, isAdvancing: () => advancing, play() {}, pause() {}, next() {}, previous() {}, seek() {}, onError() { errors++; } };
   t.after(() => { for (const effect of f.effects) effect?.cleanup?.(); for (const [name, descriptor] of originals) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name]; } });
-  return { session, requests, metadataWrites, positionWrites, events, audios, nativeArtists, get errors() { return errors; }, setAdvancing(value) { advancing = value; }, setTime(value) { time = value; }, render(state, position = 0) { time = position; f.cursor = 0; useMediaSession({ enabled: true, position, ...snapshot, ...state }, controls); for (const effect of f.pending.splice(0)) effect(); } };
+  return { session, requests, metadataWrites, positionWrites, events, audios, handlers, controls, get errors() { return errors; }, setAdvancing(value) { advancing = value; }, setTime(value) { time = value; }, render(state, position = 0) { time = position; f.cursor = 0; useMediaSession({ enabled: true, position, ...snapshot, ...state }, controls); for (const effect of f.pending.splice(0)) effect(); } };
 }
 
 test('WebKit uses an empty metadata observer that never starts a competing audio route or ten-second timeline', async t => {
@@ -153,15 +152,16 @@ test('a rejected silent carrier reproduces the system-control failure while the 
   assert.equal(f.session.playbackState, 'playing'); assert.equal(f.positionWrites.at(-1).position, 35);
 });
 
-test('WebKit native metadata notifications continue without playing a silent carrier or replacing metadata', t => {
+test('system lyric boundaries push their position without playing a silent carrier or replacing metadata', t => {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const f = hookFixture(t, 'Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', true);
   const lyrics = [{ time: 0, text: 'Beginning' }, { time: 1, text: 'Line one' }, { time: 1.2, text: 'Line two' }];
   f.render({ lyrics });
   const metadata = f.session.metadata;
   f.setTime(1); t.mock.timers.tick(100);
+  assert.equal(metadata.artist, 'Line one'); assert.equal(f.positionWrites.at(-1).position, 1);
   f.setTime(1.2); t.mock.timers.tick(100);
-  assert.deepEqual(f.nativeArtists, ['Line one', 'Line two'], 'the modeled native observer is notified before a five-second polling fallback');
+  assert.equal(metadata.artist, 'Line two'); assert.equal(f.positionWrites.at(-1).position, 1.2);
   assert.equal(f.session.metadata, metadata);
   assert.equal(f.audios[0].playCalls, 0); assert.equal(f.audios[0].loadCalls, 0);
   assert.deepEqual(f.audios[0].args, []);
@@ -240,7 +240,7 @@ test('turning system lyrics off immediately clears only artist, stops lyric time
   assert.equal(f.session.metadata,metadata);assert.equal(metadata.artist,'Second');assert.equal(metadata.artwork,artwork);
 });
 
-test('rapid background lyrics are independent of 1 Hz progress writes and preserve metadata and cover', async t => {
+test('rapid background lyrics immediately publish their position and preserve metadata and cover', async t => {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 0 });
   t.mock.method(performance, 'now', () => Date.now());
   const f = hookFixture(t), lyrics = Array.from({ length: 8 }, (_, index) => ({ time: 1 + index * .06, text: `Rapid ${index}` }));
@@ -253,8 +253,97 @@ test('rapid background lyrics are independent of 1 Hz progress writes and preser
   // No renders after setup: the same path is used while the page is hidden.
   for (let ms = 0; ms < 1600; ms += 5) { f.setTime((ms + 5) / 1000); t.mock.timers.tick(5); }
   assert.deepEqual(writes, lyrics.map(line => line.text));
-  assert.equal(f.positionWrites.length - before, 1, 'fast lyric lines must not force a progress write per line');
+  assert.ok(f.positionWrites.length - before >= lyrics.length, 'lyric changes must not wait behind progress throttling');
   assert.equal(f.session.metadata, metadata);
   assert.equal(metadata.artwork, cover);
   assert.equal(f.session.playbackState, 'playing');
+});
+
+test('hidden system-lyric playback publishes at 10 Hz without a React render, then returns to 1 Hz when disabled', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 0 });
+  t.mock.method(performance, 'now', () => Date.now());
+  const f = hookFixture(t), lyrics = [{ time: 0, text: 'Long lyric' }, { time: 30, text: 'Later' }];
+  globalThis.document.visibilityState = 'hidden';
+  f.render({ lyrics });
+  const metadata = f.session.metadata, before = f.positionWrites.length;
+  for (let i = 1; i <= 10; i++) { f.setTime(i / 10); t.mock.timers.tick(100); }
+  assert.equal(f.positionWrites.length - before, 10, 'native publishing keeps the v1.13 cadence when visual updates are suspended');
+  assert.equal(f.session.metadata, metadata);
+  f.render({ lyrics, systemLyricsEnabled: false }, 1);
+  const disabled = f.positionWrites.length;
+  for (let i = 1; i <= 10; i++) { f.setTime(1 + i / 10); t.mock.timers.tick(100); }
+  assert.equal(f.positionWrites.length - disabled, 1);
+  assert.equal(f.session.metadata, metadata);
+  assert.equal(metadata.artist, 'Vibloom');
+});
+
+test('a lyric boundary immediately wakes system position publication inside the heartbeat interval', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 0 });
+  t.mock.method(performance, 'now', () => Date.now());
+  const f = hookFixture(t), lyrics = [{ time: 0, text: 'First' }, { time: .08, text: 'Second' }];
+  f.render({ lyrics });
+  const metadata = f.session.metadata, before = f.positionWrites.length;
+  f.setTime(.08); t.mock.timers.tick(50);
+  assert.equal(metadata.artist, 'Second');
+  assert.equal(f.positionWrites.length, before + 1);
+  assert.equal(f.positionWrites.at(-1).position, .08, 'artist assignment alone is not sufficient for this regression');
+  assert.equal(f.session.metadata, metadata);
+});
+
+test('the background heartbeat catches up lyrics when the boundary callback has not run', t => {
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 0 });
+  t.mock.method(performance, 'now', () => Date.now());
+  // Leave the lyric timeout pending: only the independent heartbeat runs.
+  t.mock.method(globalThis, 'setTimeout', () => 0);
+  const f = hookFixture(t), lyrics = [{ time: 0, text: 'First' }, { time: 1, text: 'Missed' }, { time: 2, text: 'Current' }];
+  f.render({ lyrics });
+  const metadata = f.session.metadata;
+  f.setTime(2.1); const before = f.positionWrites.length;
+  t.mock.timers.tick(100);
+  assert.equal(metadata.artist, 'Current', 'publish the heard line instead of replaying missed lines');
+  assert.equal(f.positionWrites.at(-1).position, 2.1);
+  assert.equal(f.positionWrites.length, before + 1, 'the lyric and heartbeat share one progress publication');
+  assert.equal(f.session.metadata, metadata);
+});
+
+test('a seek revision refreshes lyrics even when the visual position has not changed', t => {
+  const f = hookFixture(t), lyrics = [{ time: 0, text: 'First' }, { time: 2, text: 'After seek' }];
+  f.render({ lyrics, isPlaying: false });
+  const metadata = f.session.metadata;
+  f.render({ lyrics, isPlaying: false, positionRevision: 1, position: 0 }, 2.1);
+  assert.equal(metadata.artist, 'After seek');
+  assert.equal(f.session.metadata, metadata);
+  assert.equal(f.positionWrites.at(-1).position, 2.1);
+});
+
+test('completed system seeks publish lyrics and position without a React render, including small paused seeks', async t => {
+  const f = hookFixture(t), lyrics = [{ time: 0, text: 'First' }, { time: 2, text: 'After seek' }];
+  f.render({ lyrics, isPlaying: false });
+  const metadata = f.session.metadata;
+  let complete;
+  f.controls.seek = target => new Promise(resolve => { complete = () => { f.setTime(target); resolve(); }; });
+  const before = f.positionWrites.length;
+  f.handlers.get('seekto')({ seekTime: 2.1 });
+  assert.equal(metadata.artist, 'First', 'do not publish the target before the audio seek completes');
+  complete(); await flush();
+  assert.equal(metadata.artist, 'After seek');
+  assert.equal(f.positionWrites.at(-1).position, 2.1);
+  assert.equal(f.positionWrites.length, before + 1, 'one publication for the changed lyric and completed seek');
+  f.handlers.get('seekto')({ seekTime: 2.102 }); complete(); await flush();
+  assert.equal(f.positionWrites.at(-1).position, 2.102, 'an explicit tiny seek bypasses the paused-position threshold');
+  assert.equal(f.session.metadata, metadata);
+  assert.equal(f.errors, 0);
+});
+
+test('a completed system seek cannot republish after the media session is disabled', async t => {
+  const f = hookFixture(t), lyrics = [{ time: 0, text: 'First' }];
+  f.render({ lyrics, isPlaying: false });
+  let complete;
+  f.controls.seek = () => new Promise(resolve => { complete = resolve; });
+  f.handlers.get('seekto')({ seekTime: 2 });
+  f.render({ enabled: false, lyrics, isPlaying: false });
+  const before = f.positionWrites.length;
+  complete(); await flush();
+  assert.equal(f.positionWrites.length, before);
+  assert.equal(f.session.metadata, null);
 });
