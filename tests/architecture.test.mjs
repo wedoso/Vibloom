@@ -225,7 +225,8 @@ test("keeps the desktop renderer sandboxed and packages both operating systems",
   assert.equal(manifest.build.publish.owner, "wedoso");
   assert.equal(manifest.build.publish.repo, "Vibloom");
   assert.equal(manifest.dependencies["electron-updater"].startsWith("^6."), true);
-  assert.match(workflow, /macos-14/u);
+  assert.match(workflow, /os: macos-15\s+arch: arm64/u);
+  assert.match(workflow, /os: macos-15-intel\s+arch: x64/u);
   assert.match(workflow, /macOS Apple Silicon/u);
   assert.match(workflow, /macOS Intel/u);
   assert.match(workflow, /--mac --arm64/u);
